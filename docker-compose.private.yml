@@ -1,0 +1,18 @@
+# Owner usage:
+#   docker compose -f docker-compose.yml -f docker-compose.private.yml up
+#
+# Differences from public mode:
+#   - public_mode disabled -> data fetch and refresh enabled
+#   - data/ directory mounted -> live OHLCV accessible
+#   - results/ mounted read-write -> export_results.py can write here
+#   - Chrome profile mounted -> tvkit browser authentication
+
+services:
+  csm:
+    environment:
+      CSM_PUBLIC_MODE: "false"
+      TVKIT_BROWSER: "chrome"
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+      - ~/.config/google-chrome:/root/.config/google-chrome:ro

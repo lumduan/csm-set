@@ -1,0 +1,63 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.tox/
+.nox/
+
+# Virtual environments
+.venv
+venv/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uv
+uv.lock
+
+# docs plans (internal only)
+docs/plan/
+
+# Market data — never commit raw or processed OHLCV (TradingView copyright)
+data/
+
+# results/ IS committed — do not ignore
+# Temporary export artifacts only
+results/.tmp/
+
+# Environment — credentials must never be committed
+.env
+.env.*
+!.env.example
+
+.github/instructions/
+.github/prompts/
+.github/copilot-instructions.md
+
+.claude/settings.local.json

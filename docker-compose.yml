@@ -1,0 +1,12 @@
+services:
+  csm:
+    build: .
+    ports:
+      - "8080:8080"
+      - "8000:8000"
+    environment:
+      CSM_PUBLIC_MODE: "true"
+      CSM_LOG_LEVEL: "INFO"
+    volumes:
+      - ./results:/app/results:ro
+    restart: unless-stopped
