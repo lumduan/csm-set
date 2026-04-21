@@ -105,10 +105,9 @@ uv run python ui/main.py
 
 ## Docs
 
-- [ติดตั้งและเริ่มต้น](docs/getting-started/installation.md)
-- [Public mode คืออะไร](docs/guides/public-mode.md)
+- [วิธีติดตั้ง](docs/getting-started/installation.md)
 - [Docker setup](docs/guides/docker.md)
-- [สถาปัตยกรรมระบบ](docs/architecture/system-overview.md)
+- [Architecture](docs/architecture/system-overview.md)
 - [API Reference](docs/reference/index.md)
 
 ---
