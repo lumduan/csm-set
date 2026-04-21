@@ -2,9 +2,9 @@
 
 import httpx
 import pandas as pd
+from api.main import app
 from nicegui import ui
 
-from api.main import app
 from ui.components.tables import signal_table
 
 
@@ -27,7 +27,9 @@ async def signals_page() -> None:
     ui.label(f"As of: {payload.get('as_of', 'n/a')}")
     if not rankings.empty:
         signal_table(rankings)
-        numeric_columns: list[str] = [column for column in ["z_score", "rank"] if column in rankings.columns]
+        numeric_columns: list[str] = [
+            column for column in ["z_score", "rank"] if column in rankings.columns
+        ]
         if numeric_columns:
             heatmap_data: list[list[object]] = []
             for row_index, (_, row) in enumerate(rankings.head(20).iterrows()):

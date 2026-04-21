@@ -24,7 +24,9 @@ def _run_backtest_job(store: ParquetStore, config: BacktestConfig) -> None:
     feature_panel["date"] = pd.to_datetime(feature_panel["date"])
     feature_panel = feature_panel.set_index(["date", "symbol"]).sort_index()
     prices: pd.DataFrame = store.load("prices_latest")
-    result = MomentumBacktest(store=store).run(feature_panel=feature_panel, prices=prices, config=config)
+    result = MomentumBacktest(store=store).run(
+        feature_panel=feature_panel, prices=prices, config=config
+    )
     store.save("backtest_summary", pd.DataFrame([result.metrics_dict()]))
 
 

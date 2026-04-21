@@ -31,8 +31,12 @@ def notebooks_page() -> None:
                     with ui.card().classes("w-full"):
                         ui.label(title).classes("text-xl")
                         ui.label("This notebook export is still a placeholder.")
-                        ui.label("Run scripts/export_results.py in private mode to generate the HTML output.")
+                        ui.label(
+                            "Run scripts/export_results.py in private mode "
+                            "to generate the HTML output."
+                        )
                 else:
                     ui.html(
-                        f'<iframe src="/static/notebooks/{filename}" style="width:100%;height:85vh;border:none;"></iframe>'
+                        f'<iframe src="/static/notebooks/{filename}"'
+                        f' style="width:100%;height:85vh;border:none;"></iframe>'
                     )

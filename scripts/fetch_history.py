@@ -22,12 +22,16 @@ async def main() -> None:
 
     logging.basicConfig(level=settings.log_level)
     if settings.public_mode:
-        raise RuntimeError("fetch_history.py is owner-only. Set CSM_PUBLIC_MODE=false before running.")
+        raise RuntimeError(
+            "fetch_history.py is owner-only. Set CSM_PUBLIC_MODE=false before running."
+        )
 
     symbols: list[str] = ["SET:AOT", "SET:CPALL", "SET:PTT", "SET:ADVANC", "SET:KBANK"]
     store: ParquetStore = ParquetStore(Path(settings.data_dir) / "raw")
     loader: OHLCVLoader = OHLCVLoader(settings=settings)
-    pending_symbols: list[str] = [symbol for symbol in symbols if not store.exists(symbol.replace(":", "_"))]
+    pending_symbols: list[str] = [
+        symbol for symbol in symbols if not store.exists(symbol.replace(":", "_"))
+    ]
     fetched = await loader.fetch_batch(symbols=pending_symbols, interval="1D", bars=3000)
     for symbol, frame in fetched.items():
         store.save(symbol.replace(":", "_"), frame)

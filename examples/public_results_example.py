@@ -19,8 +19,12 @@ async def main() -> None:
     signals_path = settings.results_dir / "signals" / "latest_ranking.json"
     backtest_path = settings.results_dir / "backtest" / "summary.json"
     signals_payload: object = json.loads(signals_path.read_text()) if signals_path.exists() else {}
-    backtest_payload: object = json.loads(backtest_path.read_text()) if backtest_path.exists() else {}
-    logger.info("Public results example", extra={"signals": signals_payload, "backtest": backtest_payload})
+    backtest_payload: object = (
+        json.loads(backtest_path.read_text()) if backtest_path.exists() else {}
+    )
+    logger.info(
+        "Public results example", extra={"signals": signals_payload, "backtest": backtest_payload}
+    )
 
 
 if __name__ == "__main__":

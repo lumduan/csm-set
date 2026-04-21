@@ -6,9 +6,9 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
+from api.main import app
 from nicegui import ui
 
-from api.main import app
 from csm.config.settings import settings
 from csm.risk.regime import RegimeState
 
@@ -36,7 +36,13 @@ async def dashboard_page() -> None:
         summary = json.loads(summary_path.read_text())
 
     regime_text: str = str(summary.get("regime", RegimeState.NEUTRAL.value))
-    color: str = "green" if regime_text == RegimeState.BULL.value else "red" if regime_text == RegimeState.BEAR.value else "amber"
+    color: str = (
+        "green"
+        if regime_text == RegimeState.BULL.value
+        else "red"
+        if regime_text == RegimeState.BEAR.value
+        else "amber"
+    )
     ui.badge(regime_text).props(f"color={color}")
 
     with ui.row().classes("w-full gap-4"):
@@ -54,7 +60,9 @@ async def dashboard_page() -> None:
                 ui.link("Notebooks", "/notebooks")
                 ui.link("Universe", "/universe")
             if not settings.public_mode:
-                ui.button("Refresh Data", on_click=lambda: ui.notify("Use the API to refresh data."))
+                ui.button(
+                    "Refresh Data", on_click=lambda: ui.notify("Use the API to refresh data.")
+                )
 
     if not settings.public_mode:
         series_index: pd.DatetimeIndex = pd.date_range(end=pd.Timestamp.now(), periods=30, freq="D")
@@ -63,7 +71,10 @@ async def dashboard_page() -> None:
             ui.label("SET Index - Last 30 Days")
             ui.echart(
                 {
-                    "xAxis": {"type": "category", "data": [str(index.date()) for index in series_index]},
+                    "xAxis": {
+                        "type": "category",
+                        "data": [str(index.date()) for index in series_index],
+                    },
                     "yAxis": {"type": "value"},
                     "series": [{"type": "line", "data": index_values.astype(float).tolist()}],
                 }

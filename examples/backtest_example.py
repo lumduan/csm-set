@@ -20,14 +20,18 @@ async def main() -> None:
 
     logging.basicConfig(level=settings.log_level)
     if settings.public_mode:
-        logger.warning("Public mode is enabled. This example uses synthetic prices and does not fetch data.")
+        logger.warning(
+            "Public mode is enabled. This example uses synthetic prices and does not fetch data."
+        )
 
     dates: pd.DatetimeIndex = pd.date_range("2022-01-03", periods=500, freq="B", tz="Asia/Bangkok")
     symbols: list[str] = ["SET:AOT", "SET:CPALL", "SET:PTT", "SET:ADVANC", "SET:KBANK"]
     price_map: dict[str, pd.DataFrame] = {}
     close_matrix: pd.DataFrame = pd.DataFrame(index=dates)
     for offset, symbol in enumerate(symbols):
-        close: pd.Series = pd.Series(100.0 * np.exp(np.linspace(0.0, 0.5 + offset * 0.05, len(dates))), index=dates)
+        close: pd.Series = pd.Series(
+            100.0 * np.exp(np.linspace(0.0, 0.5 + offset * 0.05, len(dates))), index=dates
+        )
         close_matrix[symbol] = close
         price_map[symbol] = pd.DataFrame(
             {

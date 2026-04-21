@@ -12,7 +12,9 @@ def test_ranker_computes_percentiles_and_quintiles() -> None:
             "mom_12_1": [5.0, 4.0, 3.0, 2.0, 1.0],
             "sharpe_mom": [5.0, 4.0, 3.0, 2.0, 1.0],
         },
-        index=pd.MultiIndex.from_product([[date], ["A", "B", "C", "D", "E"]], names=["date", "symbol"]),
+        index=pd.MultiIndex.from_product(
+            [[date], ["A", "B", "C", "D", "E"]], names=["date", "symbol"]
+        ),
     )
     ranked: pd.DataFrame = CrossSectionalRanker().rank(panel, date)
     assert ranked.iloc[0]["symbol"] == "A"

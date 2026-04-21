@@ -2,9 +2,8 @@
 
 import httpx
 import pandas as pd
-from nicegui import ui
-
 from api.main import app
+from nicegui import ui
 
 
 async def _fetch_universe() -> dict[str, object]:

@@ -1,17 +1,23 @@
 """FastAPI application entrypoint for csm-set."""
 
 import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Awaitable, Callable
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from api.deps import set_store
-from api.routers import backtest_router, data_router, portfolio_router, signals_router, universe_router
+from api.routers import (
+    backtest_router,
+    data_router,
+    portfolio_router,
+    signals_router,
+    universe_router,
+)
 from api.scheduler.jobs import create_scheduler
 from csm.config.settings import settings
 from csm.data.store import ParquetStore

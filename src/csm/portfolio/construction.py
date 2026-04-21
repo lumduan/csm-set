@@ -25,7 +25,9 @@ class PortfolioConstructor:
 
         if ranked.empty:
             return []
-        threshold: int = 5 if abs(top_quantile - 0.2) < 1e-9 else int(round((1.0 - top_quantile) * 5 + 1))
+        threshold: int = (
+            5 if abs(top_quantile - 0.2) < 1e-9 else int(round((1.0 - top_quantile) * 5 + 1))
+        )
         selected: list[str] = ranked.loc[ranked["quintile"] >= threshold, "symbol"].tolist()
         logger.info("Selected portfolio names", extra={"count": len(selected)})
         return selected

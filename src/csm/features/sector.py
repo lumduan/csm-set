@@ -26,8 +26,12 @@ class SectorFeatures:
         rows: list[dict[str, str | float]] = []
         for symbol, value in returns.items():
             sector: str = sector_map.get(symbol, "UNKNOWN")
-            sector_symbols: list[str] = [name for name, code in sector_map.items() if code == sector]
-            sector_return: float = float(returns.reindex(sector_symbols).median()) if sector_symbols else 0.0
+            sector_symbols: list[str] = [
+                name for name, code in sector_map.items() if code == sector
+            ]
+            sector_return: float = (
+                float(returns.reindex(sector_symbols).median()) if sector_symbols else 0.0
+            )
             rows.append(
                 {
                     "symbol": symbol,

@@ -1,14 +1,14 @@
 """Market regime detection utilities."""
 
-from enum import Enum
 import logging
+from enum import StrEnum
 
 import pandas as pd
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-class RegimeState(str, Enum):
+class RegimeState(StrEnum):
     """Discrete market regime states."""
 
     BULL = "BULL"

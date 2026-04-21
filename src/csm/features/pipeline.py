@@ -19,7 +19,9 @@ class FeaturePipeline:
         self._momentum: MomentumFeatures = MomentumFeatures()
         self._risk_adjusted: RiskAdjustedFeatures = RiskAdjustedFeatures()
 
-    def build(self, prices: dict[str, pd.DataFrame], rebalance_dates: list[pd.Timestamp]) -> pd.DataFrame:
+    def build(
+        self, prices: dict[str, pd.DataFrame], rebalance_dates: list[pd.Timestamp]
+    ) -> pd.DataFrame:
         """Build a z-scored feature panel across rebalance dates.
 
         Args:
@@ -34,7 +36,9 @@ class FeaturePipeline:
         for symbol, frame in prices.items():
             series: pd.Series = frame["close"].rename(symbol)
             close_frames.append(series)
-        close_matrix: pd.DataFrame = pd.concat(close_frames, axis=1).sort_index() if close_frames else pd.DataFrame()
+        close_matrix: pd.DataFrame = (
+            pd.concat(close_frames, axis=1).sort_index() if close_frames else pd.DataFrame()
+        )
 
         panel_frames: list[pd.DataFrame] = []
         for rebalance_date in rebalance_dates:
@@ -59,7 +63,9 @@ class FeaturePipeline:
             panel_frames.append(winsorised.reset_index(names="symbol"))
 
         if not panel_frames:
-            empty_index: pd.MultiIndex = pd.MultiIndex.from_arrays([[], []], names=["date", "symbol"])
+            empty_index: pd.MultiIndex = pd.MultiIndex.from_arrays(
+                [[], []], names=["date", "symbol"]
+            )
             return pd.DataFrame(index=empty_index)
 
         panel: pd.DataFrame = pd.concat(panel_frames, ignore_index=True)

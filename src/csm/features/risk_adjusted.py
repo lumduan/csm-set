@@ -44,7 +44,9 @@ class RiskAdjustedFeatures:
         """
 
         symbol_returns: pd.DataFrame = prices.pct_change().dropna(how="all").tail(252)
-        market_returns: pd.Series = index_prices.pct_change().dropna().reindex(symbol_returns.index).fillna(0.0)
+        market_returns: pd.Series = (
+            index_prices.pct_change().dropna().reindex(symbol_returns.index).fillna(0.0)
+        )
         residual_scores: dict[str, float] = {}
         variance: float = float(market_returns.var(ddof=0))
 
@@ -53,7 +55,9 @@ class RiskAdjustedFeatures:
             if variance == 0.0:
                 residual_scores[symbol] = float(aligned.sum())
                 continue
-            covariance: float = float(np.cov(aligned.to_numpy(), market_returns.to_numpy(), ddof=0)[0, 1])
+            covariance: float = float(
+                np.cov(aligned.to_numpy(), market_returns.to_numpy(), ddof=0)[0, 1]
+            )
             beta: float = covariance / variance
             alpha: float = float(aligned.mean() - beta * market_returns.mean())
             residuals: pd.Series = aligned - (alpha + beta * market_returns)

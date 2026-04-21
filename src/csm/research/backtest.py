@@ -101,7 +101,9 @@ class MomentumBacktest:
         if feature_panel.empty or prices.empty:
             raise BacktestError("Feature panel and prices are required to run a backtest.")
 
-        rebalance_dates: list[pd.Timestamp] = list(feature_panel.index.get_level_values("date").unique())
+        rebalance_dates: list[pd.Timestamp] = list(
+            feature_panel.index.get_level_values("date").unique()
+        )
         if len(rebalance_dates) < 2:
             raise BacktestError("At least two rebalance dates are required.")
 
@@ -112,22 +114,30 @@ class MomentumBacktest:
         positions: dict[str, list[str]] = {}
         turnover_map: dict[str, float] = {}
 
-        for current_date, next_date in zip(rebalance_dates[:-1], rebalance_dates[1:]):
+        for current_date, next_date in zip(rebalance_dates[:-1], rebalance_dates[1:], strict=False):
             ranked: pd.DataFrame = self._ranker.rank(feature_panel, current_date)
             selected: list[str] = self._constructor.select(ranked, config.top_quantile)
             if not selected:
                 continue
-            trailing_returns: pd.DataFrame = prices[selected].pct_change().dropna(how="all").tail(252)
+            trailing_returns: pd.DataFrame = (
+                prices[selected].pct_change().dropna(how="all").tail(252)
+            )
             if config.weight_scheme == "vol_target":
-                target_weights: pd.Series = self._optimizer.vol_target_weight(selected, trailing_returns)
+                target_weights: pd.Series = self._optimizer.vol_target_weight(
+                    selected, trailing_returns
+                )
             elif config.weight_scheme == "min_variance":
                 target_weights = self._optimizer.min_variance_weight(selected, trailing_returns)
             else:
                 target_weights = self._optimizer.equal_weight(selected)
 
             turnover: float = self._scheduler.compute_turnover(current_weights, target_weights)
-            period_returns: pd.Series = prices[selected].loc[current_date:next_date].pct_change().dropna(how="all").mean()
-            gross_return: float = float(period_returns.reindex(target_weights.index).fillna(0.0).dot(target_weights))
+            period_returns: pd.Series = (
+                prices[selected].loc[current_date:next_date].pct_change().dropna(how="all").mean()
+            )
+            gross_return: float = float(
+                period_returns.reindex(target_weights.index).fillna(0.0).dot(target_weights)
+            )
             cost: float = turnover * (config.transaction_cost_bps / 10_000.0)
             nav *= 1.0 + gross_return - cost
 

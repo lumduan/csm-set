@@ -13,5 +13,7 @@ def test_equal_weight_sums_to_one() -> None:
 
 def test_vol_target_output_shape(sample_prices: pd.DataFrame) -> None:
     returns: pd.DataFrame = sample_prices[["SET000", "SET001", "SET002"]].pct_change().dropna()
-    weights: pd.Series = WeightOptimizer().vol_target_weight(["SET000", "SET001", "SET002"], returns)
+    weights: pd.Series = WeightOptimizer().vol_target_weight(
+        ["SET000", "SET001", "SET002"], returns
+    )
     assert list(weights.index) == ["SET000", "SET001", "SET002"]

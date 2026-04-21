@@ -13,7 +13,9 @@ router: APIRouter = APIRouter(prefix="/universe", tags=["universe"])
 
 
 @router.get("")
-async def get_universe(store: ParquetStore = Depends(get_store)) -> dict[str, list[dict[str, object]]]:
+async def get_universe(
+    store: ParquetStore = Depends(get_store),
+) -> dict[str, list[dict[str, object]]]:
     """Return the current stored universe with basic metadata."""
 
     if not store.exists("universe_latest"):

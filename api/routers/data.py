@@ -28,7 +28,9 @@ async def refresh_data(
         raise HTTPException(status_code=400, detail="Universe snapshot missing symbol column.")
     loader: OHLCVLoader = OHLCVLoader(settings=settings)
     symbols: list[str] = universe["symbol"].astype(str).tolist()
-    fetched: dict[str, pd.DataFrame] = await loader.fetch_batch(symbols=symbols, interval="1D", bars=600)
+    fetched: dict[str, pd.DataFrame] = await loader.fetch_batch(
+        symbols=symbols, interval="1D", bars=600
+    )
     raw_store: ParquetStore = ParquetStore(settings.data_dir / "raw")
     for symbol, frame in fetched.items():
         raw_store.save(symbol.replace(":", "_"), frame)

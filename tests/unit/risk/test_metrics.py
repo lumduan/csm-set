@@ -14,5 +14,7 @@ def test_sharpe_matches_manual_calculation() -> None:
     )
     metrics: dict[str, float] = PerformanceMetrics().summary(equity_curve)
     returns: pd.Series = equity_curve.pct_change().dropna()
-    expected_sharpe: float = float((returns.mean() * 12.0 - 0.02) / (returns.std(ddof=0) * np.sqrt(12.0)))
+    expected_sharpe: float = float(
+        (returns.mean() * 12.0 - 0.02) / (returns.std(ddof=0) * np.sqrt(12.0))
+    )
     assert metrics["sharpe"] == pytest.approx(expected_sharpe)

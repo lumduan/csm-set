@@ -33,9 +33,13 @@ class WeightOptimizer:
         if not symbols:
             return pd.Series(dtype=float)
         volatility: pd.Series = returns[symbols].std(ddof=0).replace(0.0, np.nan)
-        inverse_volatility: pd.Series = (1.0 / volatility).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        inverse_volatility: pd.Series = (
+            (1.0 / volatility).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        )
         weights: pd.Series = inverse_volatility / inverse_volatility.sum()
-        portfolio_volatility: float = float(np.sqrt(weights.T @ returns[symbols].cov().fillna(0.0).to_numpy() @ weights))
+        portfolio_volatility: float = float(
+            np.sqrt(weights.T @ returns[symbols].cov().fillna(0.0).to_numpy() @ weights)
+        )
         logger.info(
             "Computed vol-target weights",
             extra={"target_vol": target_vol, "estimated_vol": portfolio_volatility},

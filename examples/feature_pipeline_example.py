@@ -24,7 +24,9 @@ async def main() -> None:
     dates: pd.DatetimeIndex = pd.date_range("2022-01-03", periods=400, freq="B", tz="Asia/Bangkok")
     price_map: dict[str, pd.DataFrame] = {}
     for offset, symbol in enumerate(["SET:AOT", "SET:CPALL", "SET:PTT", "SET:ADVANC"]):
-        close: pd.Series = pd.Series(100.0 + np.cumsum(np.full(len(dates), 0.1 + offset * 0.01)), index=dates)
+        close: pd.Series = pd.Series(
+            100.0 + np.cumsum(np.full(len(dates), 0.1 + offset * 0.01)), index=dates
+        )
         price_map[symbol] = pd.DataFrame(
             {
                 "open": close.shift(1).fillna(close.iloc[0]),

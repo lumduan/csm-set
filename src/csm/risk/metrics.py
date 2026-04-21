@@ -43,11 +43,17 @@ class PerformanceMetrics:
             }
         periods: int = len(monthly_returns.index)
         years: float = periods / 12.0
-        cagr: float = float((equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (1.0 / years) - 1.0) if years > 0 else 0.0
+        cagr: float = (
+            float((equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (1.0 / years) - 1.0)
+            if years > 0
+            else 0.0
+        )
         annual_return: float = float(monthly_returns.mean() * 12.0)
         annual_volatility: float = float(monthly_returns.std(ddof=0) * np.sqrt(12.0))
         downside: pd.Series = monthly_returns[monthly_returns < 0.0]
-        downside_volatility: float = float(downside.std(ddof=0) * np.sqrt(12.0)) if not downside.empty else 0.0
+        downside_volatility: float = (
+            float(downside.std(ddof=0) * np.sqrt(12.0)) if not downside.empty else 0.0
+        )
         excess_return: float = annual_return - RISK_FREE_RATE_ANNUAL
         sharpe: float = 0.0 if annual_volatility == 0.0 else excess_return / annual_volatility
         sortino: float = 0.0 if downside_volatility == 0.0 else excess_return / downside_volatility
@@ -74,11 +80,17 @@ class PerformanceMetrics:
                 covariance: float = float(aligned.cov().loc["portfolio", "benchmark"])
                 benchmark_variance: float = float(aligned["benchmark"].var(ddof=0))
                 beta: float = covariance / benchmark_variance if benchmark_variance != 0.0 else 0.0
-                alpha: float = float(aligned["portfolio"].mean() - beta * aligned["benchmark"].mean()) * 12.0
-                tracking_error: float = float((aligned["portfolio"] - aligned["benchmark"]).std(ddof=0) * np.sqrt(12.0))
+                alpha: float = (
+                    float(aligned["portfolio"].mean() - beta * aligned["benchmark"].mean()) * 12.0
+                )
+                tracking_error: float = float(
+                    (aligned["portfolio"] - aligned["benchmark"]).std(ddof=0) * np.sqrt(12.0)
+                )
                 information_ratio: float = 0.0
                 if tracking_error != 0.0:
-                    information_ratio = float((aligned["portfolio"] - aligned["benchmark"]).mean() * 12.0 / tracking_error)
+                    information_ratio = float(
+                        (aligned["portfolio"] - aligned["benchmark"]).mean() * 12.0 / tracking_error
+                    )
                 metrics["alpha"] = alpha
                 metrics["beta"] = beta
                 metrics["information_ratio"] = information_ratio

@@ -18,7 +18,9 @@ async def main() -> None:
 
     logging.basicConfig(level=settings.log_level)
     if settings.public_mode:
-        raise RuntimeError("build_universe.py is owner-only. Set CSM_PUBLIC_MODE=false before running.")
+        raise RuntimeError(
+            "build_universe.py is owner-only. Set CSM_PUBLIC_MODE=false before running."
+        )
 
     raw_store: ParquetStore = ParquetStore(Path(settings.data_dir) / "raw")
     processed_store: ParquetStore = ParquetStore(Path(settings.data_dir) / "processed")

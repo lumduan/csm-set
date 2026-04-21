@@ -1,6 +1,5 @@
 """Owner-side APScheduler jobs for csm-set."""
 
-import asyncio
 import logging
 import time
 
@@ -20,10 +19,17 @@ async def daily_refresh(settings: Settings, store: ParquetStore) -> None:
 
     started_at: float = time.perf_counter()
     universe: pd.DataFrame = store.load("universe_latest")
-    symbols: list[str] = universe["symbol"].astype(str).tolist() if "symbol" in universe.columns else []
+    symbols: list[str] = (
+        universe["symbol"].astype(str).tolist() if "symbol" in universe.columns else []
+    )
     loader: OHLCVLoader = OHLCVLoader(settings=settings)
-    fetched: dict[str, pd.DataFrame] = await loader.fetch_batch(symbols=symbols, interval="1D", bars=600)
-    store.save("prices_latest", pd.concat({symbol: frame["close"] for symbol, frame in fetched.items()}, axis=1))
+    fetched: dict[str, pd.DataFrame] = await loader.fetch_batch(
+        symbols=symbols, interval="1D", bars=600
+    )
+    store.save(
+        "prices_latest",
+        pd.concat({symbol: frame["close"] for symbol, frame in fetched.items()}, axis=1),
+    )
     rebalance_dates: list[pd.Timestamp] = list(
         pd.date_range(end=pd.Timestamp.now(tz="Asia/Bangkok"), periods=12, freq="BME")
     )
@@ -31,7 +37,11 @@ async def daily_refresh(settings: Settings, store: ParquetStore) -> None:
     duration: float = time.perf_counter() - started_at
     logger.info(
         "Completed daily refresh",
-        extra={"duration_seconds": duration, "symbol_count": len(symbols), "failures": len(symbols) - len(fetched)},
+        extra={
+            "duration_seconds": duration,
+            "symbol_count": len(symbols),
+            "failures": len(symbols) - len(fetched),
+        },
     )
 
 

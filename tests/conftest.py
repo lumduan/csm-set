@@ -1,16 +1,16 @@
 """Shared pytest fixtures for csm-set."""
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Callable, TypeVar, cast
+from typing import TypeVar, cast
 
 import numpy as np
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-
 from api.deps import set_store
 from api.main import app
+from fastapi.testclient import TestClient
+
 from csm.config.settings import Settings, settings
 from csm.data.store import ParquetStore
 
@@ -85,10 +85,14 @@ def tmp_results(tmp_path: Path) -> Path:
     (results_dir / "signals").mkdir(parents=True, exist_ok=True)
     (results_dir / "backtest").mkdir(parents=True, exist_ok=True)
     (results_dir / "notebooks").mkdir(parents=True, exist_ok=True)
-    (results_dir / "signals" / "latest_ranking.json").write_text('{"as_of": "2026-04-21", "rankings": []}')
-    (results_dir / "backtest" / "summary.json").write_text('{"generated_at": "2026-04-21T00:00:00+07:00"}')
+    (results_dir / "signals" / "latest_ranking.json").write_text(
+        '{"as_of": "2026-04-21", "rankings": []}'
+    )
+    (results_dir / "backtest" / "summary.json").write_text(
+        '{"generated_at": "2026-04-21T00:00:00+07:00"}'
+    )
     (results_dir / "backtest" / "equity_curve.json").write_text('{"series": []}')
-    (results_dir / "backtest" / "annual_returns.json").write_text('{}')
+    (results_dir / "backtest" / "annual_returns.json").write_text("{}")
     return results_dir
 
 

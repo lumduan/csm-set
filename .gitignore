@@ -59,5 +59,6 @@ results/.tmp/
 .github/instructions/
 .github/prompts/
 .github/copilot-instructions.md
+.github/workflows/
 
 .claude/settings.local.json

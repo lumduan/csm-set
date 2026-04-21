@@ -19,7 +19,12 @@ class ICAnalyzer:
         for date in common_dates:
             signal_row: pd.Series = signals.loc[date, common_columns].astype(float)
             return_row: pd.Series = forward_returns.loc[date, common_columns].astype(float)
-            ic_rows.append({"date": pd.Timestamp(date), "ic": float(signal_row.corr(return_row, method="pearson"))})
+            ic_rows.append(
+                {
+                    "date": pd.Timestamp(date),
+                    "ic": float(signal_row.corr(return_row, method="pearson")),
+                }
+            )
         return pd.DataFrame(ic_rows).set_index("date") if ic_rows else pd.DataFrame(columns=["ic"])
 
     def compute_rank_ic(self, signals: pd.DataFrame, forward_returns: pd.DataFrame) -> pd.DataFrame:
@@ -37,7 +42,11 @@ class ICAnalyzer:
                     "rank_ic": float(signal_row.corr(return_row, method="spearman")),
                 }
             )
-        return pd.DataFrame(ic_rows).set_index("date") if ic_rows else pd.DataFrame(columns=["rank_ic"])
+        return (
+            pd.DataFrame(ic_rows).set_index("date")
+            if ic_rows
+            else pd.DataFrame(columns=["rank_ic"])
+        )
 
     def icir(self, ic_series: pd.Series) -> float:
         """Compute the information coefficient information ratio."""
@@ -56,7 +65,9 @@ class ICAnalyzer:
 
         monthly_prices: pd.DataFrame = prices.resample("ME").last().sort_index()
         if signal_date not in monthly_prices.index:
-            signal_date = monthly_prices.index[monthly_prices.index.get_indexer([signal_date], method="ffill")[0]]
+            signal_date = monthly_prices.index[
+                monthly_prices.index.get_indexer([signal_date], method="ffill")[0]
+            ]
         start_position: int = int(monthly_prices.index.get_loc(signal_date))
         rows: list[dict[str, float | int]] = []
         for horizon in horizons:

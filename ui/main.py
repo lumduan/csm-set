@@ -1,11 +1,10 @@
 """NiceGUI entrypoint mounted on the FastAPI application."""
 
+from api.main import app
 from nicegui import ui
 
-from api.main import app
 from csm.config.settings import settings
 from ui import pages  # noqa: F401
-
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(

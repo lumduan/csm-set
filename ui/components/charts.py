@@ -8,7 +8,11 @@ def equity_curve_chart(equity: pd.Series, benchmark: pd.Series | None = None) ->
     """Render equity curve (NAV) chart via NiceGUI plotly integration."""
 
     series: list[dict[str, object]] = [
-        {"type": "line", "name": "Portfolio", "data": [[str(index), float(value)] for index, value in equity.items()]}
+        {
+            "type": "line",
+            "name": "Portfolio",
+            "data": [[str(index), float(value)] for index, value in equity.items()],
+        }
     ]
     if benchmark is not None:
         series.append(
@@ -18,7 +22,9 @@ def equity_curve_chart(equity: pd.Series, benchmark: pd.Series | None = None) ->
                 "data": [[str(index), float(value)] for index, value in benchmark.items()],
             }
         )
-    ui.echart({"xAxis": {"type": "time"}, "yAxis": {"type": "value"}, "series": series}).classes("w-full h-80")
+    ui.echart({"xAxis": {"type": "time"}, "yAxis": {"type": "value"}, "series": series}).classes(
+        "w-full h-80"
+    )
 
 
 def ic_chart(ic_series: pd.Series) -> None:
@@ -31,7 +37,13 @@ def ic_chart(ic_series: pd.Series) -> None:
         }
         for index, value in ic_series.items()
     ]
-    ui.echart({"xAxis": {"type": "time"}, "yAxis": {"type": "value"}, "series": [{"type": "bar", "data": data}]}).classes("w-full h-64")
+    ui.echart(
+        {
+            "xAxis": {"type": "time"},
+            "yAxis": {"type": "value"},
+            "series": [{"type": "bar", "data": data}],
+        }
+    ).classes("w-full h-64")
 
 
 def drawdown_chart(underwater: pd.Series) -> None:

@@ -31,7 +31,9 @@ class CrossSectionalRanker:
             z_score = (composite - mean) / std
             z_score.name = "z_score"
         rank_pct: pd.Series = z_score.rank(pct=True, method="first")
-        quintile: pd.Series = pd.qcut(rank_pct.rank(method="first"), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
+        quintile: pd.Series = pd.qcut(
+            rank_pct.rank(method="first"), q=5, labels=[1, 2, 3, 4, 5]
+        ).astype(int)
         result: pd.DataFrame = pd.DataFrame(
             {
                 "symbol": z_score.index,

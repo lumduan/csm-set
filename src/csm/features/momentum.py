@@ -37,7 +37,8 @@ class MomentumFeatures:
         required_rows: int = formation_months + skip_months + 1
         if len(monthly_prices.index) < required_rows:
             raise InsufficientDataError(
-                f"Need at least {required_rows} monthly observations, got {len(monthly_prices.index)}."
+                f"Need at least {required_rows} monthly observations, "
+                f"got {len(monthly_prices.index)}."
             )
 
         end_offset: int = skip_months + 1

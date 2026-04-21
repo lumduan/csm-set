@@ -38,7 +38,9 @@ def _assert_safe_exports(results_dir: Path) -> None:
         text: str = json.dumps(payload)
         for column in forbidden:
             if f'"{column}"' in text:
-                raise ValueError(f"Raw price field leaked into export: {json_path} contains {column}")
+                raise ValueError(
+                    f"Raw price field leaked into export: {json_path} contains {column}"
+                )
 
 
 async def main() -> None:
@@ -46,7 +48,9 @@ async def main() -> None:
 
     logging.basicConfig(level=settings.log_level)
     if settings.public_mode:
-        raise RuntimeError("export_results.py is owner-only. Set CSM_PUBLIC_MODE=false before running.")
+        raise RuntimeError(
+            "export_results.py is owner-only. Set CSM_PUBLIC_MODE=false before running."
+        )
 
     notebooks_dir: Path = Path("notebooks")
     results_dir: Path = settings.results_dir
@@ -74,11 +78,19 @@ async def main() -> None:
     store: ParquetStore = ParquetStore(settings.data_dir / "processed")
     feature_panel: pd.DataFrame = FeaturePipeline(store=store).load_latest()
     prices: pd.DataFrame = store.load("prices_latest")
-    result = MomentumBacktest(store=store).run(feature_panel=feature_panel, prices=prices, config=BacktestConfig())
+    result = MomentumBacktest(store=store).run(
+        feature_panel=feature_panel, prices=prices, config=BacktestConfig()
+    )
 
-    (results_dir / "backtest" / "summary.json").write_text(json.dumps(result.metrics_dict(), indent=2))
-    (results_dir / "backtest" / "equity_curve.json").write_text(json.dumps(result.equity_curve_dict(), indent=2))
-    (results_dir / "backtest" / "annual_returns.json").write_text(json.dumps(result.annual_returns_dict(), indent=2))
+    (results_dir / "backtest" / "summary.json").write_text(
+        json.dumps(result.metrics_dict(), indent=2)
+    )
+    (results_dir / "backtest" / "equity_curve.json").write_text(
+        json.dumps(result.equity_curve_dict(), indent=2)
+    )
+    (results_dir / "backtest" / "annual_returns.json").write_text(
+        json.dumps(result.annual_returns_dict(), indent=2)
+    )
 
     latest_date: pd.Timestamp = feature_panel.index.get_level_values("date").max()
     ranking: pd.DataFrame = CrossSectionalRanker().rank(feature_panel, latest_date)
@@ -86,7 +98,9 @@ async def main() -> None:
         "as_of": latest_date.strftime("%Y-%m-%d"),
         "rankings": ranking[["symbol", "quintile", "z_score"]].to_dict(orient="records"),
     }
-    (results_dir / "signals" / "latest_ranking.json").write_text(json.dumps(signal_payload, indent=2))
+    (results_dir / "signals" / "latest_ranking.json").write_text(
+        json.dumps(signal_payload, indent=2)
+    )
     _assert_safe_exports(results_dir)
     logger.info("Exported public results successfully")
 
