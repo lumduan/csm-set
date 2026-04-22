@@ -219,32 +219,37 @@ data/universe/{YYYY-MM-DD}.parquet  ← dated snapshots per rebalance date
 
 ### Phase 1.2 — Storage Layer
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.2-storage-layer.md`
 
 **Goal:** Encapsulate all parquet I/O behind a single class. Callers never touch pyarrow or file paths directly.
 
 **Deliverables:**
 
-- [ ] `src/csm/data/store.py` — `ParquetStore`
-  - [ ] `__init__(self, base_dir: Path)` — accepts data root, creates directory if absent
-  - [ ] `save(key: str, df: pd.DataFrame) -> None` — writes `{base_dir}/{key}.parquet`; overwrites if exists
-  - [ ] `load(key: str) -> pd.DataFrame` — reads and returns DataFrame; raises `KeyError` if not found
-  - [ ] `exists(key: str) -> bool` — returns `True` if the parquet file exists
-  - [ ] `list_keys() -> list[str]` — returns sorted list of all stored keys (stem of each `.parquet` file)
-  - [ ] `delete(key: str) -> None` — removes the file; raises `KeyError` if not found
-- [ ] Unit test: round-trip `save → load` preserves `DatetimeIndex` with UTC timezone
-- [ ] Unit test: round-trip preserves all column dtypes (`float64`, `int64`, `object`)
-- [ ] Unit test: `load` raises `KeyError` for missing key
-- [ ] Unit test: `exists` returns `False` before save, `True` after save
-- [ ] Unit test: `list_keys` returns sorted list matching saved keys
-- [ ] Unit test: `delete` removes file; subsequent `exists` returns `False`
+- [x] `src/csm/data/store.py` — `ParquetStore`
+  - [x] `__init__(self, base_dir: Path)` — accepts data root, creates directory if absent
+  - [x] `save(key: str, df: pd.DataFrame) -> None` — writes `{base_dir}/{encoded_key}.parquet`; overwrites if exists
+  - [x] `load(key: str) -> pd.DataFrame` — reads and returns DataFrame; raises `KeyError` if not found
+  - [x] `exists(key: str) -> bool` — returns `True` if the parquet file exists (`is_file()`)
+  - [x] `list_keys() -> list[str]` — returns sorted list of all stored keys (recursive glob, POSIX-normalised)
+  - [x] `delete(key: str) -> None` — removes the file; raises `KeyError` if not found
+  - [x] `_validate_key()` — rejects empty, whitespace, backslash, and `..` traversal keys
+- [x] Unit test: round-trip `save → load` preserves `DatetimeIndex` with UTC timezone
+- [x] Unit test: round-trip preserves `float64` and `int64` column dtypes
+- [x] Unit test: `save` returns `None`
+- [x] Unit test: overwrite with same key succeeds; subsequent `load` returns updated data
+- [x] Unit test: `load` raises `KeyError` for missing key
+- [x] Unit test: `exists` returns `False` before save, `True` after save
+- [x] Unit test: `list_keys` returns sorted canonical keys (e.g. `["SET:ADVANC", "SET:AOT"]`)
+- [x] Unit test: `delete` removes file; subsequent `delete` raises `KeyError`
 
 **Implementation notes:**
 
-- Use `pd.read_parquet` / `df.to_parquet` with `engine="pyarrow"` explicitly
-- Store index: use `index=True` on write, `index_col` inferred on read
-- Key format: bare symbol string, e.g. `"SET:AOT"` — the store handles path construction
-- Keys containing `:` must be sanitised to a valid filename: replace `:` with `_` in path only; `list_keys` must reverse this to return the canonical key
+- Key encoding uses `urllib.parse.quote(key, safe="/")` — fully reversible percent-encoding; handles `%` and `:` in keys; safe on Windows and macOS
+- `ParquetStore` is synchronous — documented architectural exception in module docstring; callers that need non-blocking I/O should wrap with `asyncio.to_thread()`
+- `path.is_file()` used throughout instead of `path.exists()` to exclude directories named `*.parquet`
+- `list_keys()` uses `rglob("*.parquet")` with `.as_posix()` for Windows-safe key reconstruction
+- `tests/unit/data/__init__.py` created — package marker that aligns data test dir with `tests/unit/config/` convention
 
 ---
 
