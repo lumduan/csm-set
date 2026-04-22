@@ -255,33 +255,34 @@ data/universe/{YYYY-MM-DD}.parquet  ← dated snapshots per rebalance date
 
 ### Phase 1.3 — tvkit Loader
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.3-tvkit-loader.md`
 
 **Goal:** Thin, testable async wrapper around tvkit `OHLCV`. Enforces public mode guard, handles concurrency, retries transient failures, and returns DataFrames with a documented schema.
 
 **Deliverables:**
 
-- [ ] `src/csm/data/loader.py`
-  - [ ] `class DataAccessError(Exception)` — raised when `public_mode=True`
-  - [ ] `class TransientDataFetchError(Exception)` — optional internal wrapper for retryable network / upstream failures
-  - [ ] `class OHLCVLoader`
-    - [ ] `__init__(self, settings: Settings)` — stores settings, creates semaphore
-    - [ ] `async def fetch(symbol: str, interval: str = "1D", bars: int = 5000) -> pd.DataFrame`
-      - [ ] Raises `DataAccessError` immediately when `settings.public_mode=True`
-      - [ ] Calls `tvkit.OHLCV.get_historical_ohlcv(symbol, interval, bars)`
-      - [ ] Retries up to `settings.tvkit_retry_attempts` only on transient network / timeout / upstream transport failures
-      - [ ] Does not retry validation errors, schema mismatches, bad symbol inputs, or programming errors
-      - [ ] Returns DataFrame with columns: `open`, `close`, `high`, `low`, `volume` + `DatetimeIndex` (UTC)
-    - [ ] `async def fetch_batch(symbols: list[str], interval: str = "1D", bars: int = 5000) -> dict[str, pd.DataFrame]`
-      - [ ] Raises `DataAccessError` immediately when `settings.public_mode=True`
-      - [ ] Runs concurrent `fetch()` calls under `asyncio.Semaphore(settings.tvkit_concurrency)`
-      - [ ] Logs per-symbol failures without crashing the batch
-      - [ ] Returns `{symbol: DataFrame}` for all successfully fetched symbols; failed symbols are absent from the dict
-- [ ] Unit test: mock tvkit; assert `fetch` returns DataFrame with correct columns and `DatetimeIndex`
-- [ ] Unit test: `DataAccessError` is raised by `fetch` when `public_mode=True` — no tvkit call is made
-- [ ] Unit test: `DataAccessError` is raised by `fetch_batch` when `public_mode=True`
-- [ ] Unit test: `fetch_batch` continues after one symbol raises — failed symbol absent from result
-- [ ] Unit test: retry logic — mock tvkit raising twice then succeeding; assert `fetch` returns DataFrame after third attempt
+- [x] `src/csm/data/loader.py`
+  - [x] `class DataAccessError(Exception)` — raised when `public_mode=True` (in `exceptions.py`)
+  - [x] `TransientDataFetchError` — omitted (plan marks as optional; see phase plan Design Decision §7)
+  - [x] `class OHLCVLoader`
+    - [x] `__init__(self, settings: Settings)` — stores settings, creates semaphore
+    - [x] `async def fetch(symbol: str, interval: str, bars: int) -> pd.DataFrame`
+      - [x] Raises `DataAccessError` immediately when `settings.public_mode=True`
+      - [x] Calls `tvkit.OHLCV.get_historical_ohlcv(symbol, interval, bars)`
+      - [x] Retries up to `settings.tvkit_retry_attempts` only on transient network / timeout / transport failures
+      - [x] Does not retry validation errors, schema mismatches, bad symbol inputs, or programming errors
+      - [x] Returns DataFrame with columns `open`, `high`, `low`, `close`, `volume` + `DatetimeIndex` (`Asia/Bangkok` — see phase plan Design Decision §1)
+    - [x] `async def fetch_batch(symbols: list[str], interval: str, bars: int) -> dict[str, pd.DataFrame]`
+      - [x] Raises `DataAccessError` immediately when `settings.public_mode=True`
+      - [x] Runs concurrent `fetch()` calls under `asyncio.Semaphore(settings.tvkit_concurrency)`
+      - [x] Logs per-symbol failures without crashing the batch
+      - [x] Returns `{symbol: DataFrame}` for all successfully fetched symbols; failed symbols are absent from the dict
+- [x] Unit test: mock tvkit; assert `fetch` returns DataFrame with correct columns and `DatetimeIndex`
+- [x] Unit test: `DataAccessError` is raised by `fetch` when `public_mode=True` — no tvkit call is made
+- [x] Unit test: `DataAccessError` is raised by `fetch_batch` when `public_mode=True`
+- [x] Unit test: `fetch_batch` continues after one symbol raises — failed symbol absent from result
+- [x] Unit test: retry logic — mock tvkit raising twice then succeeding; assert `fetch` returns DataFrame after third attempt
 - [ ] Integration smoke test (skipped in CI, manual only): `fetch("SET:SET", "1D", 100)` returns 100 rows
 
 **Output DataFrame schema:**
