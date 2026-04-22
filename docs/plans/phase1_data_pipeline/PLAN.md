@@ -301,32 +301,44 @@ Index: `DatetimeIndex`, name `"datetime"`, timezone `UTC`.
 
 ### Phase 1.4 — Universe Builder
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.4-universe-builder.md`
 
 **Goal:** Define the investable universe deterministically. Produce both a full candidate list and dated per-rebalance snapshots that downstream backtesting can use without survivorship bias.
 
 **Deliverables:**
 
-- [ ] `data/universe/symbols.json` — full SET symbol list sourced from `lumduan/thai-securities-data`
-  - [ ] Format: `{"symbols": ["SET:AAV", "SET:ADVANC", ...]}` — sorted, canonical tvkit format
-  - [ ] Update process documented in `scripts/build_universe.py`
-- [ ] `src/csm/data/universe.py` — `UniverseBuilder`
-  - [ ] `__init__(self, store: ParquetStore, settings: Settings)`
-  - [ ] `def filter(self, symbol: str, asof: pd.Timestamp) -> bool`
-    - [ ] Price filter: latest close ≥ `MIN_PRICE_THB`
-    - [ ] Volume filter: 90-day avg daily volume ≥ `MIN_AVG_DAILY_VOLUME`
-    - [ ] Coverage filter: valid bars ≥ `MIN_DATA_COVERAGE` of `LOOKBACK_YEARS` * 252 trading days
-  - [ ] `def build_snapshot(self, asof: pd.Timestamp, symbols: list[str]) -> list[str]`
-    - [ ] Applies all filters as of `asof` date (uses only data up to `asof`, no look-ahead)
-    - [ ] Returns sorted list of symbols passing all filters
-  - [ ] `def build_all_snapshots(self, symbols: list[str], rebalance_dates: pd.DatetimeIndex) -> None`
-    - [ ] Iterates rebalance dates, calls `build_snapshot`, saves to `ParquetStore`
-    - [ ] Key format: `universe/{YYYY-MM-DD}`
-- [ ] Unit test: price filter rejects symbol with close < 1.0 THB
-- [ ] Unit test: volume filter rejects symbol below liquidity threshold
-- [ ] Unit test: coverage filter rejects symbol with > 20% missing bars
-- [ ] Unit test: `build_snapshot` uses only data `≤ asof` — no look-ahead leakage
-- [ ] Unit test: `build_all_snapshots` produces one snapshot per rebalance date
+- [x] `data/universe/symbols.json` — full SET symbol list sourced from `settfex` (PyPI) via `get_stock_list()` + `filter_by_market("SET")`
+  - [x] Format: `{"symbols": ["SET:AAV", "SET:ADVANC", ...]}` — sorted, canonical tvkit format
+  - [x] Atomic write (tmp file + rename) in `scripts/build_universe.py`
+- [x] `src/csm/data/universe.py` — `UniverseBuilder`
+  - [x] `__init__(self, store: ParquetStore, settings: Settings)`
+  - [x] `def filter(self, symbol: str, asof: pd.Timestamp) -> bool`
+    - [x] Price filter: latest close ≥ `MIN_PRICE_THB`
+    - [x] Volume filter: 90-day trailing avg volume ≥ `MIN_AVG_DAILY_VOLUME`
+    - [x] Coverage filter: valid bars ≥ `MIN_DATA_COVERAGE` of trailing `min(len(history), LOOKBACK_YEARS * 252)` bars
+    - [x] Returns `False` immediately when symbol not in store
+  - [x] `def build_snapshot(self, asof: pd.Timestamp, symbols: list[str]) -> list[str]`
+    - [x] Applies all filters as of `asof` date (uses only data up to `asof`, no look-ahead)
+    - [x] Returns sorted list of symbols passing all filters
+  - [x] `def build_all_snapshots(self, symbols: list[str], rebalance_dates: pd.DatetimeIndex, snapshot_store: ParquetStore | None = None) -> None`
+    - [x] Iterates rebalance dates, calls `build_snapshot`, saves to `ParquetStore`
+    - [x] Key format: `universe/{YYYY-MM-DD}`; schema: `symbol` + `asof` columns
+    - [x] Optional `snapshot_store` separates OHLCV source from universe output
+- [x] Unit test: price filter rejects symbol with close < 1.0 THB
+- [x] Unit test: volume filter rejects symbol below liquidity threshold
+- [x] Unit test: coverage filter rejects symbol with > 20% missing bars
+- [x] Unit test: `filter` returns `False` for symbol not in store
+- [x] Unit test: `build_snapshot` uses only data `≤ asof` — no look-ahead leakage
+- [x] Unit test: `build_all_snapshots` produces one snapshot per rebalance date
+
+**Implementation notes:**
+
+- Symbol source changed from `lumduan/thai-securities-data` to `settfex>=0.1.0` (PyPI) per user request; `settfex` added to `pyproject.toml`
+- `_align_tz()` normalises `asof` to match store index timezone using `index.tz` directly (not the `TIMEZONE` constant) to be correct regardless of stored timezone
+- Coverage denominator uses `history.tail(LOOKBACK_YEARS * 252)` as the window so numerator and denominator always match (prevents `coverage > 1.0` on long histories)
+- `Settings` stored in `__init__` for future extension; filter thresholds come from `constants.py` in this phase
+- Pre-existing `test_regime` failure unrelated to Phase 1.4 and out of scope
 
 ---
 

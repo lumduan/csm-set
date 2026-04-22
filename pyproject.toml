@@ -27,6 +27,7 @@ dependencies = [
     "apscheduler>=3.10",
     "httpx>=0.27",
     "scipy>=1.17.1",
+    "settfex>=0.1.0",
 ]
 
 [dependency-groups]
