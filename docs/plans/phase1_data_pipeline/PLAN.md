@@ -344,32 +344,44 @@ Index: `DatetimeIndex`, name `"datetime"`, timezone `UTC`.
 
 ### Phase 1.5 — Price Cleaner
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.5-price-cleaner.md`
 
 **Goal:** Standardise raw OHLCV DataFrames so that all downstream signal calculations operate on clean, consistent data.
 
 **Deliverables:**
 
-- [ ] `src/csm/data/cleaner.py` — `PriceCleaner`
-  - [ ] `def forward_fill_gaps(df: pd.DataFrame, max_gap_days: int = 5) -> pd.DataFrame`
-    - [ ] Forward-fills NaN close prices for gaps of ≤ `max_gap_days` consecutive trading days
-    - [ ] Gaps larger than `max_gap_days` are left as NaN (not filled)
-  - [ ] `def drop_low_coverage(df: pd.DataFrame, min_coverage: float = MIN_DATA_COVERAGE, window_years: int = 1) -> pd.DataFrame | None`
-    - [ ] Returns `None` if the symbol has > `(1 - min_coverage)` missing bars in any rolling year
-    - [ ] Returns cleaned DataFrame otherwise
-  - [ ] `def winsorise_returns(df: pd.DataFrame, lower: float = 0.01, upper: float = 0.99) -> pd.DataFrame`
-    - [ ] Computes daily returns from `close`
-    - [ ] Clips returns at `lower` / `upper` percentile
-    - [ ] Back-computes and replaces extreme `close` values
-  - [ ] `def clean(df: pd.DataFrame) -> pd.DataFrame | None`
-    - [ ] Applies: `forward_fill_gaps` → `drop_low_coverage` → `winsorise_returns` in that order
-    - [ ] Returns `None` if the symbol is dropped by `drop_low_coverage`
-- [ ] Unit test: `forward_fill_gaps` fills a 3-day gap; leaves a 6-day gap unfilled
-- [ ] Unit test: `drop_low_coverage` returns `None` for a symbol with 25% missing in one year
-- [ ] Unit test: `drop_low_coverage` returns DataFrame for a symbol with 15% missing
-- [ ] Unit test: `winsorise_returns` clips extreme return outliers to percentile bounds
-- [ ] Unit test: `clean` returns `None` when symbol fails coverage check
-- [ ] Unit test: `clean` applies all steps in correct order
+- [x] `src/csm/data/cleaner.py` — `PriceCleaner`
+  - [x] `def forward_fill_gaps(df: pd.DataFrame, max_gap_days: int = 5) -> pd.DataFrame`
+    - [x] Forward-fills NaN close prices for gaps of ≤ `max_gap_days` consecutive trading days
+    - [x] Gaps larger than `max_gap_days` are left as NaN (not filled)
+  - [x] `def drop_low_coverage(df: pd.DataFrame, min_coverage: float = MIN_DATA_COVERAGE, window_years: int = 1) -> pd.DataFrame | None`
+    - [x] Returns `None` if the symbol has > `(1 - min_coverage)` missing bars in any rolling year
+    - [x] Returns cleaned DataFrame otherwise
+  - [x] `def winsorise_returns(df: pd.DataFrame, lower: float = 0.01, upper: float = 0.99) -> pd.DataFrame`
+    - [x] Computes daily returns from `close`
+    - [x] Clips returns at `lower` / `upper` percentile
+    - [x] Back-computes and replaces extreme `close` values
+  - [x] `def clean(df: pd.DataFrame) -> pd.DataFrame | None`
+    - [x] Applies: `forward_fill_gaps` → `drop_low_coverage` → `winsorise_returns` in that order
+    - [x] Returns `None` if the symbol is dropped by `drop_low_coverage`
+- [x] Unit test: `forward_fill_gaps` fills a 3-day gap; leaves last day of a 6-day gap unfilled
+- [x] Unit test: `drop_low_coverage` returns `None` for a symbol with 25% missing in one year
+- [x] Unit test: `drop_low_coverage` returns DataFrame for a symbol with 15% missing
+- [x] Unit test: `winsorise_returns` clips extreme return outliers to percentile bounds
+- [x] Unit test: `clean` returns `None` when symbol fails coverage check
+- [x] Unit test: `clean` applies all steps in correct order
+
+**Implementation notes:**
+
+- Existing wide-matrix API replaced with per-symbol OHLCV API (one DataFrame per symbol)
+- `compute_returns` removed — not in Phase 1.5 spec; log-return reconstruction replaced with
+  arithmetic pct_change for clarity and correctness of back-computed close values
+- `drop_low_coverage` short-history guard: if `len(df) < window_years * 252`, checks full-series
+  coverage instead of rolling window to avoid incorrectly dropping partially-populated stores
+- `forward_fill_gaps` applies `ffill(limit=max_gap_days)` to all OHLCV columns (not just close)
+  to keep rows internally consistent for suspended-trading gaps
+- Only `close` column is modified by `winsorise_returns`; open/high/low/volume are unchanged
 
 ---
 
