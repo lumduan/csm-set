@@ -3,7 +3,7 @@
 **Feature:** Reliable OHLCV Data Pipeline for All SET Symbols
 **Branch:** `feature/phase-1-data-pipeline`
 **Created:** 2026-04-21
-**Status:** Not started
+**Status:** In progress (1.6 complete, 1.7 pending)
 **Positioning:** Foundation layer — all signal research, backtesting, and portfolio construction depend on clean, versioned parquet data produced here
 
 ---
@@ -387,22 +387,36 @@ Index: `DatetimeIndex`, name `"datetime"`, timezone `UTC`.
 
 ### Phase 1.6 — Bulk Fetch Script
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.6-bulk-fetch-script.md`
 
 **Goal:** Provide a single idempotent entry point that fetches 20 years of daily history for all universe symbols and writes them to `data/raw/`.
 
 **Deliverables:**
 
-- [ ] `scripts/fetch_history.py`
-  - [ ] Reads `data/universe/symbols.json` for the candidate symbol list
-  - [ ] Initialises `OHLCVLoader` and `ParquetStore(data/raw/)`
-  - [ ] Skips symbols where `store.exists(symbol)` is already `True` (idempotent)
-  - [ ] Fetches in batches using `OHLCVLoader.fetch_batch()` with concurrency from `Settings`
-  - [ ] Saves each successfully fetched DataFrame via `ParquetStore.save()`
-  - [ ] Logs progress: symbols attempted / succeeded / failed
-  - [ ] Exits with non-zero status if failure rate > 10% (configurable)
+- [x] `scripts/fetch_history.py`
+  - [x] Reads `data/universe/symbols.json` for the candidate symbol list; exits 1 if missing, malformed, or empty
+  - [x] Initialises `OHLCVLoader` and `ParquetStore(data/raw/)`
+  - [x] Skips symbols where `store.exists(symbol)` is already `True` (idempotent)
+  - [x] Fetches in batches using `OHLCVLoader.fetch_batch()` with concurrency from `Settings`
+  - [x] Saves each successfully fetched DataFrame via `ParquetStore.save()`; `StoreError` counted as failure
+  - [x] Logs progress: symbols attempted / succeeded / failed
+  - [x] Exits 1 if failure rate > `--failure-threshold` (default 0.1); configurable at CLI
+  - [x] Writes `data/raw/fetch_failures.json` on failure; deletes stale file on zero-failure success
+  - [x] Exits 1 immediately when `Settings.public_mode=True`
+- [x] Unit tests: `tests/unit/scripts/test_fetch_history.py` — 18 tests, all passing
 - [ ] Run script manually; verify `data/raw/` populated with ≥ 400 parquet files
 - [ ] Re-run script; verify no symbols are re-fetched (idempotent check)
+
+**Implementation notes:**
+
+- `_SymbolsFile(BaseModel)` with `symbols: list[StrictStr]` — Pydantic strict validation rejects non-list and non-string elements
+- Store key passed as raw symbol string (e.g. `"SET:AOT"`); `ParquetStore` applies `urllib.parse.quote` internally — no pre-encoding in this script
+- All file I/O wrapped with `asyncio.to_thread()` for async compliance; `store.exists()` kept synchronous (simple `path.is_file()`, matches `build_universe.py` pattern)
+- CLI validated at parse time: `_positive_int()` and `_unit_float()` type converters produce exit code 2 for out-of-range values
+- `raw_dir.mkdir(parents=True, exist_ok=True)` called explicitly at startup, before `ParquetStore` init, to guarantee the failures file path exists
+- `run_timestamp` captured at `main()` entry and embedded in `fetch_failures.json` for auditability
+- `importlib.util.spec_from_file_location` used in tests to bypass pytest package namespace collision with `tests/unit/scripts/` directory
 
 **Usage:**
 
