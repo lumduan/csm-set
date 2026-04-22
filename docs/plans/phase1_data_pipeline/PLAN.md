@@ -92,6 +92,14 @@ All runtime configuration is in a single `Settings` class (pydantic-settings `Ba
 
 `OHLCVLoader` checks `settings.public_mode` before any network call and raises `DataAccessError` immediately. The check is in the loader, not scattered across scripts, so every call site is protected automatically.
 
+### Repository Layout Validation
+
+This plan matches the current repository layout and does not introduce speculative paths. The implementation targets the existing `src/csm/` package, the existing `notebooks/` directory, and the existing gitignored `data/` tree (`data/raw/`, `data/processed/`, `data/universe/`). Phase 1 work should be executed against those paths directly rather than assuming a future reorganisation.
+
+### DataFrame Boundary and Pydantic Compliance
+
+Project instructions require typed, validated boundaries, and this phase keeps that rule for configuration, settings, exceptions, and public-facing contracts. The explicit exception is the internal OHLCV tabular payload: pandas `DataFrame` is the canonical in-memory container for columnar price history because parquet I/O, rolling-window analytics, gap analysis, and vectorised cleaning are all DataFrame-native operations. To keep the architecture defensible, every pipeline boundary that accepts or returns OHLCV tabular data must enforce the documented DataFrame schema, while all non-tabular structures remain fully typed and Pydantic-validated.
+
 ---
 
 ## Architecture
@@ -131,6 +139,8 @@ tests/
 │   └── test_cleaner.py
 ```
 
+This directory layout is already present in the repository today: `src/csm/` exists as the application package root, `notebooks/` already contains the exploratory notebooks, and `data/` already contains `raw/`, `processed/`, and `universe/` directories. Phase 1 should extend these existing locations rather than creating parallel alternatives.
+
 ### Dependency Graph
 
 ```
@@ -167,37 +177,43 @@ data/universe/{YYYY-MM-DD}.parquet  ← dated snapshots per rebalance date
 
 ### Phase 1.1 — Config & Constants
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.1-config-and-constants.md`
 
 **Goal:** Establish the typed configuration layer that all other sub-phases depend on. No business logic here — only settings and compile-time constants.
 
 **Deliverables:**
 
-- [ ] `src/csm/config/constants.py`
-  - [ ] `INDEX_SYMBOL: str = "SET:SET"` — benchmark symbol for tvkit
-  - [ ] `SET_SECTOR_CODES: dict[str, str]` — sector code → sector name mapping
-  - [ ] `MIN_PRICE_THB: float = 1.0` — universe filter floor
-  - [ ] `MIN_AVG_DAILY_VOLUME: int` — liquidity threshold (document source/rationale)
-  - [ ] `MIN_DATA_COVERAGE: float = 0.80` — 80% minimum valid bars in lookback window
-  - [ ] `LOOKBACK_YEARS: int = 15` — history depth for full backtest
-  - [ ] `REBALANCE_FREQ: str = "BME"` — pandas offset alias for business month-end
-- [ ] `src/csm/config/settings.py`
-  - [ ] `class Settings(BaseSettings)` with `model_config = SettingsConfigDict(env_prefix="CSM_", env_file=".env")`
-  - [ ] `public_mode: bool = False` — blocks data access when `CSM_PUBLIC_MODE=true`
-  - [ ] `results_dir: Path = Path("./results")` — output root for git-committed artefacts
-  - [ ] `data_dir: Path = Path("./data")` — gitignored data root
-  - [ ] `tvkit_concurrency: int = 5` — semaphore limit for `fetch_batch`
-  - [ ] `tvkit_retry_attempts: int = 3` — retry count for transient errors
-  - [ ] `log_level: str = "INFO"`
-- [ ] Unit test: `Settings` loads correctly from a mock `.env` file
-- [ ] Unit test: `Settings.public_mode` defaults to `False` with no env var set
-- [ ] Unit test: `Settings.public_mode` is `True` when `CSM_PUBLIC_MODE=true` in env
+- [x] `src/csm/config/constants.py`
+  - [x] `INDEX_SYMBOL: str = "SET:SET"` — benchmark symbol for tvkit
+  - [x] `SET_SECTOR_CODES: dict[str, str]` — sector code → sector name mapping
+  - [x] `MIN_PRICE_THB: float = 1.0` — universe filter floor
+  - [x] `MIN_AVG_DAILY_VOLUME: float = 1_000_000.0` — liquidity threshold (THB avg daily turnover; `float` retained over plan's `int` to avoid truncation in downstream arithmetic)
+  - [x] `MIN_DATA_COVERAGE: float = 0.80` — 80% minimum valid bars in lookback window
+  - [x] `LOOKBACK_YEARS: int = 15` — history depth for full backtest
+  - [x] `REBALANCE_FREQ: str = "BME"` — pandas offset alias for business month-end
+- [x] `src/csm/config/settings.py`
+  - [x] `class Settings(BaseSettings)` with `model_config = SettingsConfigDict(env_prefix="CSM_", env_file=".env", frozen=True)`
+  - [x] `public_mode: bool = False` — blocks data access when `CSM_PUBLIC_MODE=true`
+  - [x] `results_dir: Path = Path("./results")` — output root for git-committed artefacts
+  - [x] `data_dir: Path = Path("./data")` — gitignored data root
+  - [x] `tvkit_concurrency: int = 5` — semaphore limit for `fetch_batch`, constrained `gt=0`
+  - [x] `tvkit_retry_attempts: int = 3` — retry count for transient errors, constrained `ge=0`
+  - [x] `log_level: str = "INFO"`
+  - [x] `get_settings()` singleton via `@lru_cache(maxsize=1)`
+- [x] Unit test: `Settings` loads correctly with correct defaults
+- [x] Unit test: `Settings.public_mode` defaults to `False` with no env var set
+- [x] Unit test: `Settings.public_mode` is `True` when `CSM_PUBLIC_MODE=true` in env
+- [x] Unit test: `get_settings()` returns cached singleton
+- [x] Unit test: `Settings` is frozen (attribute assignment raises)
 
 **Implementation notes:**
 
 - `constants.py` uses only Python builtins — no pydantic, no env vars
-- `settings.py` requires `pydantic-settings>=2.0.0` — verify it is declared in `pyproject.toml`
-- `Settings` is a singleton: expose `get_settings()` function that returns a cached instance (using `functools.lru_cache`)
+- `pydantic-settings>=2.3` is already declared in `pyproject.toml`
+- `Settings` is a singleton: `get_settings()` with `functools.lru_cache(maxsize=1)`
+- `.gitignore` `data/` pattern fixed to `/data/` — the unanchored form was silently excluding all of `src/csm/data/` from git tracking
+- `tests/conftest.py` `client` fixture updated: `api.*` imports moved inside body to fix pytest collection for unit-only runs
 
 ---
 
@@ -242,12 +258,14 @@ data/universe/{YYYY-MM-DD}.parquet  ← dated snapshots per rebalance date
 
 - [ ] `src/csm/data/loader.py`
   - [ ] `class DataAccessError(Exception)` — raised when `public_mode=True`
+  - [ ] `class TransientDataFetchError(Exception)` — optional internal wrapper for retryable network / upstream failures
   - [ ] `class OHLCVLoader`
     - [ ] `__init__(self, settings: Settings)` — stores settings, creates semaphore
     - [ ] `async def fetch(symbol: str, interval: str = "1D", bars: int = 5000) -> pd.DataFrame`
       - [ ] Raises `DataAccessError` immediately when `settings.public_mode=True`
       - [ ] Calls `tvkit.OHLCV.get_historical_ohlcv(symbol, interval, bars)`
-      - [ ] Retries up to `settings.tvkit_retry_attempts` on `Exception`
+      - [ ] Retries up to `settings.tvkit_retry_attempts` only on transient network / timeout / upstream transport failures
+      - [ ] Does not retry validation errors, schema mismatches, bad symbol inputs, or programming errors
       - [ ] Returns DataFrame with columns: `open`, `close`, `high`, `low`, `volume` + `DatetimeIndex` (UTC)
     - [ ] `async def fetch_batch(symbols: list[str], interval: str = "1D", bars: int = 5000) -> dict[str, pd.DataFrame]`
       - [ ] Raises `DataAccessError` immediately when `settings.public_mode=True`
@@ -419,7 +437,7 @@ class Settings(BaseSettings):
 
 ### OHLCV DataFrame Contract
 
-All DataFrames passed between pipeline stages must conform to this schema:
+All DataFrames passed between pipeline stages must conform to this schema. This is the approved internal exception to the general Pydantic-first rule: OHLCV history remains a DataFrame because the pipeline's storage, cleaning, and analytical operations are fundamentally columnar and vectorised. Validation still happens at the boundary by enforcing the schema below before data is persisted or handed to the next stage.
 
 | Field | Type | Constraint |
 |---|---|---|
@@ -449,12 +467,15 @@ class DataAccessError(Exception):
 | Scenario | Behaviour |
 |---|---|
 | `public_mode=True` and fetch attempted | `DataAccessError` raised immediately; no network call |
-| Single symbol fetch fails (transient) | Retry up to `tvkit_retry_attempts`; log warning on each attempt |
+| Single symbol fetch hits timeout, connection drop, or upstream transport failure | Retry up to `tvkit_retry_attempts`; log warning on each attempt |
+| Single symbol fetch fails validation, receives malformed payload, or is called with bad input | Fail immediately; log error; no retry |
 | Single symbol fetch fails after all retries | Log error; symbol absent from `fetch_batch` result; batch continues |
 | Batch failure rate > 10% | `fetch_history.py` exits with non-zero status; partial results preserved |
 | `ParquetStore.load` called for missing key | `KeyError` raised with descriptive message |
 | `PriceCleaner.clean` drops symbol | Returns `None`; caller must check and skip |
 | `UniverseBuilder.filter` called with no raw data for symbol | Returns `False` (symbol excluded from universe) |
+
+Retryable failures must be limited to explicitly transient cases exposed by the async HTTP / WebSocket stack used by `tvkit` such as timeouts, connection resets, or temporary upstream unavailability. Non-retryable failures include schema validation failures, symbol-format errors, impossible OHLCV invariants, and other defects that require code or input correction.
 
 ### Logging Convention
 
@@ -466,7 +487,7 @@ All pipeline components use Python's standard `logging` module with logger names
 
 ### Coverage Target
 
-≥ 80% line coverage across `src/csm/` (enforced in Phase 8 CI). Phase 1 unit tests should cover all branches in the storage layer and cleaner; the loader's async paths require mocking tvkit.
+Minimum 90% line coverage across `src/csm/` for Phase 1 changes, with 100% coverage expected for new public APIs introduced in this phase. Phase 1 unit tests should cover all branches in the storage layer and cleaner; the loader's async paths require mocking tvkit.
 
 ### Mocking Strategy
 
