@@ -3,7 +3,7 @@
 **Feature:** Reliable OHLCV Data Pipeline for All SET Symbols
 **Branch:** `feature/phase-1-data-pipeline`
 **Created:** 2026-04-21
-**Status:** In progress (1.6 complete, 1.7 pending)
+**Status:** Complete — all sub-phases 1.1–1.7 done (2026-04-23)
 **Positioning:** Foundation layer — all signal research, backtesting, and portfolio construction depend on clean, versioned parquet data produced here
 
 ---
@@ -439,20 +439,32 @@ uv run python scripts/fetch_history.py
 
 ### Phase 1.7 — Data Quality Check
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-23
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.7-data-quality-check.md`
 
 **Goal:** Human sign-off that the raw data is fit for signal research. The notebook is the Phase 1 exit gate.
 
 **Deliverables:**
 
-- [ ] `notebooks/01_data_exploration.ipynb`
-  - [ ] **Missing data heatmap** — symbols × years, colour = fraction missing; identify systematic gaps
-  - [ ] **Return distribution by year** — annual cross-sectional return distribution; flag extreme outliers
-  - [ ] **Liquidity distribution** — histogram of avg daily turnover (THB); annotate `MIN_AVG_DAILY_VOLUME` threshold
-  - [ ] **Survivorship bias audit** — confirm delisted symbols present in raw data; list top-10 delisted names by market cap
-  - [ ] **Universe size over time** — symbols passing all Phase 1.4 filters per rebalance date; target ≥ 400 at recent dates
-  - [ ] **Data coverage summary** — % of universe with ≥ 15Y history; % with 10–15Y; < 10Y
-  - [ ] Final sign-off cell: print pass/fail for all exit criteria
+- [x] `notebooks/01_data_exploration.ipynb`
+  - [x] **Missing data heatmap** — symbols × years, colour = fraction missing; identify systematic gaps
+  - [x] **Annual cross-sectional return distribution** — per-symbol annual return (year-end/year-start close − 1); box-plot distribution across symbols per year; flag extreme outliers
+  - [x] **Liquidity distribution** — histogram of avg daily turnover (THB); annotate `MIN_AVG_DAILY_VOLUME` threshold
+  - [x] **Survivorship bias / fetch completeness audit** — compare `symbols.json` vs raw store; top-10 symbols by calendar history length; limitation documented (not a full delisting audit)
+  - [x] **Universe size over time** — symbols passing all Phase 1.4 filters per rebalance date (loaded from dated snapshots); target ≥ 400 at recent dates
+  - [x] **Data coverage summary** — % of universe bucketed by literal calendar history length: ≥ 15Y, 10–15Y, < 10Y
+  - [x] Final sign-off cell: print PASS/FAIL for all 6 exit criteria using imported constants
+
+**Implementation notes:**
+
+- Annual returns are cross-sectional (one scalar per symbol per year), not daily return time-series grouped by year
+- Coverage denominator is `min(total_bars, LOOKBACK_YEARS × 252)` — consistent with `UniverseBuilder.filter()`
+- Coverage summary Section 6 buckets by literal calendar history length (`(last − first).days / 365.25`), not bar count, to avoid mislabeling
+- Universe snapshot keys: `universe_store = ParquetStore(data/universe/)`; keys are `"universe/{YYYY-MM-DD}"` (file path: `data/universe/universe/{YYYY-MM-DD}.parquet`)
+- All markdown cells written in Thai per project convention
+- Notebook gracefully handles empty `data/raw/` with `⚠ DATA NOT AVAILABLE` guards per section
+- Pre-existing format violations in `src/csm/data/__init__.py` and `src/csm/data/exceptions.py` (missing trailing newline) fixed as part of this commit
+- Pre-existing failures: 4 integration API tests and `test_regime_transitions_on_known_price_series` — unrelated to Phase 1.7; all 50 Phase 1 unit tests pass
 
 ---
 
