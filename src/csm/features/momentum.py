@@ -4,7 +4,7 @@ import logging
 
 import pandas as pd
 
-from csm.config.constants import REBALANCE_FREQUENCY
+from csm.config.constants import REBALANCE_FREQ
 from csm.features.exceptions import InsufficientDataError
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class MomentumFeatures:
             InsufficientDataError: If insufficient monthly history is available.
         """
 
-        monthly_prices: pd.DataFrame = prices.resample(REBALANCE_FREQUENCY).last().dropna(how="all")
+        monthly_prices: pd.DataFrame = prices.resample(REBALANCE_FREQ).last().dropna(how="all")
         required_rows: int = formation_months + skip_months + 1
         if len(monthly_prices.index) < required_rows:
             raise InsufficientDataError(

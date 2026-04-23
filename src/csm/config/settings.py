@@ -1,5 +1,6 @@
 """Application settings for csm-set."""
 
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
@@ -15,6 +16,8 @@ class Settings(BaseSettings):
         log_level: Logging verbosity for application services.
         public_mode: When true, disable all live data fetch and write operations.
         results_dir: Directory containing pre-computed public outputs.
+        tvkit_concurrency: Max concurrent tvkit fetch requests.
+        tvkit_retry_attempts: Retry count for transient tvkit errors.
         api_host: API bind host.
         api_port: API bind port.
         ui_port: NiceGUI port.
@@ -28,18 +31,29 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        frozen=True,
     )
 
     env: str = Field(default="development", description="Application environment name.")
     data_dir: Path = Field(default=Path("./data"), description="Base market data directory.")
     log_level: str = Field(default="INFO", description="Application log level.")
     public_mode: bool = Field(
-        default=True,
+        default=False,
         description="Disable live data fetches and write paths when enabled.",
     )
     results_dir: Path = Field(
         default=Path("./results"),
         description="Directory containing pre-computed results committed to git.",
+    )
+    tvkit_concurrency: int = Field(
+        default=5,
+        gt=0,
+        description="Semaphore limit for concurrent tvkit fetch calls.",
+    )
+    tvkit_retry_attempts: int = Field(
+        default=3,
+        ge=0,
+        description="Number of retries for transient tvkit network failures.",
     )
     api_host: str = Field(default="0.0.0.0", description="API bind host.")
     api_port: int = Field(default=8000, description="API bind port.")
@@ -58,6 +72,12 @@ class Settings(BaseSettings):
     )
 
 
-settings: Settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the cached application settings singleton."""
+    return Settings()
 
-__all__: list[str] = ["Settings", "settings"]
+
+settings: Settings = get_settings()
+
+__all__: list[str] = ["Settings", "get_settings", "settings"]

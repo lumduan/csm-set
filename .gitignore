@@ -41,11 +41,10 @@ Thumbs.db
 # uv
 uv.lock
 
-# docs plans (internal only)
-docs/plan/
 
 # Market data — never commit raw or processed OHLCV (TradingView copyright)
-data/
+# Leading slash anchors to repo root — does not affect src/csm/data/
+/data/
 
 # results/ IS committed — do not ignore
 # Temporary export artifacts only

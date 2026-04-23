@@ -7,9 +7,6 @@ from typing import TypeVar, cast
 import numpy as np
 import pandas as pd
 import pytest
-from api.deps import set_store
-from api.main import app
-from fastapi.testclient import TestClient
 
 from csm.config.settings import Settings, settings
 from csm.data.store import ParquetStore
@@ -97,12 +94,15 @@ def tmp_results(tmp_path: Path) -> Path:
 
 
 @fixture
-def client(tmp_results: Path, tmp_path: Path) -> Generator[TestClient, None, None]:
+def client(tmp_results: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[object, None, None]:
     """Create a FastAPI test client configured for public mode."""
+    from api.deps import set_store  # noqa: PLC0415
+    from api.main import app  # noqa: PLC0415
+    from fastapi.testclient import TestClient  # noqa: PLC0415
 
-    settings.public_mode = True
-    settings.results_dir = tmp_results
-    settings.data_dir = tmp_path / "data"
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "true")
+    monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_results))
+    monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
     set_store(ParquetStore(tmp_path / "data" / "processed"))
     with TestClient(app) as test_client:
         yield test_client
