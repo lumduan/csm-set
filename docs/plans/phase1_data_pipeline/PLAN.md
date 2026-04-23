@@ -340,6 +340,41 @@ Index: `DatetimeIndex`, name `"datetime"`, timezone `UTC`.
 - `Settings` stored in `__init__` for future extension; filter thresholds come from `constants.py` in this phase
 - Pre-existing `test_regime` failure unrelated to Phase 1.4 and out of scope
 
+**Phase 1.4 addendum — Symbol Type Filter (2026-04-23):**
+
+Running the pipeline against the full settfex SET registry revealed that `get_stock_list() + filter_by_market("SET")` returns 3057 symbols — far more than the ~700 common stocks expected. The extra symbols are non-equity instruments:
+
+| Type code | Instrument | Count |
+| --- | --- | --- |
+| `S` | Common stock | 704 |
+| `F` | Futures (e.g. `PTT-F`) | 640 |
+| `V` | Derivative Warrants on Thai stocks (e.g. `PTT01C2606T`) | 1276 |
+| `W` | Company warrants (e.g. `A5-W4`) | 56 |
+| `X` | Derivative Warrants on foreign stocks (e.g. `AAPL01`) | 352 |
+| `P` | Preferred shares | 7 |
+| `Q` | Convertible preferred shares | 7 |
+| `L` | ETF / Infrastructure funds (e.g. `1DIV`) | 13 |
+| `U` | Unit trusts | 2 |
+
+To fix this, a new module and CLI argument were added:
+
+- **`src/csm/data/symbol_filter.py`** — `SecurityType` (`StrEnum`), `SECURITY_TYPE_LABELS`, `DEFAULT_SECURITY_TYPES`, `filter_symbols()`, `parse_security_types()`
+- **`scripts/build_universe.py`** — `--security-types CODE [CODE ...]` argument (default: `S`); `--symbols-only` flag to save `symbols.json` and skip snapshot building
+- The default is `--security-types S` (common stocks only), producing a universe of ~704 symbols
+
+Usage:
+
+```bash
+# Stocks only (default)
+uv run python scripts/build_universe.py --symbols-only
+
+# Stocks + ETFs
+uv run python scripts/build_universe.py --security-types S L --symbols-only
+
+# All types (original unfiltered behaviour)
+uv run python scripts/build_universe.py --security-types S F V W X P Q L U --symbols-only
+```
+
 ---
 
 ### Phase 1.5 — Price Cleaner

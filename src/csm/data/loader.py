@@ -123,7 +123,7 @@ class OHLCVLoader:
             records.append(record)
 
         frame: pd.DataFrame = pd.DataFrame.from_records(records)
-        raw_index = pd.to_datetime(frame.pop("timestamp"), utc=True)
+        raw_index = pd.to_datetime(frame.pop("timestamp"), unit="s", utc=True)
         index: pd.DatetimeIndex = pd.DatetimeIndex(raw_index).tz_convert(TIMEZONE)
         index.name = "datetime"
         frame.index = index
