@@ -41,29 +41,29 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 1.1 Config & Constants
 
-- [ ] `src/csm/config/constants.py` — SET sector codes, index symbol, thresholds
-- [ ] `src/csm/config/settings.py` — `Settings` via pydantic-settings, env var binding
-  - [ ] Include `public_mode: bool = False` field
-  - [ ] Include `results_dir: Path = Path("./results")` field
-- [ ] Unit test: settings load from `.env` correctly
+- [x] `src/csm/config/constants.py` — SET sector codes, index symbol, thresholds
+- [x] `src/csm/config/settings.py` — `Settings` via pydantic-settings, env var binding
+  - [x] Include `public_mode: bool = False` field
+  - [x] Include `results_dir: Path = Path("./results")` field
+- [x] Unit test: settings load from `.env` correctly
 
 ### 1.2 Storage Layer
 
-- [ ] `src/csm/data/store.py` — `ParquetStore`: save / load / exists / list_keys
-- [ ] Unit test: round-trip save → load preserves DataFrame dtypes and index
-- [ ] Create `data/raw/`, `data/processed/`, `data/universe/` (gitignored)
-- [ ] Create `results/notebooks/`, `results/backtest/`, `results/signals/` (committed to git)
+- [x] `src/csm/data/store.py` — `ParquetStore`: save / load / exists / list_keys
+- [x] Unit test: round-trip save → load preserves DataFrame dtypes and index
+- [x] Create `data/raw/`, `data/processed/`, `data/universe/` (gitignored)
+- [x] Create `results/notebooks/`, `results/backtest/`, `results/signals/` (committed to git)
 
 ### 1.3 tvkit Loader
 
-- [ ] `src/csm/data/loader.py` — async `OHLCVLoader` wrapping tvkit `OHLCV`
-  - [ ] `fetch(symbol, interval, bars)` — single symbol
-  - [ ] `fetch_batch(symbols, interval, bars)` — concurrent, rate-limit safe
-  - [ ] Retry on transient errors, log failures without crashing batch
-  - [ ] Raise `DataAccessError` immediately when `settings.public_mode=True`
-- [ ] Unit test: mock tvkit, assert DataFrame schema (OHLCV + DatetimeIndex)
-- [ ] Unit test: `DataAccessError` raised when public_mode=True
-- [ ] Integration smoke test: fetch `SET:SET` 1D 100 bars
+- [x] `src/csm/data/loader.py` — async `OHLCVLoader` wrapping tvkit `OHLCV`
+  - [x] `fetch(symbol, interval, bars)` — single symbol
+  - [x] `fetch_batch(symbols, interval, bars)` — concurrent, rate-limit safe
+  - [x] Retry on transient errors, log failures without crashing batch
+  - [x] Raise `DataAccessError` immediately when `settings.public_mode=True`
+- [x] Unit test: mock tvkit, assert DataFrame schema (OHLCV + DatetimeIndex)
+- [x] Unit test: `DataAccessError` raised when public_mode=True
+- [-] Integration smoke test: fetch `SET:SET` 1D 100 bars (manual only, skipped in CI)
 
 ### 1.4 Universe Builder
 
@@ -79,27 +79,27 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 1.5 Price Cleaner
 
-- [ ] `src/csm/data/cleaner.py` — `PriceCleaner`
-  - [ ] Forward-fill gaps ≤ 5 trading days
-  - [ ] Drop symbols with > 20% missing in any rolling year
-  - [ ] Winsorise daily returns at 1st / 99th percentile
-- [ ] Unit test: gap fill, winsorise, drop logic
+- [x] `src/csm/data/cleaner.py` — `PriceCleaner`
+  - [x] Forward-fill gaps ≤ 5 trading days
+  - [x] Drop symbols with > 20% missing in any rolling year
+  - [x] Winsorise daily returns at 1st / 99th percentile
+- [x] Unit test: gap fill, winsorise, drop logic
 
 ### 1.6 Bulk Fetch Script
 
-- [ ] `scripts/fetch_history.py` — fetch 1D 20-year history for all universe symbols
-  - [ ] Skip already-fetched symbols (idempotent)
-  - [ ] Log progress (symbol count, failures)
-  - [ ] Authenticate via tvkit browser session for full bar history
-- [ ] Run script, verify `data/raw/` populated
+- [x] `scripts/fetch_history.py` — fetch 1D 20-year history for all universe symbols
+  - [x] Skip already-fetched symbols (idempotent)
+  - [x] Log progress (symbol count, failures)
+  - [x] Authenticate via tvkit browser session for full bar history
+- [x] Run script, verify `data/raw/` populated
 
 ### 1.7 Data Quality Check
 
-- [ ] Notebook `01_data_exploration.ipynb`
-  - [ ] Missing data heatmap
-  - [ ] Return distribution by year
-  - [ ] Liquidity distribution (avg daily turnover)
-  - [ ] Survivorship bias audit: confirm delisted symbols present
+- [x] Notebook `01_data_exploration.ipynb`
+  - [x] Missing data heatmap
+  - [x] Return distribution by year
+  - [x] Liquidity distribution (avg daily turnover)
+  - [x] Survivorship bias audit: confirm delisted symbols present
 
 **Exit criteria:** clean parquet for ≥ 400 SET symbols, 15+ years daily history, data quality notebook shows no critical gaps.
 
@@ -489,6 +489,7 @@ Phase 0 (Bootstrap)
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 1 (sub-phases 1.1–1.4 complete; 1.5–1.7 pending)
-- **Completed phases:** Phase 1.1 (Config), 1.2 (Storage), 1.3 (tvkit Loader), 1.4 (Universe Builder)
+- **Active phase:** Phase 2 — Signal Research
+- **Completed phases:** Phase 1 (Data Pipeline) — all sub-phases 1.1–1.7 complete as of 2026-04-23
+  - 1.1 Config & Constants, 1.2 Storage Layer, 1.3 tvkit Loader, 1.4 Universe Builder, 1.5 Price Cleaner, 1.6 Bulk Fetch Script, 1.7 Data Quality Check (all 6 sign-off checks PASS)
 - **Blocked by:** nothing
