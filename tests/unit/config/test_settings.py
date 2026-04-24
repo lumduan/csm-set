@@ -45,3 +45,26 @@ def test_settings_is_frozen() -> None:
     s = Settings()
     with pytest.raises((ValidationError, TypeError)):
         s.public_mode = True  # type: ignore[misc]
+
+
+def test_tvkit_adjustment_defaults_to_dividends(monkeypatch: pytest.MonkeyPatch) -> None:
+    """tvkit_adjustment defaults to 'dividends' when CSM_TVKIT_ADJUSTMENT is not set."""
+    monkeypatch.delenv("CSM_TVKIT_ADJUSTMENT", raising=False)
+    s = Settings()
+    assert s.tvkit_adjustment == "dividends"
+
+
+def test_tvkit_adjustment_accepts_splits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """tvkit_adjustment accepts 'splits' from the environment."""
+    monkeypatch.setenv("CSM_TVKIT_ADJUSTMENT", "splits")
+    s = Settings()
+    assert s.tvkit_adjustment == "splits"
+
+
+def test_tvkit_adjustment_rejects_unknown_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """tvkit_adjustment raises ValidationError for values outside {'splits', 'dividends'}."""
+    from pydantic import ValidationError
+
+    monkeypatch.setenv("CSM_TVKIT_ADJUSTMENT", "raw")
+    with pytest.raises(ValidationError):
+        Settings()

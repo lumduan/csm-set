@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,6 +62,14 @@ class Settings(BaseSettings):
         default="0 18 * * 1-5",
         description="Cron schedule for owner-side refresh jobs.",
     )
+    tvkit_adjustment: str = Field(
+        default="dividends",
+        description=(
+            "Price adjustment mode for OHLCV fetches. "
+            "'dividends' — total-return backward adjustment (recommended for backtesting). "
+            "'splits' — split-adjusted only (legacy pre-v0.11.0 behaviour)."
+        ),
+    )
     tvkit_browser: str | None = Field(
         default=None,
         description="Optional browser profile name for tvkit authentication.",
@@ -70,6 +78,16 @@ class Settings(BaseSettings):
         default=None,
         description="Optional TradingView authentication token.",
     )
+
+    @field_validator("tvkit_adjustment")
+    @classmethod
+    def _validate_adjustment(cls, value: str) -> str:
+        allowed: set[str] = {"splits", "dividends"}
+        if value not in allowed:
+            raise ValueError(
+                f"tvkit_adjustment must be one of {sorted(allowed)!r}, got {value!r}"
+            )
+        return value
 
 
 @lru_cache(maxsize=1)

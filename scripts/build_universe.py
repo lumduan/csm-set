@@ -81,6 +81,17 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--adjustment",
+        choices=["splits", "dividends"],
+        default=None,
+        help=(
+            "Price adjustment mode for reading raw OHLCV data when building universe filters. "
+            "Overrides CSM_TVKIT_ADJUSTMENT env var. "
+            "Use 'dividends' (default) for total-return series. "
+            "Use 'splits' to filter against legacy Phase 1.6 data."
+        ),
+    )
+    parser.add_argument(
         "--symbols-only",
         action="store_true",
         help="Save symbols.json and exit — skip snapshot building.",
@@ -178,8 +189,12 @@ async def main() -> None:
     logger.info("Building snapshots for %d rebalance dates", len(rebalance_dates))
 
     # Step 5 — build and persist snapshots
-    raw_store = ParquetStore(data_dir / "raw")
+    adjustment_mode: str = args.adjustment or app_settings.tvkit_adjustment
+    raw_store = ParquetStore(data_dir / "raw" / adjustment_mode)
     universe_store = ParquetStore(data_dir / "universe")
+    logger.info(
+        "Building universe snapshots from raw store: %s", data_dir / "raw" / adjustment_mode
+    )
     builder = UniverseBuilder(raw_store, app_settings)
     try:
         builder.build_all_snapshots(symbols, rebalance_dates, snapshot_store=universe_store)

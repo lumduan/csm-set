@@ -15,7 +15,7 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-    "tvkit>=0.4",
+    "tvkit>=0.11.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "nicegui>=2.4",

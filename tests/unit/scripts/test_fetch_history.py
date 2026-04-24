@@ -22,6 +22,7 @@ sys.modules.setdefault("scripts.fetch_history", _fh_module)
 _fh_spec.loader.exec_module(_fh_module)
 
 _parse_args = _fh_module._parse_args
+_migrate_legacy_raw = _fh_module._migrate_legacy_raw
 main = _fh_module.main
 
 
@@ -29,14 +30,17 @@ main = _fh_module.main
 # Helpers
 # ---------------------------------------------------------------------------
 
+_DEFAULT_ADJUSTMENT = "dividends"
 
-def _make_settings(*, public_mode: bool = False) -> MagicMock:
+
+def _make_settings(*, public_mode: bool = False, adjustment: str = _DEFAULT_ADJUSTMENT) -> MagicMock:
     settings = MagicMock()
     settings.public_mode = public_mode
     settings.log_level = "WARNING"
     settings.data_dir = "/tmp/csm_test_data"
     settings.tvkit_concurrency = 5
     settings.tvkit_retry_attempts = 3
+    settings.tvkit_adjustment = adjustment
     return settings
 
 
@@ -120,7 +124,7 @@ async def test_all_symbols_already_stored_is_noop(
         await main()
 
     mock_loader.fetch_batch.assert_not_called()
-    assert not (tmp_path / "raw" / "fetch_failures.json").exists()
+    assert not (tmp_path / "raw" / _DEFAULT_ADJUSTMENT / "fetch_failures.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +195,7 @@ async def test_store_save_error_counted_as_failure(
     ):
         await main()
 
-    failures_path = tmp_path / "raw" / "fetch_failures.json"
+    failures_path = tmp_path / "raw" / _DEFAULT_ADJUSTMENT / "fetch_failures.json"
     assert failures_path.exists()
     data = json.loads(failures_path.read_text())
     assert "SET:PTT" in data["failed_symbols"]
@@ -230,12 +234,13 @@ async def test_writes_fetch_failures_json_on_failure(
     ):
         await main()
 
-    failures_path = tmp_path / "raw" / "fetch_failures.json"
+    failures_path = tmp_path / "raw" / _DEFAULT_ADJUSTMENT / "fetch_failures.json"
     assert failures_path.exists()
     data = json.loads(failures_path.read_text())
     assert data["failed_symbols"] == ["SET:PTT"]
     assert data["count"] == 1
     assert "run_timestamp" in data
+    assert data["adjustment"] == _DEFAULT_ADJUSTMENT
 
 
 @pytest.mark.asyncio
@@ -246,11 +251,11 @@ async def test_deletes_fetch_failures_json_on_success(
     symbols = ["SET:AOT"]
     _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
 
-    raw_dir = tmp_path / "raw"
+    raw_dir = tmp_path / "raw" / _DEFAULT_ADJUSTMENT
     raw_dir.mkdir(parents=True, exist_ok=True)
     stale = raw_dir / "fetch_failures.json"
     stale.write_text(
-        json.dumps({"run_timestamp": "old", "failed_symbols": ["SET:AOT"], "count": 1})
+        json.dumps({"run_timestamp": "old", "adjustment": _DEFAULT_ADJUSTMENT, "failed_symbols": ["SET:AOT"], "count": 1})
     )
 
     mock_store = MagicMock()
@@ -398,3 +403,163 @@ def test_invalid_cli_args_exit_code_2(
         _parse_args()
 
     assert exc_info.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.8 — Adjustment flag and storage layout
+# ---------------------------------------------------------------------------
+
+
+def test_default_adjustment_arg_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--adjustment defaults to None (falls back to settings.tvkit_adjustment at runtime)."""
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py"])
+    args = _parse_args()
+    assert args.adjustment is None
+
+
+def test_adjustment_dividends_arg_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--adjustment dividends is parsed correctly."""
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--adjustment", "dividends"])
+    args = _parse_args()
+    assert args.adjustment == "dividends"
+
+
+def test_adjustment_splits_arg_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--adjustment splits is parsed correctly."""
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--adjustment", "splits"])
+    args = _parse_args()
+    assert args.adjustment == "splits"
+
+
+def test_invalid_adjustment_arg_exits_code_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unknown --adjustment value exits with code 2 (argparse choices validation)."""
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--adjustment", "raw"])
+    with pytest.raises(SystemExit) as exc_info:
+        _parse_args()
+    assert exc_info.value.code == 2
+
+
+@pytest.mark.asyncio
+async def test_adjustment_dividends_stores_in_dividends_subdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--adjustment dividends routes the store to data/raw/dividends/."""
+    symbols = ["SET:AOT"]
+    _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
+
+    captured_paths: list[Path] = []
+
+    class _CapturingParquetStore:
+        def __init__(self, base_dir: Path) -> None:
+            captured_paths.append(base_dir)
+
+        def exists(self, key: str) -> bool:
+            return False
+
+        def save(self, key: str, df: Any) -> None:
+            pass
+
+    mock_loader = MagicMock()
+    mock_loader.fetch_batch = AsyncMock(return_value={"SET:AOT": _minimal_df()})
+
+    monkeypatch.setattr(
+        sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path), "--adjustment", "dividends"]
+    )
+
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings(adjustment="dividends")),
+        patch("scripts.fetch_history.ParquetStore", side_effect=_CapturingParquetStore),
+        patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+    ):
+        await main()
+
+    assert any(p == tmp_path / "raw" / "dividends" for p in captured_paths)
+
+
+@pytest.mark.asyncio
+async def test_adjustment_splits_stores_in_splits_subdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--adjustment splits routes the store to data/raw/splits/."""
+    symbols = ["SET:AOT"]
+    _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
+
+    captured_paths: list[Path] = []
+
+    class _CapturingParquetStore:
+        def __init__(self, base_dir: Path) -> None:
+            captured_paths.append(base_dir)
+
+        def exists(self, key: str) -> bool:
+            return False
+
+        def save(self, key: str, df: Any) -> None:
+            pass
+
+    mock_loader = MagicMock()
+    mock_loader.fetch_batch = AsyncMock(return_value={"SET:AOT": _minimal_df()})
+
+    monkeypatch.setattr(
+        sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path), "--adjustment", "splits"]
+    )
+
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings(adjustment="splits")),
+        patch("scripts.fetch_history.ParquetStore", side_effect=_CapturingParquetStore),
+        patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+    ):
+        await main()
+
+    assert any(p == tmp_path / "raw" / "splits" for p in captured_paths)
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.8 — Legacy migration
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_legacy_raw_moves_parquet_files(tmp_path: Path) -> None:
+    """_migrate_legacy_raw moves *.parquet files from raw_root to raw_root/splits/."""
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    (raw_root / "SET%3AAOT.parquet").write_bytes(b"")
+    (raw_root / "SET%3APTT.parquet").write_bytes(b"")
+
+    _migrate_legacy_raw(raw_root)
+
+    assert not (raw_root / "SET%3AAOT.parquet").exists()
+    assert not (raw_root / "SET%3APTT.parquet").exists()
+    assert (raw_root / "splits" / "SET%3AAOT.parquet").exists()
+    assert (raw_root / "splits" / "SET%3APTT.parquet").exists()
+
+
+def test_migrate_legacy_raw_is_idempotent(tmp_path: Path) -> None:
+    """Running _migrate_legacy_raw twice does not move already-migrated files."""
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    (raw_root / "SET%3AAOT.parquet").write_bytes(b"")
+
+    _migrate_legacy_raw(raw_root)
+    _migrate_legacy_raw(raw_root)
+
+    # The file should be in splits/ exactly once
+    splits_dir = raw_root / "splits"
+    assert (splits_dir / "SET%3AAOT.parquet").exists()
+    assert not (raw_root / "SET%3AAOT.parquet").exists()
+
+
+def test_migrate_legacy_raw_no_op_when_empty(tmp_path: Path) -> None:
+    """_migrate_legacy_raw is a no-op when no flat *.parquet files exist."""
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+
+    _migrate_legacy_raw(raw_root)
+
+    assert not (raw_root / "splits").exists()
+
+
+def test_migrate_legacy_raw_no_op_when_dir_missing(tmp_path: Path) -> None:
+    """_migrate_legacy_raw is safe to call even if raw_root does not exist."""
+    raw_root = tmp_path / "raw_nonexistent"
+    # Should not raise
+    _migrate_legacy_raw(raw_root)
