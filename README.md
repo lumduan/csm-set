@@ -12,23 +12,30 @@
 
 ---
 
-## สถานะการพัฒนา
+> **⚠️ Disclaimer**
+> โปรเจกต์นี้จัดทำขึ้นเพื่อการศึกษาเท่านั้น ไม่ถือเป็นคำแนะนำการลงทุนในทุกกรณี
+> ผลการทดสอบย้อนหลัง (backtest) ไม่ได้รับประกันผลตอบแทนในอนาคต
+> ผู้พัฒนาไม่รับผิดชอบต่อความเสียหายหรือผลกำไรขาดทุนใดๆ ที่เกิดจากการนำโปรเจกต์นี้ไปใช้งาน
 
-| Phase | รายละเอียด | สถานะ |
-|-------|-----------|-------|
-| 0 | Project Bootstrap | `[x]` เสร็จแล้ว |
-| **1** | **Data Pipeline** | **`[x]` เสร็จแล้ว** |
-| 2 | Signal Research | `[ ]` ยังไม่เริ่ม |
-| 3 | Backtesting | `[ ]` ยังไม่เริ่ม |
-| 4 | Portfolio & Risk | `[ ]` ยังไม่เริ่ม |
-| 5 | API | `[ ]` ยังไม่เริ่ม |
-| 6 | Web Dashboard | `[ ]` ยังไม่เริ่ม |
-| 7 | Docker & Public Distribution | `[ ]` ยังไม่เริ่ม |
-| 8 | Hardening & Docs | `[ ]` ยังไม่เริ่ม |
+---
 
-**Phase 1 — Data Pipeline เสร็จสมบูรณ์แล้ว (2026-04-23)**
+## Development Status
 
-สิ่งที่ทำเสร็จใน Phase 1:
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Project Bootstrap | `[x]` Completed |
+| **1** | **Data Pipeline** | **`[x]` Completed** |
+| 2 | Signal Research | `[ ]` Not started |
+| 3 | Backtesting | `[ ]` Not started |
+| 4 | Portfolio & Risk | `[ ]` Not started |
+| 5 | API | `[ ]` Not started |
+| 6 | Web Dashboard | `[ ]` Not started |
+| 7 | Docker & Public Distribution | `[ ]` Not started |
+| 8 | Hardening & Docs | `[ ]` Not started |
+
+**Phase 1 — Data Pipeline Comleted (2026-04-23)**
+
+สิ่งที่ทำใน Phase 1:
 - `ParquetStore` — เก็บข้อมูล OHLCV เป็น parquet พร้อม round-trip ครบถ้วน
 - `OHLCVLoader` — async wrapper ของ tvkit พร้อม retry, concurrency control, และ public mode guard
 - `UniverseBuilder` — กรอง symbol และสร้าง dated universe snapshots ป้องกัน survivorship bias
@@ -38,12 +45,6 @@
 - `notebooks/01_data_exploration.ipynb` — ตรวจสอบคุณภาพข้อมูล — **ผ่านทุก 6 เกณฑ์**
 
 ดู roadmap เต็มได้ที่ [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md)
-
-> **⚠️ Disclaimer**
-> โปรเจกต์นี้จัดทำขึ้นเพื่อการศึกษาเท่านั้น ไม่ถือเป็นคำแนะนำการลงทุนในทุกกรณี
-> ผลการทดสอบย้อนหลัง (backtest) ไม่ได้รับประกันผลตอบแทนในอนาคต
-> ผู้พัฒนาไม่รับผิดชอบต่อความเสียหายหรือผลกำไรขาดทุนใดๆ ที่เกิดจากการนำโปรเจกต์นี้ไปใช้งาน
-
 
 ---
 
