@@ -31,11 +31,20 @@ class FeaturePipeline:
         Returns:
             MultiIndex DataFrame with index `(date, symbol)` and normalized features.
         """
+        dates_index: pd.DatetimeIndex = pd.DatetimeIndex(rebalance_dates)
 
+        # Build close matrix (columns = symbols) and compute momentum once per symbol.
+        symbol_momentum: dict[str, pd.DataFrame] = {}
         close_frames: list[pd.Series] = []
         for symbol, frame in prices.items():
             series: pd.Series = frame["close"].rename(symbol)
             close_frames.append(series)
+            try:
+                mom_df: pd.DataFrame = self._momentum.compute(series, dates_index)
+                symbol_momentum[symbol] = mom_df
+            except Exception:
+                logger.warning("Skipping momentum for symbol %s", symbol)
+
         close_matrix: pd.DataFrame = (
             pd.concat(close_frames, axis=1).sort_index() if close_frames else pd.DataFrame()
         )
@@ -45,20 +54,44 @@ class FeaturePipeline:
             history: pd.DataFrame = close_matrix.loc[close_matrix.index <= rebalance_date]
             if history.empty:
                 continue
-            try:
-                momentum_frame: pd.DataFrame = self._momentum.compute_multi(history)
-            except Exception:
+
+            # Collect per-symbol momentum features for this date.
+            date_rows: list[dict[str, object]] = []
+            for symbol, mom_df in symbol_momentum.items():
+                if rebalance_date not in mom_df.index:
+                    continue
+                row: dict[str, object] = {"symbol": symbol}
+                row.update(mom_df.loc[rebalance_date].to_dict())
+                date_rows.append(row)
+
+            if not date_rows:
                 continue
+
+            feature_frame: pd.DataFrame = pd.DataFrame(date_rows).set_index("symbol")
+            feature_cols: list[str] = [c for c in feature_frame.columns if c != "symbol"]
+
+            # Append sharpe momentum (wide-matrix approach kept for now).
             sharpe_signal: pd.Series = self._risk_adjusted.sharpe_momentum(history)
-            feature_frame: pd.DataFrame = momentum_frame.join(sharpe_signal, how="outer")
+            feature_frame = feature_frame.join(sharpe_signal, how="outer")
+            feature_cols = list(feature_frame.columns)
+
+            # Drop rows with any NaN before z-scoring.
+            feature_frame = feature_frame.dropna()
+            if feature_frame.empty:
+                logger.warning("No valid symbols on %s after NaN drop", rebalance_date)
+                continue
+
             winsorised: pd.DataFrame = feature_frame.copy()
-            for column in winsorised.columns:
+            for column in feature_cols:
+                if column not in winsorised.columns:
+                    continue
                 lower: float = float(winsorised[column].quantile(0.01))
                 upper: float = float(winsorised[column].quantile(0.99))
                 winsorised[column] = winsorised[column].clip(lower=lower, upper=upper)
                 std: float = float(winsorised[column].std(ddof=0))
                 mean: float = float(winsorised[column].mean())
                 winsorised[column] = 0.0 if std == 0.0 else (winsorised[column] - mean) / std
+
             winsorised["date"] = rebalance_date
             panel_frames.append(winsorised.reset_index(names="symbol"))
 

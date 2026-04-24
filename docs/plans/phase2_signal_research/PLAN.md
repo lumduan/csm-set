@@ -1,10 +1,10 @@
-# Phase 2 — Signal Research Master Plan
+# Phase 2 - Signal Research Master Plan
 
-**Feature:** Momentum Signal Research และ IC Analysis บนตลาด SET
+**Feature:** Momentum Signal Research and IC Analysis on the SET market
 **Branch:** `feature/phase-2-signal-research`
 **Created:** 2026-04-24
-**Status:** In Progress — เริ่มต้น Phase 2
-**Positioning:** Research layer — ทดสอบและคัดเลือก momentum signals ที่มี alpha บนตลาดหุ้นไทย ก่อนนำไป backtest ใน Phase 3
+**Status:** In Progress - Starting Phase 2
+**Positioning:** Research layer - test and select momentum signals that exhibit real alpha in the Thai equity market before investing time in a backtest for Phase 3
 
 ---
 
@@ -28,100 +28,100 @@
 
 ### Purpose
 
-Phase 2 คือ **research layer** ที่ใช้ข้อมูล OHLCV ที่ผ่านการทำความสะอาดจาก Phase 1 มาคำนวณ momentum features แล้วทดสอบว่า signal ตัวไหนมี predictive power จริงบน SET ก่อนที่จะลงทุนเวลาพัฒนา backtest engine ใน Phase 3
+Phase 2 is the **research layer** that takes cleaned OHLCV data from Phase 1, computes momentum features, and tests which signals have genuine predictive power on the SET before spending time building a backtest engine in Phase 3.
 
-กระบวนการหลัก:
+Core workflow:
 
-1. คำนวณ momentum features หลายแบบ (12-1M, 6-1M, 3-1M, 1-0M, risk-adjusted, sector-relative)
-2. รวม features เป็น panel DataFrame (date × symbol) พร้อม winsorise + z-score
-3. Rank symbols แบบ cross-sectional percentile และ assign quintile labels
-4. วัด IC (Information Coefficient) และ ICIR ต่อ signal แต่ละตัวที่ horizons ต่างๆ
-5. สรุป composite signal ที่จะนำไป Phase 3
+1. Compute multiple momentum features (12-1M, 6-1M, 3-1M, 1-0M, risk-adjusted, sector-relative)
+2. Combine features into a panel DataFrame (date x symbol) with winsorization and z-scoring
+3. Rank symbols cross-sectionally by percentile and assign quintile labels
+4. Measure IC (Information Coefficient) and ICIR for each signal across multiple horizons
+5. Select the composite signal that will move forward into Phase 3
 
 ### Scope
 
-Phase 2 ครอบคลุม 7 sub-phases ตาม dependency order:
+Phase 2 covers 7 sub-phases in dependency order:
 
 | Sub-phase | Deliverable | Purpose |
-|---|---|---|
-| 2.1 | Momentum Features | คำนวณ mom_12_1, mom_6_1, mom_3_1, mom_1_0 |
-| 2.2 | Risk-Adjusted Features | sharpe_momentum, residual_momentum |
-| 2.3 | Sector Features | relative strength vs sector index |
-| 2.4 | Feature Pipeline | รวม features + winsorise + z-score cross-sectionally |
-| 2.5 | Ranking | Percentile rank + quintile labels per rebalance date |
+| --- | --- | --- |
+| 2.1 | Momentum Features | Compute mom_12_1, mom_6_1, mom_3_1, mom_1_0 |
+| 2.2 | Risk-Adjusted Features | Compute sharpe_momentum and residual_momentum |
+| 2.3 | Sector Features | Compute relative strength vs sector index |
+| 2.4 | Feature Pipeline | Combine features + winsorize + z-score cross-sectionally |
+| 2.5 | Ranking | Percentile ranks + quintile labels per rebalance date |
 | 2.6 | IC Analysis | Pearson IC, Spearman IC, ICIR, decay curves |
-| 2.7 | Signal Research Notebook | `02_signal_research.ipynb` — วิเคราะห์ครบ + ตัดสินใจ composite signal |
+| 2.7 | Signal Research Notebook | `02_signal_research.ipynb` - complete analysis + composite signal decision |
 
 **Out of scope for Phase 2:**
 
 - Backtest engine (Phase 3)
 - Portfolio construction (Phase 4)
-- API หรือ UI (Phases 5–6)
-- Live data refresh หรือ scheduled jobs (Phase 5)
+- API or UI work (Phases 5-6)
+- Live data refresh or scheduled jobs (Phase 5)
 
 ### Dependency on Phase 1
 
-Phase 2 ต้องการ artefacts ทั้งหมดจาก Phase 1:
+Phase 2 requires the following Phase 1 artifacts:
 
-| Artefact | Source | ใช้ใน |
-|---|---|---|
-| `data/raw/dividends/*.parquet` | Phase 1.8 re-fetch | คำนวณ returns ทุก sub-phase |
-| `data/processed/*.parquet` | Phase 1.5 PriceCleaner | raw returns ที่ผ่าน gap-fill และ winsorise แล้ว |
-| `data/universe/{YYYY-MM-DD}.parquet` | Phase 1.4 UniverseBuilder | กำหนด investable universe per rebalance date |
-| `data/universe/symbols.json` | Phase 1.4 | list of all candidate symbols |
+| Artifact | Source | Used In |
+| --- | --- | --- |
+| `data/raw/dividends/*.parquet` | Phase 1.8 re-fetch | Return computation in all sub-phases |
+| `data/processed/*.parquet` | Phase 1.5 PriceCleaner | Raw returns after gap-fill and winsorization |
+| `data/universe/{YYYY-MM-DD}.parquet` | Phase 1.4 UniverseBuilder | Investable universe per rebalance date |
+| `data/universe/symbols.json` | Phase 1.4 | List of all candidate symbols |
 
-Phase 2 **ไม่แตะ** raw OHLCV store โดยตรง — อ่านผ่าน `ParquetStore` เท่านั้น และ **ไม่สร้าง** ข้อมูลใหม่ใน `data/raw/` หรือ `data/processed/`
+Phase 2 **does not touch** the raw OHLCV store directly - it reads through `ParquetStore` only, and it **does not create** new data under `data/raw/` or `data/processed/`.
 
 ---
 
 ## Problem Statement
 
-ก่อนที่จะเขียน backtest engine ต้องรู้ก่อนว่า signal ตัวไหนมี predictive power จริงบน SET เพราะ:
+Before writing a backtest engine, we need to know which signals actually have predictive power on the SET because:
 
-1. **Emerging market dynamics แตกต่าง** — SET มีสัดส่วน retail investors สูง, bid-ask spreads กว้างกว่า developed markets, และมี sector concentration ที่ต่างจาก US/Europe momentum literature
-2. **Look-ahead bias ซ่อนง่าย** — การคำนวณ momentum return ที่ include เดือนล่าสุด (short-term reversal) หรือใช้ข้อมูลอนาคตใน z-score normalization จะทำให้ IC เกินจริง
-3. **Redundancy ระหว่าง signals** — ถ้า mom_12_1 และ mom_6_1 correlate สูง การรวมทั้งคู่ไม่ได้เพิ่ม alpha แต่เพิ่ม turnover
-4. **IC decay** — signal ที่ทำงานดีที่ 1M forward อาจ decay เร็วหรือช้าแตกต่างกัน ซึ่งส่งผลต่อ rebalancing frequency ที่เหมาะสม
-5. **Gate criterion** — ICIR < 0.3 บน signal ใดๆ หมายความว่า signal นั้นไม่ควรเข้า composite score ใน Phase 3
+1. **Emerging market dynamics differ** - the SET has a higher share of retail investors, wider bid-ask spreads than developed markets, and sector concentration that differs from US and European momentum literature.
+2. **Look-ahead bias is easy to hide** - if momentum calculations include the most recent month or use future information during z-score normalization, IC will be overstated.
+3. **Signals can be redundant** - if mom_12_1 and mom_6_1 are highly correlated, combining them may not add alpha and may only increase turnover.
+4. **IC decay matters** - a signal that works well at 1M forward return may decay faster or slower than others, which affects the appropriate rebalancing frequency.
+5. **A gate criterion is needed** - if ICIR < 0.3 for a signal, it should not be included in the Phase 3 composite score.
 
 ---
 
 ## Design Rationale
 
-### Cross-sectional แทน Time-series
+### Cross-Sectional Instead of Time-Series
 
-Phase 2 ทำ cross-sectional ranking (rank symbols ต่อกันภายใน universe เดียวกัน) ไม่ใช่ time-series momentum (เปรียบเทียบ symbol กับตัวเองในอดีต) เพราะ:
+Phase 2 uses cross-sectional ranking, meaning symbols are ranked against each other within the same universe, rather than time-series momentum, which compares each symbol against its own history, because:
 
-- ลด market beta exposure โดยธรรมชาติ
-- สอดคล้องกับ Jegadeesh–Titman (1993) และ Rouwenhorst (1999) ที่ทดสอบบน emerging markets
-- ป้องกัน look-ahead bias ได้ง่ายกว่า — แต่ละ rebalance date ใช้ข้อมูล ≤ asof เท่านั้น
+- It naturally reduces market beta exposure.
+- It aligns with Jegadeesh-Titman (1993) and Rouwenhorst (1999), which studied momentum in emerging markets.
+- It is easier to protect against look-ahead bias because each rebalance date uses only data <= the as-of date.
 
-### Skip Last Month (Formation Gap)
+### Skip the Last Month (Formation Gap)
 
-ทุก momentum feature ใช้ pattern `[t-N : t-1M]` ไม่ใช่ `[t-N : t]` เพื่อหลีกเลี่ยง short-term reversal ที่รู้จักกันดีในตลาด (bid-ask bounce, microstructure noise) ซึ่งจะทำให้ signal ดูแย่ลงใน IC ถ้าไม่ skip
+Every momentum feature uses the pattern `[t-N : t-1M]` instead of `[t-N : t]` to avoid short-term reversal effects that are well known in markets, such as bid-ask bounce and microstructure noise. Without this skip, the signal may look artificially worse in IC tests.
 
-### Z-score Cross-sectionally, Not Time-series
+### Z-Score Cross-Sectionally, Not Time-Series
 
-Normalization ทำ per rebalance date cross-sectionally (mean 0, std 1 across symbols ณ วันนั้น) ไม่ใช่ normalize ตาม time series ของ symbol เดิม เพราะ:
+Normalization is performed per rebalance date across the cross-section, not across the time series of each symbol, because:
 
-- ป้องกัน distribution shift ของ market regime ซึมเข้ามาใน signal
-- ทำให้ signal ทุกตัว comparable บน scale เดียวกันสำหรับ composite weighting
+- It prevents market-regime distribution shifts from leaking into the signal.
+- It makes all signals directly comparable on the same scale for composite weighting.
 
 ### IC vs Quintile Spread
 
-Phase 2 ใช้ทั้ง IC (continuous correlation) และ quintile spread (Q5−Q1) เป็น complementary metrics:
+Phase 2 uses both IC and quintile spread (Q5-Q1) as complementary metrics:
 
-- IC วัด signal quality อย่าง statistically robust
-- Quintile spread วัดว่า practical portfolio ที่ long Q5 / short Q1 จะทำกำไรได้จริงแค่ไหน
-- ICIR = mean(IC) / std(IC) วัด signal stability ข้าม time periods
+- IC measures signal quality in a statistically robust continuous way.
+- Quintile spread measures whether a practical Q5 long / Q1 short portfolio would produce meaningful performance.
+- ICIR = mean(IC) / std(IC) measures signal stability across time.
 
-### DataFrame Panel Design
+### Panel DataFrame Design
 
-Feature pipeline ผลิต panel DataFrame ที่ index เป็น `(date, symbol)` MultiIndex — รูปแบบนี้ทำให้:
+The feature pipeline produces a panel DataFrame indexed by `(date, symbol)` as a MultiIndex. This structure makes it easy to:
 
-- GroupBy per date สำหรับ cross-sectional z-score ง่ายมาก
-- Forward join กับ return ที่ horizon ต่างๆ ทำใน pandas โดยตรง
-- ง่ายต่อการ export เป็น parquet สำหรับ Phase 3 consumption
+- run `groupby` by date for cross-sectional z-scoring,
+- join forward returns for multiple horizons directly in pandas,
+- export parquet files for Phase 3 consumption.
 
 ---
 
@@ -129,18 +129,18 @@ Feature pipeline ผลิต panel DataFrame ที่ index เป็น `(dat
 
 ### Directory Layout
 
-```
+```text
 src/csm/
 ├── features/
 │   ├── __init__.py
-│   ├── momentum.py           # MomentumFeatures — mom_12_1, 6_1, 3_1, 1_0
-│   ├── risk_adjusted.py      # RiskAdjustedFeatures — sharpe_momentum, residual_momentum
-│   ├── sector.py             # SectorFeatures — relative strength vs sector
-│   └── pipeline.py           # FeaturePipeline — combine + winsorise + z-score
+│   ├── momentum.py           # MomentumFeatures - mom_12_1, 6_1, 3_1, 1_0
+│   ├── risk_adjusted.py      # RiskAdjustedFeatures - sharpe_momentum, residual_momentum
+│   ├── sector.py             # SectorFeatures - relative strength vs sector
+│   └── pipeline.py           # FeaturePipeline - combine + winsorise + z-score
 ├── research/
 │   ├── __init__.py
-│   ├── ranking.py            # CrossSectionalRanker — percentile rank + quintiles
-│   └── ic_analysis.py        # ICAnalyzer — Pearson/Spearman IC, ICIR, decay curves
+│   ├── ranking.py            # CrossSectionalRanker - percentile rank + quintiles
+│   └── ic_analysis.py        # ICAnalyzer - Pearson/Spearman IC, ICIR, decay curves
 
 notebooks/
 └── 02_signal_research.ipynb  # IC time series, ICIR table, correlation matrix, decay curves
@@ -150,276 +150,277 @@ results/
     └── latest_ranking.json   # exported composite signal scores + quintiles (git-committed)
 
 tests/
-├── features/
-│   ├── test_momentum.py
-│   ├── test_risk_adjusted.py
-│   ├── test_sector.py
-│   └── test_pipeline.py
-└── research/
+└── unit/
+  ├── features/
+  │   ├── test_momentum.py
+  │   ├── test_risk_adjusted.py
+  │   ├── test_sector.py
+  │   └── test_pipeline.py
+  └── research/
     ├── test_ranking.py
     └── test_ic_analysis.py
 ```
 
 ### Dependency Graph
 
-```
-ParquetStore + UniverseBuilder (Phase 1 — read-only)
+```text
+ParquetStore + UniverseBuilder (Phase 1 - read-only)
     ↑ reads
-MomentumFeatures       (pandas, numpy — pure computation, no I/O)
-RiskAdjustedFeatures   (pandas, numpy, scipy — regression for residual)
-SectorFeatures         (pandas — relative to sector aggregation)
+MomentumFeatures       (pandas, numpy - pure computation, no I/O)
+RiskAdjustedFeatures   (pandas, numpy, scipy - regression for residual)
+SectorFeatures         (pandas - relative to sector aggregation)
     ↑ combined by
-FeaturePipeline        (all features → panel DataFrame; winsorise + z-score)
+FeaturePipeline        (all features -> panel DataFrame; winsorise + z-score)
     ↑ consumed by
 CrossSectionalRanker   (percentile rank, quintile labels)
 ICAnalyzer             (Pearson/Spearman IC, ICIR, decay)
-    ↑ visualised by
+    ↑ visualized by
 02_signal_research.ipynb
 ```
 
 ### Data Flow
 
-```
-data/processed/{SYMBOL}.parquet     ← Phase 1.5 cleaned OHLCV (read-only)
-data/universe/{YYYY-MM-DD}.parquet  ← Phase 1.4 universe snapshots (read-only)
+```text
+data/processed/{SYMBOL}.parquet     <- Phase 1.5 cleaned OHLCV (read-only)
+data/universe/{YYYY-MM-DD}.parquet  <- Phase 1.4 universe snapshots (read-only)
     ↓  MomentumFeatures.compute()
     ↓  RiskAdjustedFeatures.compute()
     ↓  SectorFeatures.compute()
     ↓  FeaturePipeline.build()
-panel_df: (date, symbol) → {features}   ← in-memory panel
+panel_df: (date, symbol) -> {features}   <- in-memory panel
     ↓  CrossSectionalRanker.rank()
 panel_df + {rank, quintile} columns
     ↓  ICAnalyzer.compute_ic()
-ic_results: {signal_name → IC series, ICIR, decay_curve}
-    ↓  02_signal_research.ipynb (visualise + decide)
-results/signals/latest_ranking.json   ← exported for Phase 5/6 public mode
+ic_results: {signal_name -> IC series, ICIR, decay_curve}
+    ↓  02_signal_research.ipynb (visualize + decide)
+results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 ```
 
 ---
 
 ## Implementation Phases
 
-### Phase 2.1 — Momentum Features
+### Phase 2.1 - Momentum Features
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-24
 **Depends On:** Phase 1.5 (processed OHLCV in `data/processed/`)
 
-**Goal:** คำนวณ raw momentum returns ทั้ง 4 แบบต่อ symbol ต่อ rebalance date โดยปราศจาก look-ahead bias
+**Goal:** Compute the four raw momentum-return variants per symbol and per rebalance date without look-ahead bias.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/momentum.py` — `MomentumFeatures`
-  - [ ] `compute(close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Input: `close` price Series ของ symbol เดียว, DatetimeIndex ของ rebalance dates
-    - [ ] Output: DataFrame index = rebalance_dates, columns = signal names
-    - [ ] `mom_12_1`: return จาก `t-252` ถึง `t-21` trading days (12 เดือน skip 1 เดือน)
-    - [ ] `mom_6_1`: return จาก `t-126` ถึง `t-21` (6 เดือน skip 1 เดือน)
-    - [ ] `mom_3_1`: return จาก `t-63` ถึง `t-21` (3 เดือน skip 1 เดือน)
-    - [ ] `mom_1_0`: return จาก `t-21` ถึง `t` (1 เดือน ไม่ skip — ใช้เป็น reversal signal)
-    - [ ] Return คำนวณเป็น `log(price_end / price_start)` สำหรับ compositing ที่ดีกว่า
-    - [ ] ถ้า close ที่ boundary date ไม่มีข้อมูล → NaN (ไม่ backfill ข้าม boundary)
-- [ ] Unit test: `mom_12_1` ตรงกับการคำนวณ manual ด้วย pandas
-- [ ] Unit test: `mom_6_1`, `mom_3_1`, `mom_1_0` ตรงกับ pandas reference
-- [ ] Unit test: no look-ahead — signal ที่ rebalance date `t` ใช้เฉพาะ close ≤ `t-21`
-- [ ] Unit test: NaN propagation ถ้า close history สั้นกว่า lookback
+- [x] `src/csm/features/momentum.py` - `MomentumFeatures`
+  - [x] `compute(close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
+    - [x] Input: close price Series for a single symbol and a DatetimeIndex of rebalance dates
+    - [x] Output: DataFrame indexed by rebalance dates with signal-name columns
+    - [x] `mom_12_1`: return from `t-252` to `t-21` trading days (12 months, skip 1 month)
+    - [x] `mom_6_1`: return from `t-126` to `t-21` (6 months, skip 1 month)
+    - [x] `mom_3_1`: return from `t-63` to `t-21` (3 months, skip 1 month)
+    - [x] `mom_1_0`: return from `t-21` to `t` (1 month, no skip - used as a reversal signal)
+    - [x] Returns are computed as `log(price_end / price_start)` for better compositing behavior
+    - [x] If the close value at a boundary date is missing -> NaN, with no backfill across the boundary
+- [x] Unit test: `mom_12_1` matches a manual pandas calculation
+- [x] Unit test: `mom_6_1`, `mom_3_1`, and `mom_1_0` match pandas reference calculations
+- [x] Unit test: no look-ahead - the signal at rebalance date `t` uses only closes <= `t-21`
+- [x] Unit test: NaN propagation when close history is shorter than the lookback window
 
 **Implementation notes:**
 
-- ใช้ integer offset (trading days) ไม่ใช่ calendar days เพราะ SET หยุดวันหยุดราชการ
-- `t-21` ≈ 1 เดือน trading days, `t-63` ≈ 3M, `t-126` ≈ 6M, `t-252` ≈ 12M
-- ไม่ annualize return — ใช้ raw log return เพื่อความ consistent กับ IC calculation
+- Use integer offsets in trading days rather than calendar days because the SET closes on public holidays.
+- `t-21` ≈ 1 trading month, `t-63` ≈ 3M, `t-126` ≈ 6M, `t-252` ≈ 12M.
+- Do not annualize returns - use raw log return for consistency with IC calculation.
 
 ---
 
-### Phase 2.2 — Risk-Adjusted Features
+### Phase 2.2 - Risk-Adjusted Features
 
 **Status:** `[ ]` Not started
 **Depends On:** Phase 2.1 (raw momentum returns), Phase 1 OHLCV data
 
-**Goal:** สร้าง features ที่ปรับ return ด้วย risk เพื่อดูว่า risk-adjusted signal มี ICIR ดีกว่า raw momentum หรือไม่
+**Goal:** Build features that adjust returns for risk in order to test whether risk-adjusted signals produce better ICIR than raw momentum.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/risk_adjusted.py` — `RiskAdjustedFeatures`
+- [ ] `src/csm/features/risk_adjusted.py` - `RiskAdjustedFeatures`
   - [ ] `compute(close: pd.Series, index_close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
     - [ ] Input: symbol close, SET index close, rebalance dates
-    - [ ] Output: DataFrame index = rebalance_dates, columns = signal names
-    - [ ] `sharpe_momentum`: `mom_12_1 / vol_12` โดย `vol_12` = annualized std ของ daily returns ใน 252 วันก่อน `t-21`
-    - [ ] `residual_momentum`: alpha จาก OLS regression ของ daily returns ของ symbol vs SET index ใน 252 วันก่อน `t-21` (market-beta-neutral)
-    - [ ] ทั้งคู่ใช้ window เดียวกับ `mom_12_1` เพื่อความ consistent
-- [ ] Unit test: `sharpe_momentum` bounded อย่างสมเหตุสมผล (ไม่ infinity ถ้า vol ≠ 0)
-- [ ] Unit test: `residual_momentum` market-neutral — correlation กับ index return ≈ 0
-- [ ] Unit test: NaN ถ้า vol = 0 หรือ history สั้นเกินไปสำหรับ regression
-- [ ] Unit test: no look-ahead — regression ใช้เฉพาะ data ≤ `t-21`
+    - [ ] Output: DataFrame indexed by rebalance dates with signal-name columns
+    - [ ] `sharpe_momentum`: `mom_12_1 / vol_12`, where `vol_12` is the annualized standard deviation of daily returns in the 252 days before `t-21`
+    - [ ] `residual_momentum`: alpha from an OLS regression of symbol daily returns vs SET index daily returns over the 252 days before `t-21` (market-beta-neutral)
+    - [ ] Both use the same window as `mom_12_1` for consistency
+- [ ] Unit test: `sharpe_momentum` remains bounded and does not become infinity when vol != 0
+- [ ] Unit test: `residual_momentum` is market-neutral - correlation with index return is approximately 0
+- [ ] Unit test: NaN when vol = 0 or history is too short for regression
+- [ ] Unit test: no look-ahead - the regression uses only data <= `t-21`
 
 **Implementation notes:**
 
-- `sharpe_momentum`: ถ้า `vol_12 == 0` ให้ return `NaN` ไม่ใช่ `inf`
-- `residual_momentum`: ใช้ `scipy.stats.linregress` หรือ `numpy.linalg.lstsq` — ไม่ต้อง statsmodels (ลด dependency)
-- Index close ดึงจาก `data/processed/SET%3ASET.parquet` (tvkit format)
+- For `sharpe_momentum`, if `vol_12 == 0`, return `NaN` rather than `inf`.
+- For `residual_momentum`, use `scipy.stats.linregress` or `numpy.linalg.lstsq` - `statsmodels` is not required.
+- Index close is loaded from `data/processed/SET%3ASET.parquet` (tvkit format).
 
 ---
 
-### Phase 2.3 — Sector Features
+### Phase 2.3 - Sector Features
 
 **Status:** `[ ]` Not started
-**Depends On:** Phase 1 OHLCV data, `src/csm/config/constants.py` (SET_SECTOR_CODES)
+**Depends On:** Phase 1 OHLCV data, `src/csm/config/constants.py` (`SET_SECTOR_CODES`)
 
-**Goal:** วัด relative strength ของแต่ละ symbol เทียบกับ sector index ของตัวเอง เพราะ momentum บน SET อาจเป็น sector-driven มากกว่า stock-specific
+**Goal:** Measure each symbol's relative strength versus its own sector index, because momentum on the SET may be more sector-driven than stock-specific.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/sector.py` — `SectorFeatures`
+- [ ] `src/csm/features/sector.py` - `SectorFeatures`
   - [ ] `compute(symbol_close: pd.Series, sector_closes: dict[str, pd.Series], symbol_sector: str, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Input: symbol close, dict ของ sector index closes, sector code ของ symbol, rebalance dates
-    - [ ] Output: DataFrame index = rebalance_dates, columns = `["sector_rel_strength"]`
-    - [ ] `sector_rel_strength`: `mom_12_1(symbol) - mom_12_1(sector_index)` — excess return ของ symbol vs sector ใน 12 เดือน skip 1 เดือน
-    - [ ] ถ้า sector index ไม่มีข้อมูล → NaN (ไม่ fallback เป็น market)
-- [ ] Unit test: `sector_rel_strength == 0` เมื่อ symbol close เท่ากับ sector index
-- [ ] Unit test: positive เมื่อ symbol outperform sector, negative เมื่อ underperform
-- [ ] Unit test: NaN เมื่อไม่มี sector data
-- [ ] Unit test: no look-ahead — ใช้เฉพาะ data ≤ `t-21`
+    - [ ] Input: symbol close, dict of sector index closes, the symbol's sector code, rebalance dates
+    - [ ] Output: DataFrame indexed by rebalance dates with column `["sector_rel_strength"]`
+    - [ ] `sector_rel_strength`: `mom_12_1(symbol) - mom_12_1(sector_index)` - symbol excess return vs its sector over 12 months with a 1-month skip
+    - [ ] If sector index data is unavailable -> NaN, with no fallback to market data
+- [ ] Unit test: `sector_rel_strength == 0` when symbol close equals the sector index
+- [ ] Unit test: positive when the symbol outperforms the sector and negative when it underperforms
+- [ ] Unit test: NaN when sector data is missing
+- [ ] Unit test: no look-ahead - uses only data <= `t-21`
 
 **Implementation notes:**
 
-- Sector index สร้างเป็น equal-weight average ของ symbols ใน sector นั้นที่ผ่าน universe filter ณ วันนั้น — ไม่ใช่ SET sector index official (เพราะไม่มีข้อมูลชัดเจนใน tvkit)
-- `SET_SECTOR_CODES` ใน `constants.py` ใช้เป็น mapping — แต่ละ symbol ต้องมี `sector` metadata ซึ่งจะต้องดึงจาก `settfex` หรือ hard-code
+- The sector index is built as the equal-weight average of symbols in that sector passing the universe filter on that date - not the official SET sector index, because clear sector-index data may not be available from tvkit.
+- `SET_SECTOR_CODES` in `constants.py` is used as the mapping, but each symbol must also have `sector` metadata loaded from settfex or maintained explicitly.
 
 ---
 
-### Phase 2.4 — Feature Pipeline
+### Phase 2.4 - Feature Pipeline
 
 **Status:** `[ ]` Not started
-**Depends On:** Phase 2.1, 2.2, 2.3
+**Depends On:** Phases 2.1, 2.2, 2.3
 
-**Goal:** รวม features ทั้งหมดเป็น panel DataFrame ที่พร้อมใช้ใน IC analysis และ ranking พร้อม cross-sectional normalization ที่ถูกต้อง
+**Goal:** Combine all features into a panel DataFrame ready for IC analysis and ranking, with correct cross-sectional normalization.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/pipeline.py` — `FeaturePipeline`
+- [ ] `src/csm/features/pipeline.py` - `FeaturePipeline`
   - [ ] `__init__(self, store: ParquetStore, universe_store: ParquetStore, settings: Settings)`
   - [ ] `build(rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Output: MultiIndex DataFrame `(date, symbol)` → columns = all feature names
-    - [ ] ต่อ rebalance date:
-      1. Load universe snapshot → list of valid symbols
-      2. Load processed OHLCV ต่อ symbol จาก `ParquetStore`
-      3. Compute all features (2.1, 2.2, 2.3) ต่อ symbol
-      4. Assemble cross-sectional DataFrame ณ วันนั้น
-      5. Winsorise แต่ละ feature column ที่ 1st/99th percentile cross-sectionally
-      6. Z-score normalize แต่ละ feature column (mean 0, std 1) cross-sectionally
-    - [ ] Symbols ที่มี NaN ใน feature ใดๆ → drop จาก panel วันนั้น (ไม่ impute)
+    - [ ] Output: MultiIndex DataFrame `(date, symbol)` -> columns = all feature names
+    - [ ] For each rebalance date:
+      1. Load the universe snapshot -> list of valid symbols
+      2. Load processed OHLCV for each symbol from `ParquetStore`
+      3. Compute all features from 2.1, 2.2, and 2.3 for each symbol
+      4. Assemble the cross-sectional DataFrame for that date
+      5. Winsorize each feature column at the 1st and 99th cross-sectional percentiles
+      6. Z-score normalize each feature column cross-sectionally (mean 0, std 1)
+    - [ ] Symbols with NaN in any feature are dropped from that date's panel - no imputation
   - [ ] `build_forward_returns(panel_df: pd.DataFrame, horizons: list[int]) -> pd.DataFrame`
-    - [ ] Compute forward log-return per symbol per date at each horizon (1M, 2M, 3M, 6M, 12M)
-    - [ ] Join กับ panel_df ด้วย left join — NaN ถ้า horizon data ยังไม่มี (end of sample)
-- [ ] Unit test: z-score mean ≈ 0 และ std ≈ 1 per date per feature
-- [ ] Unit test: winsorise ลด extreme outliers ก่อน z-score
-- [ ] Unit test: no data leakage — features ที่ date `t` ใช้เฉพาะ data ≤ `t`
-- [ ] Unit test: forward return ที่ horizon `h` ใช้ data ≥ `t+h` (ไม่ contaminate signal ด้วย future data)
-- [ ] Unit test: symbol ที่มี NaN feature ถูก drop จาก output ณ วันนั้น
+    - [ ] Compute forward log return per symbol and date for each horizon (1M, 2M, 3M, 6M, 12M)
+    - [ ] Join to `panel_df` with a left join - NaN when horizon data is not yet available at the end of sample
+- [ ] Unit test: z-score mean ≈ 0 and std ≈ 1 per date and per feature
+- [ ] Unit test: winsorization reduces extreme outliers before z-scoring
+- [ ] Unit test: no data leakage - features at date `t` use only data <= `t`
+- [ ] Unit test: forward return at horizon `h` uses data >= `t+h` and does not contaminate the signal with future information
+- [ ] Unit test: a symbol with a NaN feature is dropped from that date's output
 
 **Implementation notes:**
 
-- `build()` เป็น synchronous — ถ้าใช้เวลานาน caller ควร wrap ด้วย `asyncio.to_thread()`
-- Log จำนวน symbols ที่ drop per date เพื่อ audit
-- Panel DataFrame ขนาด `(N_dates × N_symbols, N_features)` อาจใหญ่ถึง ~50K rows — ใช้ `float32` สำหรับ feature columns เพื่อประหยัด memory
+- `build()` is synchronous - if it is slow, the caller should wrap it in `asyncio.to_thread()`.
+- Log the number of symbols dropped per date for auditability.
+- The panel DataFrame may grow to roughly 50K rows, so use `float32` for feature columns to save memory.
 
 ---
 
-### Phase 2.5 — Ranking
+### Phase 2.5 - Ranking
 
 **Status:** `[ ]` Not started
 **Depends On:** Phase 2.4 (panel DataFrame)
 
-**Goal:** สร้าง cross-sectional rank และ quintile labels ต่อ rebalance date สำหรับใช้ใน IC analysis และ quintile spread analysis
+**Goal:** Create cross-sectional ranks and quintile labels per rebalance date for use in IC analysis and quintile spread analysis.
 
 **Deliverables:**
 
-- [ ] `src/csm/research/ranking.py` — `CrossSectionalRanker`
+- [ ] `src/csm/research/ranking.py` - `CrossSectionalRanker`
   - [ ] `rank(panel_df: pd.DataFrame, signal_col: str) -> pd.DataFrame`
-    - [ ] Input: panel_df ที่มี MultiIndex `(date, symbol)`, ชื่อ column ของ composite signal
-    - [ ] Output: panel_df เดิม + column `{signal_col}_rank` (0–1 percentile) + `{signal_col}_quintile` (1–5)
-    - [ ] Percentile rank per date: `rank(pct=True)` within date group
+    - [ ] Input: `panel_df` with MultiIndex `(date, symbol)` and the name of the composite signal column
+    - [ ] Output: original `panel_df` plus columns `{signal_col}_rank` (0-1 percentile) and `{signal_col}_quintile` (1-5)
+    - [ ] Percentile rank per date: `rank(pct=True)` within each date group
     - [ ] Quintile: `pd.qcut(rank, q=5, labels=[1,2,3,4,5])` per date
   - [ ] `rank_all(panel_df: pd.DataFrame) -> pd.DataFrame`
-    - [ ] Apply `rank()` ต่อทุก feature column ใน panel_df
-    - [ ] Return panel_df พร้อม rank + quintile columns สำหรับทุก feature
-- [ ] Unit test: ranks sum ถูกต้อง — percentile ranks bounded [0, 1]
-- [ ] Unit test: quintile counts balanced per date (แต่ละ quintile ≈ N/5 symbols)
-- [ ] Unit test: highest signal value → quintile 5 (winner), lowest → quintile 1 (loser)
-- [ ] Unit test: symbols ที่ NaN ใน signal ถูก drop ออกจาก rank ณ วันนั้น
+    - [ ] Apply `rank()` to every feature column in `panel_df`
+    - [ ] Return `panel_df` with rank and quintile columns for all features
+- [ ] Unit test: percentile ranks are bounded in [0, 1]
+- [ ] Unit test: quintile counts are balanced per date, with each quintile containing approximately `N/5` symbols
+- [ ] Unit test: highest signal value -> quintile 5, lowest -> quintile 1
+- [ ] Unit test: symbols with NaN in the signal are dropped from ranking on that date
 
 **Implementation notes:**
 
-- `rank(method='average')` สำหรับ ties — consistent กับ Spearman IC
-- Quintile labels เป็น integer (1–5) ไม่ใช่ string เพื่อง่ายต่อการ filter ใน Phase 3
+- Use `rank(method='average')` for ties to stay consistent with Spearman IC.
+- Quintile labels should be integers (1-5), not strings, for easier filtering in Phase 3.
 
 ---
 
-### Phase 2.6 — IC Analysis
+### Phase 2.6 - IC Analysis
 
 **Status:** `[ ]` Not started
 **Depends On:** Phase 2.4 (panel + forward returns), Phase 2.5 (ranking)
 
-**Goal:** วัด predictive power ของแต่ละ signal และ composite score โดยใช้ IC เพื่อตัดสินใจว่า signal ตัวไหนเข้า composite ใน Phase 3
+**Goal:** Measure the predictive power of each signal and the composite score using IC, in order to decide which signals enter the Phase 3 composite.
 
 **Deliverables:**
 
-- [ ] `src/csm/research/ic_analysis.py` — `ICAnalyzer`
+- [ ] `src/csm/research/ic_analysis.py` - `ICAnalyzer`
   - [ ] `compute_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
-    - [ ] Input: panel_df ที่มี signal column และ forward return column
-    - [ ] Output: IC time series (index = rebalance dates, values = Pearson IC per date)
-    - [ ] Pearson IC: `corr(signal_t, forward_return_t)` per date (cross-sectional correlation)
-    - [ ] NaN ถ้า < 10 symbols ณ วันนั้น
+    - [ ] Input: `panel_df` containing a signal column and a forward return column
+    - [ ] Output: IC time series indexed by rebalance date, with Pearson IC per date
+    - [ ] Pearson IC: `corr(signal_t, forward_return_t)` per date as a cross-sectional correlation
+    - [ ] NaN when fewer than 10 symbols are available on that date
   - [ ] `compute_rank_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
-    - [ ] Spearman rank IC (rank ทั้ง signal และ return ก่อน correlate)
+    - [ ] Spearman rank IC, ranking both signal and return before correlation
   - [ ] `compute_icir(ic_series: pd.Series) -> float`
     - [ ] ICIR = `ic_series.mean() / ic_series.std()`
-    - [ ] Return `NaN` ถ้า `ic_series` มีน้อยกว่า 12 periods
+    - [ ] Return `NaN` when `ic_series` has fewer than 12 periods
   - [ ] `compute_decay_curve(panel_df: pd.DataFrame, signal_col: str, horizons: list[int]) -> pd.Series`
-    - [ ] วัด mean IC per horizon: 1M, 2M, 3M, 6M, 12M
-    - [ ] Output: Series index = horizons, values = mean IC
+    - [ ] Measure mean IC by horizon: 1M, 2M, 3M, 6M, 12M
+    - [ ] Output: Series indexed by horizons with mean IC values
   - [ ] `summary_table(panel_df: pd.DataFrame, signal_cols: list[str], horizon: int = 1) -> pd.DataFrame`
-    - [ ] Output table: signal_name → {Mean_IC, Std_IC, ICIR, t-stat, % positive IC months}
-- [ ] Unit test: IC ต่อ known synthetic data ที่รู้ exact correlation
-- [ ] Unit test: ICIR คำนวณถูกต้องเทียบกับ manual mean/std
-- [ ] Unit test: decay curve มี horizons ถูกต้อง
-- [ ] Unit test: NaN ถ้า < 10 symbols ต่อ date
-- [ ] Unit test: summary_table มี columns ถูกต้องและ shape ตาม signal_cols
+    - [ ] Output table: `signal_name -> {Mean_IC, Std_IC, ICIR, t-stat, % positive IC months}`
+- [ ] Unit test: IC on known synthetic data with a known exact correlation
+- [ ] Unit test: ICIR matches a manual mean/std calculation
+- [ ] Unit test: decay curve returns the correct horizons
+- [ ] Unit test: NaN when fewer than 10 symbols are present on a date
+- [ ] Unit test: `summary_table` has the correct columns and shape for `signal_cols`
 
 **Implementation notes:**
 
-- Pearson IC อาจ sensitive ต่อ outliers ใน cross-sectional return → เสริมด้วย Rank IC เป็นหลัก
-- t-stat = `ICIR × sqrt(T)` โดย T = number of non-NaN IC observations
-- Phase 2.7 notebook จะ visualize และตัดสินใจ — `ICAnalyzer` แค่คำนวณตัวเลข
+- Pearson IC can be sensitive to outliers in cross-sectional returns, so Rank IC should also be used as a core metric.
+- `t-stat = ICIR * sqrt(T)`, where `T` is the number of non-NaN IC observations.
+- The Phase 2.7 notebook will handle visualization and decision-making - `ICAnalyzer` only computes the numbers.
 
 ---
 
-### Phase 2.7 — Signal Research Notebook
+### Phase 2.7 - Signal Research Notebook
 
 **Status:** `[ ]` Not started
-**Depends On:** Phase 2.1–2.6 ทั้งหมด
+**Depends On:** All of Phases 2.1-2.6
 
-**Goal:** Human sign-off ว่า signal ตัวไหนมี ICIR > 0.3 บน SET และกำหนด composite signal สำหรับ Phase 3
+**Goal:** Provide human sign-off on which signals achieve ICIR > 0.3 on the SET and define the composite signal for Phase 3.
 
 **Deliverables:**
 
 - [ ] `notebooks/02_signal_research.ipynb`
-  - [ ] **Section 1: Data Loading** — โหลด panel_df จาก FeaturePipeline + forward returns
-  - [ ] **Section 2: IC Time Series** — plot IC time series ต่อ signal (mom_12_1, 6_1, 3_1, 1_0, sharpe_momentum, residual_momentum, sector_rel_strength)
-  - [ ] **Section 3: ICIR Summary Table** — rank signals ตาม ICIR พร้อม confidence interval
-  - [ ] **Section 4: Signal Correlation Matrix** — heatmap correlation ระหว่าง signals (ตรวจ redundancy)
-  - [ ] **Section 5: IC Decay Curves** — mean IC per horizon สำหรับแต่ละ signal
-  - [ ] **Section 6: Quintile Return Spreads** — Q5−Q1 annual return ต่อ signal ต่อปี (bar chart)
-  - [ ] **Section 7: Composite Signal Design** — อธิบาย weighting scheme ที่เลือก + ICIR ของ composite
-  - [ ] **Section 8: Sign-off** — print PASS/FAIL ต่อ exit criteria ทุกข้อ
-  - [ ] ทุก markdown cell เขียนเป็นภาษาไทย
-  - [ ] จุดสิ้นสุด: ระบุ composite signal formula ที่จะใช้ใน Phase 3 พร้อมเหตุผล
+  - [ ] **Section 1: Data Loading** - load `panel_df` from `FeaturePipeline` plus forward returns
+  - [ ] **Section 2: IC Time Series** - plot IC time series for each signal (`mom_12_1`, `mom_6_1`, `mom_3_1`, `mom_1_0`, `sharpe_momentum`, `residual_momentum`, `sector_rel_strength`)
+  - [ ] **Section 3: ICIR Summary Table** - rank signals by ICIR with confidence intervals
+  - [ ] **Section 4: Signal Correlation Matrix** - heatmap of correlations between signals to check redundancy
+  - [ ] **Section 5: IC Decay Curves** - mean IC by horizon for each signal
+  - [ ] **Section 6: Quintile Return Spreads** - annual Q5-Q1 return by signal and by year (bar chart)
+  - [ ] **Section 7: Composite Signal Design** - explain the selected weighting scheme and the ICIR of the composite
+  - [ ] **Section 8: Sign-off** - print PASS/FAIL for each exit criterion
+  - [ ] All markdown cells are written in Thai
+  - [ ] Final outcome: specify the composite signal formula to be used in Phase 3, with rationale
 
 **Implementation notes:**
 
-- Notebook ใช้ `FeaturePipeline`, `CrossSectionalRanker`, `ICAnalyzer` โดยตรง
-- ถ้า `data/processed/` ว่าง → แสดง `⚠ DATA NOT AVAILABLE` ต่อ section
-- Export ผลการ IC analysis เป็น JSON ใน `results/signals/` สำหรับ Phase 5/6
+- The notebook uses `FeaturePipeline`, `CrossSectionalRanker`, and `ICAnalyzer` directly.
+- If `data/processed/` is empty, display `WARNING: DATA NOT AVAILABLE` in each section.
+- Export IC analysis outputs as JSON under `results/signals/` for Phases 5 and 6.
 
 ---
 
@@ -428,28 +429,28 @@ results/signals/latest_ranking.json   ← exported for Phase 5/6 public mode
 ### Feature Column Convention
 
 | Feature Name | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `mom_12_1` | `float32` | 12-1M log return (skip 1M) |
 | `mom_6_1` | `float32` | 6-1M log return (skip 1M) |
 | `mom_3_1` | `float32` | 3-1M log return (skip 1M) |
-| `mom_1_0` | `float32` | 1M log return (no skip — reversal signal) |
-| `sharpe_momentum` | `float32` | mom_12_1 / 12M trailing vol |
-| `residual_momentum` | `float32` | market-beta-adjusted 12M alpha |
-| `sector_rel_strength` | `float32` | symbol mom_12_1 − sector mom_12_1 |
+| `mom_1_0` | `float32` | 1M log return (no skip - reversal signal) |
+| `sharpe_momentum` | `float32` | `mom_12_1 /` trailing 12M volatility |
+| `residual_momentum` | `float32` | Market-beta-adjusted 12M alpha |
+| `sector_rel_strength` | `float32` | `symbol mom_12_1 - sector mom_12_1` |
 
-ทุก feature column ใน panel_df ที่ผ่าน `FeaturePipeline.build()` จะถูก winsorise + z-score แล้ว
+Every feature column in `panel_df` produced by `FeaturePipeline.build()` is winsorized and z-scored.
 
 ### Panel DataFrame Schema
 
-```
+```text
 Index: MultiIndex [(date: pd.Timestamp, symbol: str), ...]
   - date: rebalance date (last trading day of month, UTC)
-  - symbol: tvkit format e.g. "SET:AOT"
+  - symbol: tvkit format, e.g. "SET:AOT"
 
 Columns:
   - mom_12_1, mom_6_1, mom_3_1, mom_1_0      float32 (z-scored)
   - sharpe_momentum, residual_momentum        float32 (z-scored)
-  - sector_rel_strength                        float32 (z-scored)
+  - sector_rel_strength                       float32 (z-scored)
   - fwd_ret_1m, fwd_ret_2m, fwd_ret_3m        float32 (log return, not z-scored)
   - fwd_ret_6m, fwd_ret_12m                   float32 (log return, not z-scored)
   - rank_{feature}, quintile_{feature}        float32 / int8 (added by CrossSectionalRanker)
@@ -476,15 +477,15 @@ class ICResult:
 
 ## Error Handling Strategy
 
-| Scenario | Behaviour |
-|---|---|
-| Processed OHLCV ไม่พบสำหรับ symbol | Log warning; symbol ถูก skip ใน pipeline |
-| Universe snapshot ไม่พบสำหรับ rebalance date | Log warning; วันนั้นถูก skip ทั้งหมด |
-| Feature NaN สำหรับ symbol ณ วันใดวันหนึ่ง | Drop symbol จาก cross-section วันนั้น |
-| IC < 10 symbols ต่อ date | Return NaN สำหรับ IC วันนั้น |
-| Vol = 0 ใน sharpe_momentum | Return NaN — ไม่ใช่ inf |
-| Regression data < 63 days ใน residual_momentum | Return NaN — ไม่พอสำหรับ OLS |
-| `public_mode=True` ทุก operation | Phase 2 ทั้งหมดเป็น computation บน local data — ไม่ affected by public_mode |
+| Scenario | Behavior |
+| --- | --- |
+| Processed OHLCV missing for a symbol | Log a warning; skip the symbol in the pipeline |
+| Universe snapshot missing for a rebalance date | Log a warning; skip the entire date |
+| Feature is NaN for a symbol on a date | Drop the symbol from that date's cross-section |
+| Fewer than 10 symbols for IC on a date | Return NaN for that date's IC |
+| `vol = 0` in `sharpe_momentum` | Return NaN, not `inf` |
+| Regression data < 63 days in `residual_momentum` | Return NaN - insufficient data for OLS |
+| `public_mode=True` on all operations | Phase 2 is local-data computation only - not affected by public mode |
 
 ---
 
@@ -492,42 +493,42 @@ class ICResult:
 
 ### Coverage Target
 
-Minimum 90% line coverage สำหรับ `src/csm/features/` และ `src/csm/research/` ทั้งหมด
+Minimum 90% line coverage for all modules under `src/csm/features/` and `src/csm/research/`.
 
 ### Mocking Strategy
 
-- Features tests: synthetic close Series ที่รู้ exact expected return — ไม่ต้อง mock I/O
-- Pipeline tests: mock `ParquetStore.load` ด้วย synthetic DataFrames
-- IC tests: synthetic panel_df ที่ engineered correlation ที่รู้ exact IC value
-- No integration tests ที่ต้องการ live data ใน Phase 2
+- Feature tests: use synthetic close Series with exact expected returns - no I/O mocking required.
+- Pipeline tests: mock `ParquetStore.load` with synthetic DataFrames.
+- IC tests: use synthetic `panel_df` with engineered correlations that yield known IC values.
+- No integration tests that require live data in Phase 2.
 
 ### Test File Map
 
 | Module | Test file |
-|---|---|
-| `src/csm/features/momentum.py` | `tests/features/test_momentum.py` |
-| `src/csm/features/risk_adjusted.py` | `tests/features/test_risk_adjusted.py` |
-| `src/csm/features/sector.py` | `tests/features/test_sector.py` |
-| `src/csm/features/pipeline.py` | `tests/features/test_pipeline.py` |
-| `src/csm/research/ranking.py` | `tests/research/test_ranking.py` |
-| `src/csm/research/ic_analysis.py` | `tests/research/test_ic_analysis.py` |
+| --- | --- |
+| `src/csm/features/momentum.py` | `tests/unit/features/test_momentum.py` |
+| `src/csm/features/risk_adjusted.py` | `tests/unit/features/test_risk_adjusted.py` |
+| `src/csm/features/sector.py` | `tests/unit/features/test_sector.py` |
+| `src/csm/features/pipeline.py` | `tests/unit/features/test_pipeline.py` |
+| `src/csm/research/ranking.py` | `tests/unit/research/test_ranking.py` |
+| `src/csm/research/ic_analysis.py` | `tests/unit/research/test_ic_analysis.py` |
 
 ### Key Test Cases
 
-**No look-ahead bias** — test ที่สำคัญที่สุดของ Phase 2:
+**No look-ahead bias** - the most important test in Phase 2:
 
 ```python
-# ตัวอย่าง: signal ที่ rebalance_date ต้องไม่ใช้ข้อมูลหลัง t-21
+# Example: the signal at rebalance_date must not use data after t-21
 def test_no_lookahead_mom_12_1():
-    # สร้าง close series ที่ price เปลี่ยนแปลงหลัง t-21
-    # assert signal ไม่เปลี่ยนแปลงตาม price หลัง t-21
+    # Build a close series where price changes after t-21
+    # assert the signal does not change based on prices after t-21
 ```
 
 **Synthetic IC verification:**
 
 ```python
-# สร้าง panel ที่ signal = forward_return + noise
-# IC ควรสูงตามสัดส่วนของ signal / noise ratio
+# Build a panel where signal = forward_return + noise
+# IC should be high based on the signal/noise ratio
 ```
 
 ---
@@ -535,36 +536,36 @@ def test_no_lookahead_mom_12_1():
 ## Success Criteria
 
 | Criterion | Measure |
-|---|---|
-| อย่างน้อย 1 signal มี ICIR > 0.3 | `ICAnalyzer.compute_icir(ic_series) > 0.3` |
-| อย่างน้อย 1 signal มี mean IC > 0.03 | `ic_series.mean() > 0.03` |
-| Composite signal ICIR > 0.3 | กำหนดและทดสอบใน notebook Section 7 |
-| ไม่มี look-ahead bias | ทุก unit test ที่ test look-ahead ผ่าน |
-| Z-score mean ≈ 0, std ≈ 1 per date | unit test pipeline.py |
+| --- | --- |
+| At least one signal has ICIR > 0.3 | `ICAnalyzer.compute_icir(ic_series) > 0.3` |
+| At least one signal has mean IC > 0.03 | `ic_series.mean() > 0.03` |
+| Composite signal ICIR > 0.3 | Defined and tested in notebook Section 7 |
+| No look-ahead bias | All unit tests for look-ahead pass |
+| Z-score mean ≈ 0, std ≈ 1 per date | `pipeline.py` unit tests |
 | All unit tests pass | `uv run pytest tests/ -v -m "not integration"` exits 0 |
-| Type checking clean | `uv run mypy src/` exits 0 |
-| Linting clean | `uv run ruff check src/ scripts/` exits 0 |
-| Notebook sign-off | Section 8 print PASS สำหรับทุกข้อ |
-| Composite signal documented | Section 7 ระบุ formula + weights ชัดเจน |
+| Type checking is clean | `uv run mypy src/` exits 0 |
+| Linting is clean | `uv run ruff check src/ scripts/` exits 0 |
+| Notebook sign-off | Section 8 prints PASS for every criterion |
+| Composite signal documented | Section 7 clearly states formula + weights |
 
 ---
 
 ## Future Enhancements
 
-- **Fundamental overlay** — Phase 9 เพิ่ม P/BV, ROE signal จาก SET SMART มา composite กับ momentum
-- **Foreign flow signal** — ข้อมูล net foreign buy/sell จาก SET website เป็น signal เพิ่มเติม
-- **LightGBM ranking model** — Phase 9 ใช้ ML เพื่อ learn optimal combination ของ features แทน linear weighting
-- **Regime-conditional IC** — วัด IC แยกตาม market regime (BULL/BEAR/NEUTRAL) เพื่อ dynamic weighting ใน Phase 4
-- **Factor decay monitoring** — scheduled agent ตรวจ ICIR รายเดือนหลัง Phase 5 deploy
+- **Fundamental overlay** - in Phase 9, add P/BV and ROE signals from SET SMART into the momentum composite.
+- **Foreign flow signal** - add net foreign buy/sell data from the SET website as an additional signal.
+- **LightGBM ranking model** - in Phase 9, use ML to learn the optimal feature combination instead of linear weights.
+- **Regime-conditional IC** - evaluate IC by market regime (BULL/BEAR/NEUTRAL) for dynamic weighting in Phase 4.
+- **Factor decay monitoring** - add a scheduled agent to monitor ICIR monthly after the Phase 5 deployment.
 
 ---
 
 ## Commit & PR Templates
 
-### Commit Message (Plan — this commit)
+### Commit Message (Plan - this commit)
 
-```
-plan(signal-research): add master plan for Phase 2 — Signal Research
+```text
+plan(signal-research): add master plan for Phase 2 - Signal Research
 
 - Creates docs/plans/phase2_signal_research/PLAN.md
 - Covers 7 sub-phases: Momentum Features, Risk-Adjusted Features,
@@ -574,23 +575,23 @@ plan(signal-research): add master plan for Phase 2 — Signal Research
 - Includes architecture, data models, error handling, test matrix,
   and success criteria
 
-Part of Phase 2 — Signal Research roadmap track.
+Part of Phase 2 - Signal Research roadmap track.
 ```
 
 ### Commit Message (Phase 2.1)
 
-```
-feat(features): add MomentumFeatures — mom_12_1, 6_1, 3_1, 1_0 (Phase 2.1)
+```text
+feat(features): add MomentumFeatures - mom_12_1, 6_1, 3_1, 1_0 (Phase 2.1)
 
 - Log-return computation with formation-period skip (t-21 boundary)
-- No look-ahead: all signals use close ≤ t-21 only
+- No look-ahead: all signals use close <= t-21 only
 - Unit tests: reference pandas computation, NaN propagation, look-ahead guard
 ```
 
-### Commit Message (Phase 2.2–2.3)
+### Commit Message (Phases 2.2-2.3)
 
-```
-feat(features): add RiskAdjustedFeatures and SectorFeatures (Phases 2.2–2.3)
+```text
+feat(features): add RiskAdjustedFeatures and SectorFeatures (Phases 2.2-2.3)
 
 - sharpe_momentum: mom_12_1 / trailing vol, NaN on zero vol
 - residual_momentum: OLS alpha vs SET index (scipy.stats.linregress)
@@ -598,10 +599,10 @@ feat(features): add RiskAdjustedFeatures and SectorFeatures (Phases 2.2–2.3)
 - Unit tests: market-neutrality, bounded sharpe, relative strength direction
 ```
 
-### Commit Message (Phase 2.4–2.5)
+### Commit Message (Phases 2.4-2.5)
 
-```
-feat(features): add FeaturePipeline and CrossSectionalRanker (Phases 2.4–2.5)
+```text
+feat(features): add FeaturePipeline and CrossSectionalRanker (Phases 2.4-2.5)
 
 - FeaturePipeline: assemble panel (date, symbol), winsorise + z-score per date
 - CrossSectionalRanker: percentile rank + quintile labels per signal per date
@@ -610,8 +611,8 @@ feat(features): add FeaturePipeline and CrossSectionalRanker (Phases 2.4–2.5)
 
 ### Commit Message (Phase 2.6)
 
-```
-feat(research): add ICAnalyzer — Pearson/Spearman IC, ICIR, decay (Phase 2.6)
+```text
+feat(research): add ICAnalyzer - Pearson/Spearman IC, ICIR, decay (Phase 2.6)
 
 - compute_ic, compute_rank_ic, compute_icir, compute_decay_curve, summary_table
 - Unit tests: synthetic data verification, ICIR formula, NaN guards
@@ -619,7 +620,7 @@ feat(research): add ICAnalyzer — Pearson/Spearman IC, ICIR, decay (Phase 2.6)
 
 ### Commit Message (Phase 2.7)
 
-```
+```text
 feat(notebooks): add signal research notebook 02_signal_research.ipynb (Phase 2.7)
 
 - IC time series, ICIR summary table, correlation matrix, decay curves
@@ -633,22 +634,22 @@ feat(notebooks): add signal research notebook 02_signal_research.ipynb (Phase 2.
 ```markdown
 ## Summary
 
-- Implements full signal research layer for csm-set (Phase 2 of 9)
-- `MomentumFeatures` — mom_12_1, 6_1, 3_1, 1_0 with formation-gap skip
-- `RiskAdjustedFeatures` — sharpe_momentum, residual_momentum (market-neutral)
-- `SectorFeatures` — relative strength vs equal-weight sector index
-- `FeaturePipeline` — panel assembly, cross-sectional winsorise + z-score
-- `CrossSectionalRanker` — percentile rank + quintile labels
-- `ICAnalyzer` — Pearson/Spearman IC, ICIR, decay curves, summary table
-- `notebooks/02_signal_research.ipynb` — IC analysis + composite signal decision
+- Implements the full signal-research layer for csm-set (Phase 2 of 9)
+- `MomentumFeatures` - mom_12_1, 6_1, 3_1, 1_0 with formation-gap skip
+- `RiskAdjustedFeatures` - sharpe_momentum, residual_momentum (market-neutral)
+- `SectorFeatures` - relative strength vs equal-weight sector index
+- `FeaturePipeline` - panel assembly, cross-sectional winsorise + z-score
+- `CrossSectionalRanker` - percentile rank + quintile labels
+- `ICAnalyzer` - Pearson/Spearman IC, ICIR, decay curves, summary table
+- `notebooks/02_signal_research.ipynb` - IC analysis + composite signal decision
 
 ## Test plan
 
-- [ ] `uv run pytest tests/ -v -m "not integration"` — all unit tests pass
-- [ ] `uv run mypy src/` — exits 0
-- [ ] `uv run ruff check src/ scripts/` — exits 0
-- [ ] `uv run ruff format --check src/ scripts/` — no changes
-- [ ] Manual: run notebook `02_signal_research.ipynb` — Section 8 prints PASS for all criteria
+- [ ] `uv run pytest tests/ -v -m "not integration"` - all unit tests pass
+- [ ] `uv run mypy src/` - exits 0
+- [ ] `uv run ruff check src/ scripts/` - exits 0
+- [ ] `uv run ruff format --check src/ scripts/` - no changes
+- [ ] Manual: run notebook `02_signal_research.ipynb` - Section 8 prints PASS for all criteria
 - [ ] Manual: ICIR > 0.3 for at least one signal on SET data
 - [ ] Manual: composite signal defined with formula documented in notebook Section 7
 ```
