@@ -32,6 +32,7 @@ from pathlib import Path
 import pandas as pd
 from pydantic import BaseModel, StrictStr, ValidationError
 
+from csm.config.constants import INDEX_SYMBOL
 from csm.config.settings import Settings
 from csm.data.exceptions import StoreError
 from csm.data.loader import OHLCVLoader
@@ -198,6 +199,13 @@ async def main() -> None:
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     symbols = await asyncio.to_thread(_load_symbols, symbols_path)
+
+    # Always include the SET index symbol for data quality checks,
+    # even though it is not part of the tradeable universe in symbols.json.
+    if INDEX_SYMBOL not in symbols:
+        symbols = [INDEX_SYMBOL] + symbols
+        logger.info("Prepended %s to fetch list (index symbol)", INDEX_SYMBOL)
+
     store = ParquetStore(raw_dir)
     loader = OHLCVLoader(settings=app_settings)
 
