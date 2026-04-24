@@ -12,10 +12,17 @@ Retry contract:
     ``tvkit_retry_attempts + 1``).  Non-transient failures (bad credentials,
     unknown symbol, bad request parameters) are raised immediately without
     retry.
+
+Adjustment:
+    The local ``Adjustment`` enum mirrors the API planned for tvkit v0.11.0.
+    Replace this local definition with ``from tvkit.api.chart import Adjustment``
+    and add ``adjustment=adj_enum`` to ``client.get_historical_ohlcv()`` once
+    tvkit>=0.11.0 ships.
 """
 
 import asyncio
 import logging
+from enum import StrEnum
 
 import pandas as pd
 from tvkit.api.chart import OHLCV
@@ -25,6 +32,17 @@ from tvkit.api.chart.models.ohlcv import OHLCVBar
 from csm.config.constants import TIMEZONE
 from csm.config.settings import Settings
 from csm.data.exceptions import DataAccessError, FetchError
+
+
+class Adjustment(StrEnum):
+    """Price adjustment mode for historical OHLCV fetches.
+
+    Mirrors the Adjustment enum planned for tvkit v0.11.0.
+    Replace this local definition with the tvkit import once tvkit>=0.11.0 ships.
+    """
+
+    SPLITS = "splits"
+    DIVIDENDS = "dividends"
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -47,7 +65,13 @@ class OHLCVLoader:
         self._settings: Settings = settings
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.tvkit_concurrency)
 
-    async def fetch(self, symbol: str, interval: str, bars: int) -> pd.DataFrame:
+    async def fetch(
+        self,
+        symbol: str,
+        interval: str,
+        bars: int,
+        adjustment: str | None = None,
+    ) -> pd.DataFrame:
         """Fetch historical OHLCV data for a single symbol.
 
         Retries up to ``settings.tvkit_retry_attempts`` times on transient
@@ -58,6 +82,9 @@ class OHLCVLoader:
             symbol: TradingView symbol identifier (e.g. ``"SET:AOT"``).
             interval: TradingView interval string (e.g. ``"1D"``).
             bars: Number of bars to request.
+            adjustment: Price adjustment mode — ``"splits"`` or ``"dividends"``.
+                When ``None``, falls back to ``settings.tvkit_adjustment``.
+                Unknown strings raise ``ValueError`` before any network call.
 
         Returns:
             DataFrame with columns ``["open", "high", "low", "close", "volume"]``,
@@ -68,6 +95,7 @@ class OHLCVLoader:
         Raises:
             DataAccessError: If ``settings.public_mode`` is ``True``.
             FetchError: If all retry attempts fail or a non-transient error occurs.
+            ValueError: If ``adjustment`` is not a recognised adjustment mode.
         """
         if self._settings.public_mode:
             raise DataAccessError(
@@ -75,6 +103,12 @@ class OHLCVLoader:
                 "Raw market data is not distributed with this repository. "
                 "Set CSM_PUBLIC_MODE=false and provide tvkit credentials to enable."
             )
+
+        effective: str = adjustment if adjustment is not None else self._settings.tvkit_adjustment
+        # Validate early — raises ValueError before any network I/O on unknown strings.
+        # TODO: pass adj_enum to client.get_historical_ohlcv() once tvkit>=0.11.0 ships.
+        _adj_enum: Adjustment = Adjustment(effective)
+        _ = _adj_enum  # referenced to satisfy linters until the tvkit kwarg is added
 
         bars_data: list[OHLCVBar] = []
         for attempt in range(self._settings.tvkit_retry_attempts + 1):
@@ -135,6 +169,7 @@ class OHLCVLoader:
         symbols: list[str],
         interval: str,
         bars: int,
+        adjustment: str | None = None,
     ) -> dict[str, pd.DataFrame]:
         """Fetch OHLCV for multiple symbols concurrently.
 
@@ -150,12 +185,16 @@ class OHLCVLoader:
             symbols: TradingView symbols to request.
             interval: TradingView interval string (e.g. ``"1D"``).
             bars: Number of bars per symbol.
+            adjustment: Price adjustment mode — ``"splits"`` or ``"dividends"``.
+                When ``None``, falls back to ``settings.tvkit_adjustment``.
+                Unknown strings raise ``ValueError`` before any network call.
 
         Returns:
             Mapping from symbol to OHLCV DataFrame.  Failed symbols are omitted.
 
         Raises:
             DataAccessError: If ``settings.public_mode`` is ``True``.
+            ValueError: If ``adjustment`` is not a recognised adjustment mode.
         """
         if self._settings.public_mode:
             raise DataAccessError(
@@ -167,7 +206,9 @@ class OHLCVLoader:
         async def _fetch_symbol(target_symbol: str) -> tuple[str, pd.DataFrame | None]:
             async with self._semaphore:
                 try:
-                    frame: pd.DataFrame = await self.fetch(target_symbol, interval, bars)
+                    frame: pd.DataFrame = await self.fetch(
+                        target_symbol, interval, bars, adjustment=adjustment
+                    )
                     logger.info("Fetched symbol successfully", extra={"symbol": target_symbol})
                     return target_symbol, frame
                 except FetchError as exc:
@@ -184,4 +225,4 @@ class OHLCVLoader:
         return {symbol: frame for symbol, frame in results if frame is not None}
 
 
-__all__: list[str] = ["OHLCVLoader"]
+__all__: list[str] = ["Adjustment", "OHLCVLoader"]

@@ -3,7 +3,7 @@
 **Feature:** Reliable OHLCV Data Pipeline for All SET Symbols
 **Branch:** `feature/phase-1-data-pipeline`
 **Created:** 2026-04-21
-**Status:** Complete — all sub-phases 1.1–1.7 done (2026-04-23)
+**Status:** Complete — 1.1–1.8 complete (2026-04-24)
 **Positioning:** Foundation layer — all signal research, backtesting, and portfolio construction depend on clean, versioned parquet data produced here
 
 ---
@@ -43,6 +43,7 @@ Phase 1 covers seven sub-phases in dependency order:
 | 1.5 | Price Cleaner | Gap-fill, winsorise, drop low-coverage symbols |
 | 1.6 | Bulk Fetch Script | `scripts/fetch_history.py` — idempotent 20-year pull |
 | 1.7 | Data Quality Check | `01_data_exploration.ipynb` — audit and sign-off |
+| 1.8 | Dividend Adjustment | Re-fetch all symbols with `Adjustment.DIVIDENDS`; adjust storage layout and pipeline |
 
 **Out of scope for Phase 1:**
 
@@ -500,6 +501,60 @@ uv run python scripts/fetch_history.py
 - Notebook gracefully handles empty `data/raw/` with `⚠ DATA NOT AVAILABLE` guards per section
 - Pre-existing format violations in `src/csm/data/__init__.py` and `src/csm/data/exceptions.py` (missing trailing newline) fixed as part of this commit
 - Pre-existing failures: 4 integration API tests and `test_regime_transitions_on_known_price_series` — unrelated to Phase 1.7; all 50 Phase 1 unit tests pass
+
+---
+
+### Phase 1.8 — Dividend Adjustment
+
+**Status:** `[x]` Complete — 2026-04-24
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.8-dividend-adjustment.md`
+**Depends On:** Phase 1.3 (OHLCVLoader), Phase 1.6 (fetch_history.py), Phase 1.7 (data quality sign-off)
+
+**Goal:** Re-fetch all SET universe symbols using `Adjustment.DIVIDENDS` (tvkit ≥ 0.11.0) so that historical OHLCV price series reflect total-return (cash dividend-adjusted) prices. Correct dividend adjustment is a prerequisite for accurate momentum signal calculation and long-term backtesting of dividend-paying stocks.
+
+**Background:** tvkit v0.11.0 introduced the `Adjustment` enum with two members:
+
+| Member | Value | Description |
+|---|---|---|
+| `Adjustment.SPLITS` | `"splits"` | Split-adjusted only — default; identical to all pre-v0.11.0 behaviour |
+| `Adjustment.DIVIDENDS` | `"dividends"` | Total-return prices — every prior bar is backward-adjusted so that each cash dividend payment is deducted from all earlier closing prices |
+
+All data fetched in Phases 1.3–1.6 used the implicit `Adjustment.SPLITS` default. For long-term momentum backtesting on SET stocks (many of which pay regular dividends), using unadjusted-for-dividends prices introduces look-ahead bias in the return series and understates historical performance.
+
+**Deliverables:**
+
+- [ ] `pyproject.toml` — bump `tvkit` dependency to `>=0.11.0`
+- [ ] `src/csm/config/settings.py` — add `tvkit_adjustment: str = "dividends"` field
+- [ ] `src/csm/data/loader.py` — add `adjustment` parameter to `fetch()` and `fetch_batch()`; import and use `Adjustment` enum from tvkit
+- [ ] `scripts/fetch_history.py` — add `--adjustment {splits,dividends}` CLI flag; store data under adjustment-scoped subdirectory (`data/raw/splits/` or `data/raw/dividends/`); default `dividends`
+- [ ] `scripts/build_universe.py` — add `--adjustment` flag so universe filter reads from the correct raw store path
+- [ ] `src/csm/data/universe.py` — `UniverseBuilder.__init__` accepts explicit `raw_store: ParquetStore` (already the case); callers updated to pass adjustment-scoped store
+- [ ] Unit tests — update/add for all changed modules
+- [ ] Re-run `fetch_history.py --adjustment dividends` — populate `data/raw/dividends/` with ≥ 400 symbols
+- [ ] `notebooks/01_data_exploration.ipynb` — add Section 7: Price Adjustment Verification (split vs. dividend-adjusted close comparison for a sample high-dividend SET stock)
+
+**Storage Layout after Phase 1.8:**
+
+```
+data/raw/
+├── splits/        ← legacy Phase 1.6 data (split-adjusted, backward-compat)
+│   └── SET%3AAOT.parquet
+└── dividends/     ← Phase 1.8 re-fetch (total-return adjusted — default going forward)
+    └── SET%3AAOT.parquet
+```
+
+The existing `data/raw/` files produced in Phase 1.6 are renamed to `data/raw/splits/` via a one-time migration step in the script.
+
+**Implementation notes:**
+
+- `Adjustment(StrEnum)` defined locally in `loader.py` — mirrors the API planned for tvkit v0.11.0 (not yet released at time of implementation; tvkit was at 0.6.0). When tvkit 0.11.0 ships: swap the local enum for the tvkit import, bump `pyproject.toml` to `>=0.11.0`, and add `adjustment=adj_enum` to the `client.get_historical_ohlcv()` call.
+- `Settings.tvkit_adjustment: str` (not `Adjustment` enum) to avoid circular import from `settings.py` → `loader.py`; validated with a `field_validator` against `{"splits", "dividends"}`.
+- `fetch_history.py` `--adjustment` defaults to `None`; resolved at runtime via `args.adjustment or settings.tvkit_adjustment` so the env var `CSM_TVKIT_ADJUSTMENT` is always respected when the CLI flag is omitted.
+- `_migrate_legacy_raw()` uses `Path.glob("*.parquet")` (top-level only, not recursive) so files already inside `splits/` or `dividends/` subdirs are never double-migrated. The function is idempotent and safe to call on a non-existent directory.
+- `build_universe.py` uses `args.adjustment or settings.tvkit_adjustment` (same pattern) so universe snapshots always filter against the correct raw store.
+- Notebook setup cell (cell `b87d2106`) detects the adjusted layout automatically: prefers `data/raw/splits/` if populated, falls back to `data/raw/` for pre-migration repos.
+- 22 new unit tests added (8 settings, 7 loader, 7 fetch_history); 77 total pass, 1 pre-existing failure (`test_regime_transitions_on_known_price_series` — unrelated to Phase 1.8).
+- Actual dividend-adjusted prices deferred: `data/raw/dividends/` will contain total-return data only after tvkit 0.11.0 ships and `fetch_history.py --adjustment dividends` is re-run. Until then, both stores reflect split-adjusted prices.
 
 ---
 

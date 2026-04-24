@@ -1,11 +1,19 @@
 """Bulk fetch SET OHLCV history via tvkit and save to parquet.
 
 Usage (owner only — requires tvkit credentials in .env):
-    uv run python scripts/fetch_history.py [--data-dir PATH] [--bars N] [--failure-threshold F]
+    uv run python scripts/fetch_history.py [--data-dir PATH] [--bars N]
+        [--adjustment {splits,dividends}] [--failure-threshold F]
 
-Idempotent: skips symbols already present in <data-dir>/raw/.
+Idempotent: skips symbols already present in <data-dir>/raw/<adjustment>/.
 Reads the universe symbol list from <data-dir>/universe/symbols.json (produced by
 build_universe.py).
+
+Storage layout:
+    data/raw/splits/    — split-adjusted only (legacy Phase 1.6 data)
+    data/raw/dividends/ — total-return adjusted (default, Phase 1.8+)
+
+On first run, any flat *.parquet files found directly inside <data-dir>/raw/ are
+automatically migrated to <data-dir>/raw/splits/ (one-time, idempotent).
 
 Exit codes:
     0 — success; failure rate ≤ threshold
@@ -74,6 +82,16 @@ def _parse_args() -> argparse.Namespace:
         help=f"Bars per symbol; must be > 0 (default: {_DEFAULT_BARS}, ~20 years × 252)",
     )
     parser.add_argument(
+        "--adjustment",
+        choices=["splits", "dividends"],
+        default=None,
+        help=(
+            "Price adjustment mode. Overrides CSM_TVKIT_ADJUSTMENT env var. "
+            "Use 'dividends' (default) for total-return momentum backtesting. "
+            "Use 'splits' to reproduce legacy Phase 1.6 data."
+        ),
+    )
+    parser.add_argument(
         "--failure-threshold",
         type=_unit_float,
         default=_DEFAULT_FAILURE_THRESHOLD,
@@ -120,6 +138,37 @@ def _load_symbols(path: Path) -> list[str]:
     return parsed.symbols
 
 
+def _migrate_legacy_raw(raw_root: Path) -> None:
+    """Move flat Phase 1.6 parquet files into raw_root/splits/ if needed.
+
+    Idempotent: files already in splits/ are not touched. Safe to run even if
+    raw_root/splits/ does not yet exist.
+    """
+    legacy_files: list[Path] = list(raw_root.glob("*.parquet"))
+    if not legacy_files:
+        return
+
+    splits_dir: Path = raw_root / "splits"
+    splits_dir.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    for src in legacy_files:
+        dst: Path = splits_dir / src.name
+        if not dst.exists():
+            src.rename(dst)
+            moved += 1
+    if moved:
+        logger.info(
+            "Migration: moved %d legacy parquet file(s) from %s to %s",
+            moved,
+            raw_root,
+            splits_dir,
+        )
+    else:
+        logger.debug(
+            "Migration: all %d legacy file(s) already in %s", len(legacy_files), splits_dir
+        )
+
+
 async def main() -> None:
     """Fetch historical OHLCV data for all SET universe symbols."""
     args = _parse_args()
@@ -136,8 +185,13 @@ async def main() -> None:
         sys.exit(1)
 
     data_dir: Path = args.data_dir if args.data_dir is not None else Path(app_settings.data_dir)
+    adjustment_mode: str = args.adjustment or app_settings.tvkit_adjustment
+
+    # Migrate any flat legacy parquet files from data/raw/ → data/raw/splits/.
+    await asyncio.to_thread(_migrate_legacy_raw, data_dir / "raw")
+
     symbols_path: Path = data_dir / "universe" / "symbols.json"
-    raw_dir: Path = data_dir / "raw"
+    raw_dir: Path = data_dir / "raw" / adjustment_mode
     failures_path: Path = raw_dir / "fetch_failures.json"
 
     # Ensure raw_dir exists before any parquet or failures-file I/O.
@@ -150,10 +204,13 @@ async def main() -> None:
     pending: list[str] = [s for s in symbols if store.exists(s) is False]
     skipped = len(symbols) - len(pending)
     logger.info(
-        "Found %d symbols in universe; skipping %d already fetched; fetching %d",
+        "Found %d symbols in universe; skipping %d already fetched; fetching %d "
+        "(adjustment=%s, store=%s)",
         len(symbols),
         skipped,
         len(pending),
+        adjustment_mode,
+        raw_dir,
     )
 
     if not pending:
@@ -162,7 +219,9 @@ async def main() -> None:
             await asyncio.to_thread(failures_path.unlink)
         return
 
-    results: dict[str, pd.DataFrame] = await loader.fetch_batch(pending, "1D", args.bars)
+    results: dict[str, pd.DataFrame] = await loader.fetch_batch(
+        pending, "1D", args.bars, adjustment=adjustment_mode
+    )
 
     successfully_saved: set[str] = set()
     for symbol, frame in results.items():
@@ -177,6 +236,7 @@ async def main() -> None:
     if failed:
         failures_data = {
             "run_timestamp": run_timestamp.isoformat(),
+            "adjustment": adjustment_mode,
             "failed_symbols": failed,
             "count": len(failed),
         }

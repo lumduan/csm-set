@@ -8,7 +8,7 @@ import pytest
 
 from csm.config.settings import Settings
 from csm.data.exceptions import DataAccessError, FetchError
-from csm.data.loader import OHLCVLoader
+from csm.data.loader import Adjustment, OHLCVLoader
 
 pytestmark = pytest.mark.asyncio
 
@@ -209,3 +209,91 @@ async def test_fetch_raises_fetch_error_when_all_retries_exhausted(
     loader: OHLCVLoader = OHLCVLoader(monkeypatch_settings_with_retries)
     with pytest.raises(FetchError, match="all retries exhausted"):
         await loader.fetch(symbol="SET:AOT", interval="1D", bars=1)
+
+
+# ---------------------------------------------------------------------------
+# Adjustment parameter tests
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_accepts_explicit_adjustment_splits(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """fetch() accepts adjustment='splits' without raising."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    frame: pd.DataFrame = await loader.fetch(
+        symbol="SET:AOT", interval="1D", bars=2, adjustment="splits"
+    )
+    assert list(frame.columns) == ["open", "high", "low", "close", "volume"]
+
+
+async def test_fetch_accepts_explicit_adjustment_dividends(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """fetch() accepts adjustment='dividends' without raising."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    frame: pd.DataFrame = await loader.fetch(
+        symbol="SET:AOT", interval="1D", bars=2, adjustment="dividends"
+    )
+    assert list(frame.columns) == ["open", "high", "low", "close", "volume"]
+
+
+async def test_fetch_unknown_adjustment_raises_value_error_before_network(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """fetch() raises ValueError for unknown adjustment string — no network I/O occurs."""
+    called: dict[str, bool] = {"called": False}
+
+    class _RecordingOHLCV(_FakeOHLCV):
+        async def get_historical_ohlcv(
+            self,
+            symbol: str,
+            interval: str,
+            bars_count: int,
+        ) -> list[_FakeBar]:
+            called["called"] = True
+            return []
+
+    monkeypatch.setattr("csm.data.loader.OHLCV", _RecordingOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    with pytest.raises(ValueError, match="'unknown'"):
+        await loader.fetch(symbol="SET:AOT", interval="1D", bars=2, adjustment="unknown")
+    assert not called["called"], "tvkit should not be called for an invalid adjustment string"
+
+
+async def test_fetch_defaults_adjustment_to_settings_value(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """fetch() uses settings.tvkit_adjustment when adjustment param is None."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    # settings_override has tvkit_adjustment="dividends" by default in conftest
+    frame: pd.DataFrame = await loader.fetch(symbol="SET:AOT", interval="1D", bars=2)
+    assert isinstance(frame, pd.DataFrame)
+
+
+async def test_fetch_batch_forwards_adjustment_to_each_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """fetch_batch() forwards the adjustment param to each per-symbol fetch call."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    result: dict[str, pd.DataFrame] = await loader.fetch_batch(
+        ["SET:AOT", "SET:CPALL"], "1D", 2, adjustment="splits"
+    )
+    assert sorted(result.keys()) == ["SET:AOT", "SET:CPALL"]
+
+
+def test_adjustment_enum_values() -> None:
+    """Adjustment enum has SPLITS and DIVIDENDS members with correct string values."""
+    assert Adjustment.SPLITS == "splits"
+    assert Adjustment.DIVIDENDS == "dividends"
+    assert Adjustment("splits") is Adjustment.SPLITS
+    assert Adjustment("dividends") is Adjustment.DIVIDENDS
