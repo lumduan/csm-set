@@ -267,28 +267,31 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.3 - Sector Features
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-25
 **Depends On:** Phase 1 OHLCV data, `src/csm/config/constants.py` (`SET_SECTOR_CODES`)
 
 **Goal:** Measure each symbol's relative strength versus its own sector index, because momentum on the SET may be more sector-driven than stock-specific.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/sector.py` - `SectorFeatures`
-  - [ ] `compute(symbol_close: pd.Series, sector_closes: dict[str, pd.Series], symbol_sector: str, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Input: symbol close, dict of sector index closes, the symbol's sector code, rebalance dates
-    - [ ] Output: DataFrame indexed by rebalance dates with column `["sector_rel_strength"]`
-    - [ ] `sector_rel_strength`: `mom_12_1(symbol) - mom_12_1(sector_index)` - symbol excess return vs its sector over 12 months with a 1-month skip
-    - [ ] If sector index data is unavailable -> NaN, with no fallback to market data
-- [ ] Unit test: `sector_rel_strength == 0` when symbol close equals the sector index
-- [ ] Unit test: positive when the symbol outperforms the sector and negative when it underperforms
-- [ ] Unit test: NaN when sector data is missing
-- [ ] Unit test: no look-ahead - uses only data <= `t-21`
+- [x] `src/csm/features/sector.py` - `SectorFeatures`
+  - [x] `compute(symbol_close: pd.Series, sector_closes: dict[str, pd.Series], symbol_sector: str, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
+    - [x] Input: symbol close, dict of sector index closes, the symbol's sector code, rebalance dates
+    - [x] Output: DataFrame indexed by rebalance dates with column `["sector_rel_strength"]`
+    - [x] `sector_rel_strength`: `mom_12_1(symbol) - mom_12_1(sector_index)` - symbol excess return vs its sector over 12 months with a 1-month skip
+    - [x] If sector index data is unavailable -> NaN, with no fallback to market data
+- [x] Unit test: `sector_rel_strength == 0` when symbol close equals the sector index
+- [x] Unit test: positive when the symbol outperforms the sector and negative when it underperforms
+- [x] Unit test: NaN when sector data is missing
+- [x] Unit test: no look-ahead - uses only data <= `t-21`
 
 **Implementation notes:**
 
 - The sector index is built as the equal-weight average of symbols in that sector passing the universe filter on that date - not the official SET sector index, because clear sector-index data may not be available from tvkit.
 - `SET_SECTOR_CODES` in `constants.py` is used as the mapping, but each symbol must also have `sector` metadata loaded from settfex or maintained explicitly.
+- `_MIN_HIST = 253`: 253 prices give valid `iloc[-22]` (t-21) and `iloc[-253]` (t-252), consistent with Phase 2.1 offsets.
+- `pipeline.py` integration deferred to Phase 2.4; the new `compute()` API is pipeline-ready.
+- 17 unit tests covering: schema, zero/positive/negative cases, NaN propagation, look-ahead guard, manual calculation verification, boundary price validation, and all TypeError/ValueError paths.
 
 ---
 
