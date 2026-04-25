@@ -10,6 +10,8 @@ from csm.features.risk_adjusted import RiskAdjustedFeatures
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+_INDEX_SYMBOL: str = "SET:SET"
+
 
 class FeaturePipeline:
     """Build and persist feature panels used by ranking and backtests."""
@@ -25,7 +27,9 @@ class FeaturePipeline:
         """Build a z-scored feature panel across rebalance dates.
 
         Args:
-            prices: Mapping from symbol to OHLCV DataFrames.
+            prices: Mapping from symbol to OHLCV DataFrames. If the key ``SET:SET``
+                    is present, risk-adjusted features (sharpe_momentum,
+                    residual_momentum) are computed for each symbol.
             rebalance_dates: Rebalance timestamps.
 
         Returns:
@@ -33,47 +37,50 @@ class FeaturePipeline:
         """
         dates_index: pd.DatetimeIndex = pd.DatetimeIndex(rebalance_dates)
 
-        # Build close matrix (columns = symbols) and compute momentum once per symbol.
+        # Extract SET index close if available (needed for risk-adjusted features).
+        index_close: pd.Series | None = None
+        if _INDEX_SYMBOL in prices:
+            index_close = prices[_INDEX_SYMBOL]["close"]
+
+        # Compute momentum and risk-adjusted features once per symbol.
         symbol_momentum: dict[str, pd.DataFrame] = {}
-        close_frames: list[pd.Series] = []
+        symbol_risk: dict[str, pd.DataFrame] = {}
         for symbol, frame in prices.items():
+            if symbol == _INDEX_SYMBOL:
+                continue
             series: pd.Series = frame["close"].rename(symbol)
-            close_frames.append(series)
             try:
                 mom_df: pd.DataFrame = self._momentum.compute(series, dates_index)
                 symbol_momentum[symbol] = mom_df
             except Exception:
                 logger.warning("Skipping momentum for symbol %s", symbol)
-
-        close_matrix: pd.DataFrame = (
-            pd.concat(close_frames, axis=1).sort_index() if close_frames else pd.DataFrame()
-        )
+            if index_close is not None:
+                try:
+                    risk_df: pd.DataFrame = self._risk_adjusted.compute(
+                        series, index_close, dates_index
+                    )
+                    symbol_risk[symbol] = risk_df
+                except Exception:
+                    logger.warning("Skipping risk-adjusted features for symbol %s", symbol)
 
         panel_frames: list[pd.DataFrame] = []
         for rebalance_date in rebalance_dates:
-            history: pd.DataFrame = close_matrix.loc[close_matrix.index <= rebalance_date]
-            if history.empty:
-                continue
-
-            # Collect per-symbol momentum features for this date.
+            # Collect per-symbol features for this date.
             date_rows: list[dict[str, object]] = []
             for symbol, mom_df in symbol_momentum.items():
                 if rebalance_date not in mom_df.index:
                     continue
                 row: dict[str, object] = {"symbol": symbol}
                 row.update(mom_df.loc[rebalance_date].to_dict())
+                if symbol in symbol_risk and rebalance_date in symbol_risk[symbol].index:
+                    row.update(symbol_risk[symbol].loc[rebalance_date].to_dict())
                 date_rows.append(row)
 
             if not date_rows:
                 continue
 
             feature_frame: pd.DataFrame = pd.DataFrame(date_rows).set_index("symbol")
-            feature_cols: list[str] = [c for c in feature_frame.columns if c != "symbol"]
-
-            # Append sharpe momentum (wide-matrix approach kept for now).
-            sharpe_signal: pd.Series = self._risk_adjusted.sharpe_momentum(history)
-            feature_frame = feature_frame.join(sharpe_signal, how="outer")
-            feature_cols = list(feature_frame.columns)
+            feature_cols: list[str] = list(feature_frame.columns)
 
             # Drop rows with any NaN before z-scoring.
             feature_frame = feature_frame.dropna()

@@ -234,30 +234,34 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.2 - Risk-Adjusted Features
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-25
 **Depends On:** Phase 2.1 (raw momentum returns), Phase 1 OHLCV data
 
 **Goal:** Build features that adjust returns for risk in order to test whether risk-adjusted signals produce better ICIR than raw momentum.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/risk_adjusted.py` - `RiskAdjustedFeatures`
-  - [ ] `compute(close: pd.Series, index_close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Input: symbol close, SET index close, rebalance dates
-    - [ ] Output: DataFrame indexed by rebalance dates with signal-name columns
-    - [ ] `sharpe_momentum`: `mom_12_1 / vol_12`, where `vol_12` is the annualized standard deviation of daily returns in the 252 days before `t-21`
-    - [ ] `residual_momentum`: alpha from an OLS regression of symbol daily returns vs SET index daily returns over the 252 days before `t-21` (market-beta-neutral)
-    - [ ] Both use the same window as `mom_12_1` for consistency
-- [ ] Unit test: `sharpe_momentum` remains bounded and does not become infinity when vol != 0
-- [ ] Unit test: `residual_momentum` is market-neutral - correlation with index return is approximately 0
-- [ ] Unit test: NaN when vol = 0 or history is too short for regression
-- [ ] Unit test: no look-ahead - the regression uses only data <= `t-21`
+- [x] `src/csm/features/risk_adjusted.py` - `RiskAdjustedFeatures`
+  - [x] `compute(close: pd.Series, index_close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
+    - [x] Input: symbol close, SET index close, rebalance dates
+    - [x] Output: DataFrame indexed by rebalance dates with signal-name columns
+    - [x] `sharpe_momentum`: `mom_12_1 / vol_12`, where `vol_12` is the annualised std of 252 daily log-returns ending at `t-21` (window `hist.iloc[-274:-21]`)
+    - [x] `residual_momentum`: OLS intercept × 252 from regression of symbol vs SET index over the same 252-return window
+    - [x] `min_hist = 274` (252 returns + 21-day skip + 1 boundary price)
+- [x] Unit test: `sharpe_momentum` remains bounded and does not become infinity when vol != 0
+- [x] Unit test: `residual_momentum` recovers known alpha from synthetic data (zero-mean index returns, tolerance 0.06 annualised)
+- [x] Unit test: NaN when vol = 0 or history is too short for regression
+- [x] Unit test: no look-ahead - mutating skip region (t-20..t) leaves both signals unchanged
+- [x] Unit test: NaN when index has too many gaps (< 63 aligned return pairs)
+- [x] Unit test: TypeError/ValueError on invalid inputs (19 test cases total)
 
 **Implementation notes:**
 
-- For `sharpe_momentum`, if `vol_12 == 0`, return `NaN` rather than `inf`.
-- For `residual_momentum`, use `scipy.stats.linregress` or `numpy.linalg.lstsq` - `statsmodels` is not required.
+- `vol_12` uses `ddof=1` (sample std). NaN when not finite (zero or nan) rather than returning inf.
+- `residual_momentum` uses `scipy.stats.linregress`. NaN when `std(index_rets, ddof=1) == 0`.
+- `min_hist = 274` (not 253) because 252 daily returns + 21-day skip = 274 prices needed.
 - Index close is loaded from `data/processed/SET%3ASET.parquet` (tvkit format).
+- `pipeline.py` updated to call `compute()` per-symbol when `SET:SET` key is in prices dict.
 
 ---
 
