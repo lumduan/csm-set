@@ -297,39 +297,53 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.4 - Feature Pipeline
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-25
 **Depends On:** Phases 2.1, 2.2, 2.3
 
 **Goal:** Combine all features into a panel DataFrame ready for IC analysis and ranking, with correct cross-sectional normalization.
 
 **Deliverables:**
 
-- [ ] `src/csm/features/pipeline.py` - `FeaturePipeline`
-  - [ ] `__init__(self, store: ParquetStore, universe_store: ParquetStore, settings: Settings)`
-  - [ ] `build(rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
-    - [ ] Output: MultiIndex DataFrame `(date, symbol)` -> columns = all feature names
-    - [ ] For each rebalance date:
-      1. Load the universe snapshot -> list of valid symbols
-      2. Load processed OHLCV for each symbol from `ParquetStore`
-      3. Compute all features from 2.1, 2.2, and 2.3 for each symbol
-      4. Assemble the cross-sectional DataFrame for that date
-      5. Winsorize each feature column at the 1st and 99th cross-sectional percentiles
-      6. Z-score normalize each feature column cross-sectionally (mean 0, std 1)
-    - [ ] Symbols with NaN in any feature are dropped from that date's panel - no imputation
-  - [ ] `build_forward_returns(panel_df: pd.DataFrame, horizons: list[int]) -> pd.DataFrame`
-    - [ ] Compute forward log return per symbol and date for each horizon (1M, 2M, 3M, 6M, 12M)
-    - [ ] Join to `panel_df` with a left join - NaN when horizon data is not yet available at the end of sample
-- [ ] Unit test: z-score mean ≈ 0 and std ≈ 1 per date and per feature
-- [ ] Unit test: winsorization reduces extreme outliers before z-scoring
-- [ ] Unit test: no data leakage - features at date `t` use only data <= `t`
-- [ ] Unit test: forward return at horizon `h` uses data >= `t+h` and does not contaminate the signal with future information
-- [ ] Unit test: a symbol with a NaN feature is dropped from that date's output
+- [x] `src/csm/features/pipeline.py` - `FeaturePipeline`
+  - [x] `__init__(self, store: ParquetStore, universe_store: ParquetStore | None = None, settings: Settings | None = None)`
+  - [x] `build(prices, rebalance_dates, *, symbol_sectors=None) -> pd.DataFrame`
+    - [x] Output: MultiIndex DataFrame `(date, symbol)` -> columns = all feature names
+    - [x] For each rebalance date:
+      1. Candidate symbols from union of all feature families (not just momentum)
+      2. Assemble cross-section reindexed to global expected schema
+      3. Winsorize each feature column at the 1st and 99th cross-sectional percentiles
+      4. Z-score normalize each feature column cross-sectionally (mean 0, std 1)
+    - [x] Symbols with NaN in any feature are dropped from that date's panel - no imputation
+    - [x] Sector features integrated: equal-weight sector index built from prices dict
+    - [x] Feature columns cast to float32 after normalization
+    - [x] Dropped-symbol count logged at INFO per date
+    - [x] Prices and rebalance dates cached as immutable snapshots after build()
+    - [x] Empty result persisted to store so load_latest() does not return stale data
+  - [x] `build_forward_returns(panel_df, horizons, prices=None, rebalance_dates=None) -> pd.DataFrame`
+    - [x] Compute forward log return per symbol and date for each horizon (1M, 2M, 3M, 6M, 12M)
+    - [x] Anchored to original rebalance calendar (not surviving panel dates) to prevent horizon drift
+    - [x] Join to `panel_df` with a left join - NaN when horizon data is not yet available
+    - [x] Safe for repeat calls: existing fwd_ret_* columns dropped and recomputed
+    - [x] Validates: MultiIndex structure, panel dates ⊆ calendar, panel symbols ⊆ prices
+  - [x] Input validation: `_validate_prices()`, `_validate_rebalance_dates()`, `_validate_panel_df()`
+- [x] Unit test: z-score mean ≈ 0 and std ≈ 1 per date and per feature
+- [x] Unit test: winsorization reduces extreme outliers before z-scoring
+- [x] Unit test: a symbol with a NaN feature is dropped from that date's output
+- [x] Unit test: feature columns are float32
+- [x] Unit test: sector_rel_strength in output when symbol_sectors provided
+- [x] Unit test: forward return columns present with correct values
+- [x] Unit test: forward return NaN at last rebalance date
+- [x] Unit test: forward return horizon drift prevention (middle date dropped from panel)
+- [x] Unit test: validation errors for bad horizons, bad panel structure, missing dates/symbols
 
 **Implementation notes:**
 
 - `build()` is synchronous - if it is slow, the caller should wrap it in `asyncio.to_thread()`.
-- Log the number of symbols dropped per date for auditability.
-- The panel DataFrame may grow to roughly 50K rows, so use `float32` for feature columns to save memory.
+- `symbol_sectors` is keyword-only (enforced by `*` in signature).
+- Per-date candidate symbols drawn from union of all feature families; reindexed to global schema before dropna().
+- `build_forward_returns()` uses `rebalance_dates` param or cached calendar; raises ValueError on no cache.
+- Raw pandas types retained as formal architectural exception for the research layer (documented in phase2.4 plan).
+- 20 unit tests in test_pipeline.py; 71 total in features/ suite; 0 regressions.
 
 ---
 
