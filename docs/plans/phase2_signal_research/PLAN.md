@@ -349,31 +349,39 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.5 - Ranking
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-26
 **Depends On:** Phase 2.4 (panel DataFrame)
 
 **Goal:** Create cross-sectional ranks and quintile labels per rebalance date for use in IC analysis and quintile spread analysis.
 
 **Deliverables:**
 
-- [ ] `src/csm/research/ranking.py` - `CrossSectionalRanker`
-  - [ ] `rank(panel_df: pd.DataFrame, signal_col: str) -> pd.DataFrame`
-    - [ ] Input: `panel_df` with MultiIndex `(date, symbol)` and the name of the composite signal column
-    - [ ] Output: original `panel_df` plus columns `{signal_col}_rank` (0-1 percentile) and `{signal_col}_quintile` (1-5)
-    - [ ] Percentile rank per date: `rank(pct=True)` within each date group
-    - [ ] Quintile: `pd.qcut(rank, q=5, labels=[1,2,3,4,5])` per date
-  - [ ] `rank_all(panel_df: pd.DataFrame) -> pd.DataFrame`
-    - [ ] Apply `rank()` to every feature column in `panel_df`
-    - [ ] Return `panel_df` with rank and quintile columns for all features
-- [ ] Unit test: percentile ranks are bounded in [0, 1]
-- [ ] Unit test: quintile counts are balanced per date, with each quintile containing approximately `N/5` symbols
-- [ ] Unit test: highest signal value -> quintile 5, lowest -> quintile 1
-- [ ] Unit test: symbols with NaN in the signal are dropped from ranking on that date
+- [x] `src/csm/research/ranking.py` - `CrossSectionalRanker`
+  - [x] `rank(panel_df: pd.DataFrame, signal_col: str) -> pd.DataFrame`
+    - [x] Input: `panel_df` with MultiIndex `(date, symbol)` and the name of the composite signal column
+    - [x] Output: original `panel_df` plus columns `{signal_col}_rank` (0-1 percentile) and `{signal_col}_quintile` (1-5)
+    - [x] Percentile rank per date: `rank(pct=True, method='average')` within each date group
+    - [x] Quintile: `pd.qcut(rank, q=5, labels=[1,2,3,4,5], duplicates='drop')` per date with fallback for small cross-sections
+  - [x] `rank_all(panel_df: pd.DataFrame) -> pd.DataFrame`
+    - [x] Apply `rank()` to every numeric feature column in `panel_df` (skips `fwd_ret_*` and already-ranked columns)
+    - [x] Return `panel_df` with rank and quintile columns for all features; one shared copy (no per-column copies)
+- [x] Unit test: percentile ranks are in (0, 1]
+- [x] Unit test: quintile counts are balanced per date, with each quintile containing approximately `N/5` symbols
+- [x] Unit test: highest signal value -> quintile 5, lowest -> quintile 1
+- [x] Unit test: symbols with NaN in the signal are dropped from ranking on that date
+- [x] Unit test: tied values share the exact average rank (method='average' verified)
+- [x] Unit test: small cross-section (< 5 symbols) uses fallback labels without raising
+- [x] Unit test: MultiIndex validation (TypeError, flat index, wrong names)
+- [x] Unit test: copy semantics — input frame unchanged after rank()
+- [x] Unit test: rank\_all() skips fwd\_ret\_\*, existing \_rank/\_quintile, and non-numeric columns
 
 **Implementation notes:**
 
 - Use `rank(method='average')` for ties to stay consistent with Spearman IC.
-- Quintile labels should be integers (1-5), not strings, for easier filtering in Phase 3.
+- Quintile labels are integers (1-5), not strings, for easier filtering in Phase 3.
+- `_assign_quintiles()` has a two-level fallback: labels=False with index remapping, then all-NaN with warning.
+- `_rank_inplace()` internal helper avoids per-column DataFrame copies in `rank_all()`.
+- 15 unit tests in `tests/unit/research/test_ranking.py`; 0 regressions.
 
 ---
 
