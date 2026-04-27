@@ -77,7 +77,7 @@ class PerformanceMetrics:
                 axis=1,
             ).dropna()
             if not aligned.empty:
-                covariance: float = float(aligned.cov().loc["portfolio", "benchmark"])
+                covariance: float = float(aligned.cov(ddof=0).loc["portfolio", "benchmark"])
                 benchmark_variance: float = float(aligned["benchmark"].var(ddof=0))
                 beta: float = covariance / benchmark_variance if benchmark_variance != 0.0 else 0.0
                 alpha: float = (

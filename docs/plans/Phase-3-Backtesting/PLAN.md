@@ -58,13 +58,13 @@ Phases 3.1–3.3 are structurally complete — the core modules were scaffolded 
 
 | Module | Lines | Status |
 |---|---|---|
-| `src/csm/research/backtest.py` | 171 | `[x]` Implemented — `BacktestConfig`, `BacktestResult`, `MomentumBacktest.run()` |
-| `src/csm/risk/metrics.py` | 102 | `[x]` Implemented — `PerformanceMetrics.summary()` with full metric set |
+| `src/csm/research/backtest.py` | 175 | `[x]` Implemented + bug-fixed (2026-04-27) — `CrossSectionalRanker` misuse removed; `_select_top_quantile()` added |
+| `src/csm/risk/metrics.py` | 103 | `[x]` Implemented + ddof-fix (2026-04-27) — beta now uses `cov(ddof=0)` for consistency |
 | `src/csm/risk/drawdown.py` | 57 | `[x]` Implemented — `DrawdownAnalyzer` with underwater curve and episode table |
 | `notebooks/03_backtest_analysis.ipynb` | 0 | `[ ]` Empty — needs all cells written |
-| `tests/unit/research/test_backtest.py` | — | `[ ]` Missing — unit tests for `MomentumBacktest` not yet written |
-| `tests/unit/risk/test_metrics.py` | 20 | `[~]` Sparse — only 1 test (Sharpe); remaining metrics untested |
-| `tests/unit/risk/test_drawdown.py` | — | `[ ]` Missing — drawdown unit tests not yet written |
+| `tests/unit/research/test_backtest.py` | 130 | `[x]` Complete (2026-04-27) — 8 unit tests, all pass |
+| `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (2026-04-27) — 9 unit tests (extended from 1), all pass |
+| `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (2026-04-27) — 6 unit tests, all pass |
 | `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — prices→features→backtest round-trip |
 
 ---
@@ -185,8 +185,10 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 ### Phase 3.1 — Backtest Engine
 
-**Status:** `[x]` Implemented — `src/csm/research/backtest.py` complete (171 lines)
-**Unit tests:** `[ ]` Missing — `tests/unit/research/test_backtest.py` not yet written
+**Status:** `[x]` Implemented — `src/csm/research/backtest.py` complete (171 → 175 lines after bug fix)
+**Unit tests:** `[x]` Complete — `tests/unit/research/test_backtest.py` — all 8 tests pass (2026-04-27)
+**Bug fix (2026-04-27):** Critical bug in `run()` loop fixed — `CrossSectionalRanker.rank(feature_panel, current_date)` passed a `pd.Timestamp` as `signal_col` (expects a column name string), causing `ValueError` on every run. `PortfolioConstructor.select()` also had an incompatible API (expected flat `"quintile"` and `"symbol"` columns not present in MultiIndex panel). Both removed from the loop; replaced by `_select_top_quantile()` using `feature_panel.xs(current_date, level="date")` and direct `nlargest` selection. See `docs/plans/phase-3-backtesting/phase3.1_backtest_engine.md`.
+**Metrics fix (2026-04-27):** `PerformanceMetrics.summary()` beta calculation used `aligned.cov()` (ddof=1) for covariance but `var(ddof=0)` for benchmark variance, causing β ≠ 1.0 when portfolio = benchmark. Fixed to `aligned.cov(ddof=0)` for consistency.
 
 **Goal:** Vectorised monthly walk-forward momentum backtest. Consumes ranked feature panel and clean price matrix; emits a `BacktestResult` with equity curve, annual returns, per-period positions, turnover log, and performance metrics.
 
@@ -223,21 +225,21 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 **Deliverables (remaining):**
 
-- [ ] `tests/unit/research/test_backtest.py`
-  - [ ] Unit test: zero-cost backtest of perfect-rank signal returns correct PnL
-  - [ ] Unit test: transaction cost of 15 bps reduces return by expected fraction of turnover
-  - [ ] Unit test: `BacktestError` raised when feature panel is empty
-  - [ ] Unit test: `BacktestError` raised when only 1 rebalance date provided
-  - [ ] Unit test: `BacktestError` raised when equity curve is empty after loop
-  - [ ] Unit test: `BacktestResult.metrics_dict()` contains no raw price data
-  - [ ] Unit test: `BacktestResult.equity_curve_dict()` NAV starts at 100
+- [x] `tests/unit/research/test_backtest.py` — complete (2026-04-27)
+  - [x] Unit test: zero-cost backtest of perfect-rank signal returns correct PnL
+  - [x] Unit test: transaction cost of 15 bps reduces return by expected fraction of turnover
+  - [x] Unit test: `BacktestError` raised when feature panel is empty
+  - [x] Unit test: `BacktestError` raised when only 1 rebalance date provided
+  - [x] Unit test: `BacktestError` raised when equity curve is empty after loop
+  - [x] Unit test: `BacktestResult.metrics_dict()` contains no raw price data
+  - [x] Unit test: `BacktestResult.equity_curve_dict()` NAV starts at 100
 
 ---
 
 ### Phase 3.2 — Performance Metrics
 
-**Status:** `[x]` Implemented — `src/csm/risk/metrics.py` complete (102 lines)
-**Unit tests:** `[~]` Sparse — 1 test exists (Sharpe); 7 metrics untested
+**Status:** `[x]` Implemented — `src/csm/risk/metrics.py` complete (103 lines after ddof fix)
+**Unit tests:** `[x]` Complete — `tests/unit/risk/test_metrics.py` — 9 tests pass (2026-04-27)
 
 **Goal:** Annualised performance metrics from an equity curve. Optionally computes alpha, beta, and information ratio vs. a benchmark.
 
@@ -256,21 +258,21 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 **Deliverables (remaining):**
 
-- [ ] `tests/unit/risk/test_metrics.py` — extend to full coverage
-  - [ ] Unit test: CAGR matches manual `(end/start)^(1/years) - 1` for known series
-  - [ ] Unit test: Sortino is lower than Sharpe when downside returns exist
-  - [ ] Unit test: `max_drawdown` is negative (or zero) for any non-trivial series
-  - [ ] Unit test: `win_rate` = 0.75 for a 4-period series with 3 positive periods
-  - [ ] Unit test: `summary()` returns zero-filled dict for empty equity curve
-  - [ ] Unit test: alpha and beta present in result only when benchmark is provided
-  - [ ] Unit test: beta ≈ 1.0 when portfolio returns equal benchmark returns exactly
+- [x] `tests/unit/risk/test_metrics.py` — complete (2026-04-27)
+  - [x] Unit test: CAGR matches manual `(end/start)^(1/years) - 1` for known series
+  - [x] Unit test: Sortino is higher than Sharpe when downside vol is small (assertion corrected — plan had wrong direction)
+  - [x] Unit test: `max_drawdown` is negative (or zero) for any non-trivial series
+  - [x] Unit test: `win_rate` = 0.75 for a 4-period series with 3 positive periods
+  - [x] Unit test: `summary()` returns zero-filled dict for empty equity curve
+  - [x] Unit test: alpha and beta present in result only when benchmark is provided
+  - [x] Unit test: beta ≈ 1.0 when portfolio returns equal benchmark returns exactly
 
 ---
 
 ### Phase 3.3 — Drawdown Analysis
 
 **Status:** `[x]` Implemented — `src/csm/risk/drawdown.py` complete (57 lines)
-**Unit tests:** `[ ]` Missing — `tests/unit/risk/test_drawdown.py` not yet written
+**Unit tests:** `[x]` Complete — `tests/unit/risk/test_drawdown.py` — all 6 tests pass (2026-04-27)
 
 **Goal:** Compute the underwater equity curve, peak-to-trough max drawdown, and a table of drawdown episodes with start, trough, recovery dates, depth, and duration.
 
@@ -284,13 +286,13 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 **Deliverables (remaining):**
 
-- [ ] `tests/unit/risk/test_drawdown.py`
-  - [ ] Unit test: `underwater_curve` is all zeros for a monotonically increasing series
-  - [ ] Unit test: `max_drawdown` equals `-(peak - trough) / peak` for a known series
-  - [ ] Unit test: `max_drawdown` is negative (never positive) for any drawdown
-  - [ ] Unit test: `recovery_periods` returns empty DataFrame for a monotonically increasing series
-  - [ ] Unit test: `recovery_periods` correctly identifies start, trough, and recovery date for a single known episode
-  - [ ] Unit test: `duration_days` is consistent with `(recovery - start).days`
+- [x] `tests/unit/risk/test_drawdown.py` — complete (2026-04-27)
+  - [x] Unit test: `underwater_curve` is all zeros for a monotonically increasing series
+  - [x] Unit test: `max_drawdown` equals `-(peak - trough) / peak` for a known series
+  - [x] Unit test: `max_drawdown` is negative (never positive) for any drawdown
+  - [x] Unit test: `recovery_periods` returns empty DataFrame for a monotonically increasing series
+  - [x] Unit test: `recovery_periods` correctly identifies start, trough, and recovery date for a single known episode
+  - [x] Unit test: `duration_days` is consistent with `(recovery - start).days`
 
 ---
 

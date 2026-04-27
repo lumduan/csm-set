@@ -8,11 +8,9 @@ from pydantic import BaseModel, Field
 
 from csm.config.constants import TIMEZONE
 from csm.data.store import ParquetStore
-from csm.portfolio.construction import PortfolioConstructor
 from csm.portfolio.optimizer import WeightOptimizer
 from csm.portfolio.rebalance import RebalanceScheduler
 from csm.research.exceptions import BacktestError
-from csm.research.ranking import CrossSectionalRanker
 from csm.risk.metrics import PerformanceMetrics
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -72,11 +70,24 @@ class MomentumBacktest:
 
     def __init__(self, store: ParquetStore) -> None:
         self._store: ParquetStore = store
-        self._ranker: CrossSectionalRanker = CrossSectionalRanker()
-        self._constructor: PortfolioConstructor = PortfolioConstructor()
         self._optimizer: WeightOptimizer = WeightOptimizer()
         self._scheduler: RebalanceScheduler = RebalanceScheduler()
         self._metrics: PerformanceMetrics = PerformanceMetrics()
+
+    def _select_top_quantile(
+        self, cross_section: pd.DataFrame, top_quantile: float
+    ) -> list[str]:
+        """Select top-quantile symbols by composite signal.
+
+        Composite signal = cross-sectional mean of all z-scored feature columns.
+        At least one symbol is always returned when cross_section is non-empty.
+        """
+
+        if cross_section.empty:
+            return []
+        composite: pd.Series = cross_section.mean(axis=1)
+        n_select: int = max(1, int(round(len(composite) * top_quantile)))
+        return [str(s) for s in composite.nlargest(n_select).index]
 
     def run(
         self,
@@ -88,14 +99,14 @@ class MomentumBacktest:
 
         Args:
             feature_panel: MultiIndex feature panel indexed by `(date, symbol)`.
-            prices: Wide close-price matrix.
+            prices: Wide close-price matrix indexed by date, columns = symbols.
             config: Backtest configuration.
 
         Returns:
             Public-safe backtest result.
 
         Raises:
-            BacktestError: If required data is missing.
+            BacktestError: If required data is missing or no observations produced.
         """
 
         if feature_panel.empty or prices.empty:
@@ -115,10 +126,28 @@ class MomentumBacktest:
         turnover_map: dict[str, float] = {}
 
         for current_date, next_date in zip(rebalance_dates[:-1], rebalance_dates[1:], strict=False):
-            ranked: pd.DataFrame = self._ranker.rank(feature_panel, current_date)
-            selected: list[str] = self._constructor.select(ranked, config.top_quantile)
+            # Slice cross-section at current rebalance date.
+            try:
+                cross_section: pd.DataFrame = feature_panel.xs(current_date, level="date")
+            except KeyError:
+                continue
+            if cross_section.empty:
+                continue
+
+            # Select top-quantile symbols by composite z-score signal.
+            selected: list[str] = self._select_top_quantile(cross_section, config.top_quantile)
+
+            # Filter to symbols present in the price matrix; warn on missing.
+            missing: list[str] = [s for s in selected if s not in prices.columns]
+            if missing:
+                logger.warning(
+                    "Symbols absent from price matrix; contributing zero return",
+                    extra={"missing": missing, "date": str(current_date)},
+                )
+            selected = [s for s in selected if s in prices.columns]
             if not selected:
                 continue
+
             trailing_returns: pd.DataFrame = (
                 prices[selected].pct_change().dropna(how="all").tail(252)
             )
