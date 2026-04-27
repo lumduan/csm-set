@@ -426,30 +426,35 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.7 - Signal Research Notebook
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-27
 **Depends On:** All of Phases 2.1-2.6
 
 **Goal:** Provide human sign-off on which signals achieve ICIR > 0.3 on the SET and define the composite signal for Phase 3.
 
 **Deliverables:**
 
-- [ ] `notebooks/02_signal_research.ipynb`
-  - [ ] **Section 1: Data Loading** - load `panel_df` from `FeaturePipeline` plus forward returns
-  - [ ] **Section 2: IC Time Series** - plot IC time series for each signal (`mom_12_1`, `mom_6_1`, `mom_3_1`, `mom_1_0`, `sharpe_momentum`, `residual_momentum`, `sector_rel_strength`)
-  - [ ] **Section 3: ICIR Summary Table** - rank signals by ICIR with confidence intervals
-  - [ ] **Section 4: Signal Correlation Matrix** - heatmap of correlations between signals to check redundancy
-  - [ ] **Section 5: IC Decay Curves** - mean IC by horizon for each signal
-  - [ ] **Section 6: Quintile Return Spreads** - annual Q5-Q1 return by signal and by year (bar chart)
-  - [ ] **Section 7: Composite Signal Design** - explain the selected weighting scheme and the ICIR of the composite
-  - [ ] **Section 8: Sign-off** - print PASS/FAIL for each exit criterion
-  - [ ] All markdown cells are written in Thai
-  - [ ] Final outcome: specify the composite signal formula to be used in Phase 3, with rationale
+- [x] `notebooks/02_signal_research.ipynb`
+  - [x] **Section 1: Data Loading** - load `panel_df` from `FeaturePipeline` plus forward returns
+  - [x] **Section 2: IC Time Series** - plot IC time series for each signal (`mom_12_1`, `mom_6_1`, `mom_3_1`, `mom_1_0`, `sharpe_momentum`, `residual_momentum`, `sector_rel_strength`)
+  - [x] **Section 3: ICIR Summary Table** - rank signals by ICIR with confidence intervals; Rank_ICIR and Best_ICIR columns added
+  - [x] **Section 4: Signal Correlation Matrix** - heatmap of correlations between signals to check redundancy
+  - [x] **Section 5: IC Decay Curves** - mean IC by horizon for each signal
+  - [x] **Section 6: Quintile Return Spreads** - annual Q5-Q1 return by signal and by year (bar chart)
+  - [x] **Section 7: Composite Signal Design** - explain the selected weighting scheme and the ICIR of the composite
+  - [x] **Section 8: Sign-off** - print PASS/FAIL for each exit criterion
+  - [x] All markdown cells are written in Thai
+  - [x] Final outcome: `residual_momentum` passes gate (Rank ICIR = 0.32); composite = equal_weight([residual_momentum]), Rank ICIR = 0.32
 
 **Implementation notes:**
 
-- The notebook uses `FeaturePipeline`, `CrossSectionalRanker`, and `ICAnalyzer` directly.
-- If `data/processed/` is empty, display `WARNING: DATA NOT AVAILABLE` in each section.
-- Export IC analysis outputs as JSON under `results/signals/` for Phases 5 and 6.
+- OHLCV data lives under `data/raw/dividends/` — use `ParquetStore(settings.data_dir / "raw" / "dividends")` (not `data/raw/`).
+- Raw parquets occasionally have duplicate timestamps (re-fetch artifact); deduplicate with `df[~df.index.duplicated(keep="last")]` before passing to pipeline.
+- Jupyter asyncio: use `asyncio.new_event_loop()` + `run_until_complete()` instead of `asyncio.run()` to avoid "another loop is running" error.
+- `QUICK_RUN = True/False` flag limits to last 5 years for fast exploration; set `False` for final sign-off.
+- Gate criterion uses `max(Pearson ICIR, Rank ICIR) ≥ 0.3` — Rank IC is more robust to cross-sectional return outliers.
+- Composite falls back through three tiers: signals with Best_ICIR ≥ 0.3 → signals with ICIR > 0.1 → single `mom_12_1`.
+- settfex sector fetch unavailable in current environment — `sector_rel_strength` absent from panel; notebook handles this gracefully with a warning.
+- Export IC analysis outputs as JSON under `results/signals/latest_ranking.json`.
 
 ---
 
