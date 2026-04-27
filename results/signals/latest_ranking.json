@@ -1,1 +1,61 @@
-{}
+{
+  "generated_at": "2026-04-27T13:32:07.353341+07:00",
+  "horizon_months": 1,
+  "quick_run": false,
+  "signals": {
+    "mom_12_1": {
+      "mean_ic": 0.02414541620776984,
+      "icir": 0.16873793791940453,
+      "rank_icir": 0.22228014473420715,
+      "passes_gate": false,
+      "pct_positive": 0.587378640776699
+    },
+    "mom_6_1": {
+      "mean_ic": 0.030424344100113365,
+      "icir": 0.2263091044646839,
+      "rank_icir": 0.2920519890453703,
+      "passes_gate": false,
+      "pct_positive": 0.6116504854368932
+    },
+    "mom_3_1": {
+      "mean_ic": 0.017339777718090258,
+      "icir": 0.14706497332605328,
+      "rank_icir": 0.22426845578970173,
+      "passes_gate": false,
+      "pct_positive": 0.5922330097087378
+    },
+    "mom_1_0": {
+      "mean_ic": -0.012136851466136094,
+      "icir": -0.10060898577724749,
+      "rank_icir": -0.05520256899663158,
+      "passes_gate": false,
+      "pct_positive": 0.48058252427184467
+    },
+    "sharpe_momentum": {
+      "mean_ic": 0.027798809945496838,
+      "icir": 0.23255379511823068,
+      "rank_icir": 0.2746855893856038,
+      "passes_gate": false,
+      "pct_positive": 0.6067961165048543
+    },
+    "residual_momentum": {
+      "mean_ic": 0.02686877408964802,
+      "icir": 0.21322825182892288,
+      "rank_icir": 0.3202435242845823,
+      "passes_gate": true,
+      "pct_positive": 0.5922330097087378
+    }
+  },
+  "composite": {
+    "formula": "equal_weight",
+    "members": [
+      "residual_momentum"
+    ],
+    "weights": {
+      "residual_momentum": 1.0
+    },
+    "mean_ic": 0.02686877408964802,
+    "icir": 0.21322825182892288,
+    "rank_icir": 0.3202435242845823
+  }
+}

@@ -4,68 +4,141 @@ import logging
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+# Minimum number of prices in hist (close.loc[<= t]) to compute either signal.
+# Derived from 253 prices needed for the 252-return vol/regression window
+# (hist.iloc[-274:-21]) plus 21 positions for the skip boundary.
+_MIN_HIST: int = 274
+
+# Minimum aligned (symbol, index) return pairs for OLS regression.
+_MIN_OLS_PAIRS: int = 63
+
+_SIGNAL_NAMES: list[str] = ["sharpe_momentum", "residual_momentum"]
+
+
+def _safe_log_returns(prices: np.ndarray) -> np.ndarray:
+    """Compute daily log returns from a price array.
+
+    Returns an array of NaN with length len(prices)-1 if any price is <= 0.
+    """
+    if np.any(prices <= 0):
+        return np.full(len(prices) - 1, np.nan)
+    return np.diff(np.log(prices))
+
+
+def _annualised_vol(returns: np.ndarray) -> float:
+    """Sample std * sqrt(252). Returns NaN when array has < 2 elements or std == 0."""
+    if len(returns) < 2:
+        return float("nan")
+    vol = float(np.std(returns, ddof=1)) * float(np.sqrt(252.0))
+    return vol if vol > 0.0 else float("nan")
+
+
+def _ols_alpha_annualised(y: np.ndarray, x: np.ndarray) -> float:
+    """OLS intercept * 252 via scipy.stats.linregress. Returns NaN if std(x) == 0."""
+    if float(np.std(x, ddof=1)) == 0.0:
+        return float("nan")
+    result = stats.linregress(x, y)
+    return float(result.intercept) * 252.0
+
 
 class RiskAdjustedFeatures:
-    """Compute volatility-adjusted and residual momentum signals."""
+    """Compute volatility-adjusted and market-neutral momentum signals."""
 
-    def sharpe_momentum(self, prices: pd.DataFrame, window: int = 252) -> pd.Series:
-        """Compute annualised return divided by annualised volatility.
+    def compute(
+        self,
+        close: pd.Series,
+        index_close: pd.Series,
+        rebalance_dates: pd.DatetimeIndex,
+    ) -> pd.DataFrame:
+        """Compute sharpe_momentum and residual_momentum per rebalance date.
 
-        Args:
-            prices: Wide price matrix with symbols as columns.
-            window: Number of trading days used in the lookback window.
-
-        Returns:
-            Series indexed by symbol named `sharpe_mom`.
-        """
-
-        trailing_prices: pd.DataFrame = prices.tail(window + 1)
-        returns: pd.DataFrame = trailing_prices.pct_change().dropna(how="all")
-        annual_return: pd.Series = (1.0 + returns.mean()) ** 252 - 1.0
-        annual_volatility: pd.Series = returns.std(ddof=0) * np.sqrt(252.0)
-        sharpe: pd.Series = annual_return.div(annual_volatility.replace(0.0, np.nan))
-        sharpe = sharpe.fillna(0.0)
-        sharpe.name = "sharpe_mom"
-        logger.info("Computed sharpe momentum", extra={"window": window})
-        return sharpe
-
-    def residual_momentum(self, prices: pd.DataFrame, index_prices: pd.Series) -> pd.Series:
-        """Compute residual momentum relative to the market index.
+        Both signals use a 252-daily-log-return window ending at t-21 (the formation gap
+        boundary), derived from hist.iloc[-274:-21] (253 prices). The mom_12_1 numerator
+        for sharpe uses the Phase 2.1 formula: log(hist.iloc[-22] / hist.iloc[-253]).
 
         Args:
-            prices: Wide price matrix with symbols as columns.
-            index_prices: Market index price series.
+            close: Daily close price Series for a single symbol. DatetimeIndex required.
+                   Sorted internally. Duplicate timestamps raise ValueError.
+            index_close: Daily close for the SET index (e.g. SET:SET). Same timezone
+                         convention as close. Duplicate timestamps raise ValueError.
+            rebalance_dates: Rebalance DatetimeIndex. Non-trading dates use the last
+                   available close on or before that date.
 
         Returns:
-            Series indexed by symbol named `residual_mom`.
+            DataFrame indexed by rebalance_dates, float32 columns
+            [sharpe_momentum, residual_momentum]. NaN when insufficient history,
+            non-finite vol, non-positive boundary prices, or insufficient OLS data.
+
+        Raises:
+            TypeError:  If close.index or index_close.index is not a DatetimeIndex.
+            ValueError: If close.index or index_close.index has duplicate timestamps.
         """
-
-        symbol_returns: pd.DataFrame = prices.pct_change().dropna(how="all").tail(252)
-        market_returns: pd.Series = (
-            index_prices.pct_change().dropna().reindex(symbol_returns.index).fillna(0.0)
-        )
-        residual_scores: dict[str, float] = {}
-        variance: float = float(market_returns.var(ddof=0))
-
-        for symbol in symbol_returns.columns:
-            aligned: pd.Series = symbol_returns[symbol].fillna(0.0)
-            if variance == 0.0:
-                residual_scores[symbol] = float(aligned.sum())
-                continue
-            covariance: float = float(
-                np.cov(aligned.to_numpy(), market_returns.to_numpy(), ddof=0)[0, 1]
+        if not isinstance(close.index, pd.DatetimeIndex):
+            raise TypeError("close must have a DatetimeIndex")
+        if not isinstance(index_close.index, pd.DatetimeIndex):
+            raise TypeError("index_close must have a DatetimeIndex")
+        if not isinstance(rebalance_dates, pd.DatetimeIndex):
+            raise TypeError("rebalance_dates must be a DatetimeIndex")
+        if close.index.duplicated().any():
+            raise ValueError(
+                "close index contains duplicate timestamps; de-duplicate before calling compute()"
             )
-            beta: float = covariance / variance
-            alpha: float = float(aligned.mean() - beta * market_returns.mean())
-            residuals: pd.Series = aligned - (alpha + beta * market_returns)
-            residual_scores[symbol] = float(residuals.sum())
+        if index_close.index.duplicated().any():
+            raise ValueError(
+                "index_close index contains duplicate timestamps; "
+                "de-duplicate before calling compute()"
+            )
 
-        residual_momentum: pd.Series = pd.Series(residual_scores, name="residual_mom", dtype=float)
-        logger.info("Computed residual momentum", extra={"symbols": len(residual_momentum.index)})
-        return residual_momentum
+        close = close.sort_index()
+        index_close = index_close.sort_index()
+
+        rows: list[dict[str, float]] = []
+        for t in rebalance_dates:
+            hist: pd.Series = close.loc[close.index <= t]
+            idx_hist: pd.Series = index_close.loc[index_close.index <= t]
+            row: dict[str, float] = {s: float("nan") for s in _SIGNAL_NAMES}
+
+            if len(hist) < _MIN_HIST:
+                rows.append(row)
+                continue
+
+            # --- sharpe_momentum ---
+            prices_slice = hist.iloc[-274:-21]
+            rets = _safe_log_returns(prices_slice.values.astype(float))
+            vol = _annualised_vol(rets)
+            end_p = float(hist.iloc[-22])
+            start_p = float(hist.iloc[-253])
+            if end_p > 0.0 and start_p > 0.0 and np.isfinite(vol):
+                row["sharpe_momentum"] = float(np.log(end_p / start_p)) / vol
+
+            # --- residual_momentum ---
+            if len(idx_hist) >= _MIN_HIST:
+                sym_slice = hist.iloc[-274:-21]
+                idx_slice = idx_hist.reindex(sym_slice.index)
+                aligned = pd.concat(
+                    [sym_slice.rename("s"), idx_slice.rename("i")], axis=1
+                ).dropna()
+                if len(aligned) >= 2:
+                    sym_rets = _safe_log_returns(aligned["s"].values.astype(float))
+                    idx_rets = _safe_log_returns(aligned["i"].values.astype(float))
+                    if (
+                        len(sym_rets) >= _MIN_OLS_PAIRS
+                        and not np.any(np.isnan(sym_rets))
+                        and not np.any(np.isnan(idx_rets))
+                    ):
+                        row["residual_momentum"] = _ols_alpha_annualised(
+                            y=sym_rets, x=idx_rets
+                        )
+
+            rows.append(row)
+
+        result = pd.DataFrame(rows, index=rebalance_dates, columns=_SIGNAL_NAMES)
+        logger.debug("Computed risk-adjusted features", extra={"dates": len(rebalance_dates)})
+        return result.astype("float32")
 
 
 __all__: list[str] = ["RiskAdjustedFeatures"]
