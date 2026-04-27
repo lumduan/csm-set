@@ -240,6 +240,8 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 **Status:** `[x]` Implemented — `src/csm/risk/metrics.py` complete (103 lines after ddof fix)
 **Unit tests:** `[x]` Complete — `tests/unit/risk/test_metrics.py` — 9 tests pass (2026-04-27)
+**Plan doc:** `[x]` Created — `docs/plans/phase-3-backtesting/phase3.2_performance_metrics.md` (2026-04-27)
+**Bug fix (2026-04-27):** `pd.concat(..., sort=False)` added to silence `Pandas4Warning` in benchmark alignment path.
 
 **Goal:** Annualised performance metrics from an equity curve. Optionally computes alpha, beta, and information ratio vs. a benchmark.
 

@@ -75,6 +75,7 @@ class PerformanceMetrics:
             aligned: pd.DataFrame = pd.concat(
                 [monthly_returns.rename("portfolio"), benchmark.pct_change().rename("benchmark")],
                 axis=1,
+                sort=False,
             ).dropna()
             if not aligned.empty:
                 covariance: float = float(aligned.cov(ddof=0).loc["portfolio", "benchmark"])
