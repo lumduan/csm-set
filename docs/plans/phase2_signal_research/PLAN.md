@@ -387,34 +387,34 @@ results/signals/latest_ranking.json   <- exported for Phase 5/6 public mode
 
 ### Phase 2.6 - IC Analysis
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-27
 **Depends On:** Phase 2.4 (panel + forward returns), Phase 2.5 (ranking)
 
 **Goal:** Measure the predictive power of each signal and the composite score using IC, in order to decide which signals enter the Phase 3 composite.
 
 **Deliverables:**
 
-- [ ] `src/csm/research/ic_analysis.py` - `ICAnalyzer`
-  - [ ] `compute_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
-    - [ ] Input: `panel_df` containing a signal column and a forward return column
-    - [ ] Output: IC time series indexed by rebalance date, with Pearson IC per date
-    - [ ] Pearson IC: `corr(signal_t, forward_return_t)` per date as a cross-sectional correlation
-    - [ ] NaN when fewer than 10 symbols are available on that date
-  - [ ] `compute_rank_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
-    - [ ] Spearman rank IC, ranking both signal and return before correlation
-  - [ ] `compute_icir(ic_series: pd.Series) -> float`
-    - [ ] ICIR = `ic_series.mean() / ic_series.std()`
-    - [ ] Return `NaN` when `ic_series` has fewer than 12 periods
-  - [ ] `compute_decay_curve(panel_df: pd.DataFrame, signal_col: str, horizons: list[int]) -> pd.Series`
-    - [ ] Measure mean IC by horizon: 1M, 2M, 3M, 6M, 12M
-    - [ ] Output: Series indexed by horizons with mean IC values
-  - [ ] `summary_table(panel_df: pd.DataFrame, signal_cols: list[str], horizon: int = 1) -> pd.DataFrame`
-    - [ ] Output table: `signal_name -> {Mean_IC, Std_IC, ICIR, t-stat, % positive IC months}`
-- [ ] Unit test: IC on known synthetic data with a known exact correlation
-- [ ] Unit test: ICIR matches a manual mean/std calculation
-- [ ] Unit test: decay curve returns the correct horizons
-- [ ] Unit test: NaN when fewer than 10 symbols are present on a date
-- [ ] Unit test: `summary_table` has the correct columns and shape for `signal_cols`
+- [x] `src/csm/research/ic_analysis.py` - `ICAnalyzer`
+  - [x] `compute_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
+    - [x] Input: `panel_df` containing a signal column and a forward return column
+    - [x] Output: IC time series indexed by rebalance date, with Pearson IC per date
+    - [x] Pearson IC: `corr(signal_t, forward_return_t)` per date as a cross-sectional correlation
+    - [x] NaN when fewer than 10 symbols are available on that date
+  - [x] `compute_rank_ic(panel_df: pd.DataFrame, signal_col: str, forward_ret_col: str) -> pd.Series`
+    - [x] Spearman rank IC, ranking both signal and return before correlation
+  - [x] `compute_icir(ic_series: pd.Series) -> float`
+    - [x] ICIR = `ic_series.mean() / ic_series.std()`
+    - [x] Return `NaN` when `ic_series` has fewer than 12 periods
+  - [x] `compute_decay_curve(panel_df: pd.DataFrame, signal_col: str, horizons: list[int]) -> pd.Series`
+    - [x] Measure mean IC by horizon: 1M, 2M, 3M, 6M, 12M
+    - [x] Output: Series indexed by horizons with mean IC values
+  - [x] `summary_table(panel_df: pd.DataFrame, signal_cols: list[str], horizon: int = 1) -> pd.DataFrame`
+    - [x] Output table: `signal_name -> {Mean_IC, Std_IC, ICIR, t-stat, % positive IC months}`
+- [x] Unit test: IC on known synthetic data with a known exact correlation
+- [x] Unit test: ICIR matches a manual mean/std calculation
+- [x] Unit test: decay curve returns the correct horizons
+- [x] Unit test: NaN when fewer than 10 symbols are present on a date
+- [x] Unit test: `summary_table` has the correct columns and shape for `signal_cols`
 
 **Implementation notes:**
 
