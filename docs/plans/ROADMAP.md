@@ -111,61 +111,71 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 2.1 Momentum Features
 
-- [ ] `src/csm/features/momentum.py` — `MomentumFeatures`
-  - [ ] `mom_12_1`: 12-month return, skip last month (Jegadeesh–Titman)
-  - [ ] `mom_6_1`: 6-month return, skip last month
-  - [ ] `mom_3_1`: 3-month return, skip last month
-  - [ ] `mom_1_0`: 1-month return (expect reversal — use as negative signal)
-- [ ] Unit test: correct return calculation vs manual pandas computation
-- [ ] Unit test: no look-ahead bias (signal uses only data up to `t-skip`)
+
+### 2.1 Momentum Features
+
+- [x] `src/csm/features/momentum.py` — `MomentumFeatures`
+  - [x] `mom_12_1`: 12-month return, skip last month (Jegadeesh–Titman)
+  - [x] `mom_6_1`: 6-month return, skip last month
+  - [x] `mom_3_1`: 3-month return, skip last month
+  - [x] `mom_1_0`: 1-month return (expect reversal — use as negative signal)
+  - [x] Unit test: correct return calculation vs manual pandas computation
+  - [x] Unit test: no look-ahead bias (signal uses only data up to `t-skip`)
+
 
 ### 2.2 Risk-Adjusted Features
 
-- [ ] `src/csm/features/risk_adjusted.py` — `RiskAdjustedFeatures`
-  - [ ] `sharpe_momentum`: return / volatility over formation period
-  - [ ] `residual_momentum`: alpha vs SET index (remove market beta)
-- [ ] Unit test: sharpe_momentum output bounded, residual is market-neutral
+- [x] `src/csm/features/risk_adjusted.py` — `RiskAdjustedFeatures`
+  - [x] `sharpe_momentum`: return / volatility over formation period
+  - [x] `residual_momentum`: alpha vs SET index (remove market beta)
+  - [x] Unit test: sharpe_momentum output bounded, residual is market-neutral
+
 
 ### 2.3 Sector Features
 
-- [ ] `src/csm/features/sector.py` — `SectorFeatures`
-  - [ ] Relative strength of each symbol vs its sector index
-- [ ] Unit test: relative strength = 0 for index itself
+- [x] `src/csm/features/sector.py` — `SectorFeatures`
+  - [x] Relative strength of each symbol vs its sector index
+  - [x] Unit test: relative strength = 0 for index itself
+
 
 ### 2.4 Feature Pipeline
 
-- [ ] `src/csm/features/pipeline.py` — `FeaturePipeline`
-  - [ ] Combine all features into panel DataFrame: (date, symbol) → features
-  - [ ] Winsorise at 1st / 99th cross-sectionally per rebalance date
-  - [ ] Z-score normalise cross-sectionally (mean 0, std 1)
-- [ ] Unit test: no data leakage across rebalance dates
-- [ ] Unit test: z-score mean ≈ 0 and std ≈ 1 per date
+- [x] `src/csm/features/pipeline.py` — `FeaturePipeline`
+  - [x] Combine all features into panel DataFrame: (date, symbol) → features
+  - [x] Winsorise at 1st / 99th cross-sectionally per rebalance date
+  - [x] Z-score normalise cross-sectionally (mean 0, std 1)
+  - [x] Unit test: no data leakage across rebalance dates
+  - [x] Unit test: z-score mean ≈ 0 and std ≈ 1 per date
+
 
 ### 2.5 Ranking
 
-- [ ] `src/csm/research/ranking.py` — `CrossSectionalRanker`
-  - [ ] Percentile rank per rebalance date
-  - [ ] Assign quintile labels (Q1 loser → Q5 winner)
-- [ ] Unit test: ranks sum to N*(N+1)/2, quintile counts balanced
+- [x] `src/csm/research/ranking.py` — `CrossSectionalRanker`
+  - [x] Percentile rank per rebalance date
+  - [x] Assign quintile labels (Q1 loser → Q5 winner)
+  - [x] Unit test: ranks sum to N*(N+1)/2, quintile counts balanced
+
 
 ### 2.6 IC Analysis
 
-- [ ] `src/csm/research/ic_analysis.py` — `ICAnalyzer`
-  - [ ] Pearson IC: corr(signal_t, forward_return_t+1M)
-  - [ ] Spearman rank IC
-  - [ ] ICIR = mean(IC) / std(IC)
-  - [ ] Decay curve: IC at horizons 1M, 2M, 3M, 6M, 12M
-- [ ] Unit test: IC against known synthetic data
+- [x] `src/csm/research/ic_analysis.py` — `ICAnalyzer`
+  - [x] Pearson IC: corr(signal_t, forward_return_t+1M)
+  - [x] Spearman rank IC
+  - [x] ICIR = mean(IC) / std(IC)
+  - [x] Decay curve: IC at horizons 1M, 2M, 3M, 6M, 12M
+  - [x] Unit test: IC against known synthetic data
+
 
 ### 2.7 Signal Research Notebook
 
-- [ ] Notebook `02_signal_research.ipynb`
-  - [ ] IC time series for each signal
-  - [ ] ICIR table: all signals ranked
-  - [ ] Signal correlation matrix (check redundancy)
-  - [ ] Decay curves
-  - [ ] Quintile return spreads (Q5 − Q1) by year
-  - [ ] **Decision**: which signals to include in the composite score
+- [x] Notebook `02_signal_research.ipynb`
+  - [x] IC time series for each signal
+  - [x] ICIR table: all signals ranked
+  - [x] Signal correlation matrix (check redundancy)
+  - [x] Decay curves
+  - [x] Quintile return spreads (Q5 − Q1) by year
+  - [x] **Decision**: which signals to include in the composite score
+
 
 **Exit criteria:** at least one signal with ICIR > 0.3 on SET. Composite signal defined and documented.
 
