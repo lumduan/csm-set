@@ -274,7 +274,8 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 ### Phase 3.3 — Drawdown Analysis
 
 **Status:** `[x]` Implemented — `src/csm/risk/drawdown.py` complete (57 lines)
-**Unit tests:** `[x]` Complete — `tests/unit/risk/test_drawdown.py` — all 6 tests pass (2026-04-27)
+**Unit tests:** `[x]` Complete — `tests/unit/risk/test_drawdown.py` — all 9 tests pass (2026-04-27); extended from 6 to 9 with open-episode, multi-episode count, and single-point edge cases
+**Plan doc:** `[x]` Created — `docs/plans/phase-3-backtesting/phase3.3_drawdown_analysis.md` (2026-04-27)
 
 **Goal:** Compute the underwater equity curve, peak-to-trough max drawdown, and a table of drawdown episodes with start, trough, recovery dates, depth, and duration.
 

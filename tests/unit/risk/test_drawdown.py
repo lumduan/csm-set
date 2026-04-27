@@ -77,3 +77,26 @@ class TestDrawdownAnalyzer:
         for _, row in episodes.iterrows():
             expected_days = int((row["recovery"] - row["start"]).days)
             assert row["duration_days"] == expected_days
+
+    def test_recovery_periods_open_episode_not_included(
+        self, analyzer: DrawdownAnalyzer
+    ) -> None:
+        """An episode that has not recovered by end of series is excluded from the table."""
+        equity = _series([100.0, 90.0, 80.0])
+        episodes = analyzer.recovery_periods(equity)
+        assert episodes.empty
+
+    def test_recovery_periods_multiple_episodes_count(
+        self, analyzer: DrawdownAnalyzer
+    ) -> None:
+        """recovery_periods() returns one row per complete episode."""
+        equity = _series([100.0, 85.0, 80.0, 100.0, 95.0, 100.0])
+        episodes = analyzer.recovery_periods(equity)
+        assert len(episodes) == 2
+
+    def test_max_drawdown_single_point_returns_zero(
+        self, analyzer: DrawdownAnalyzer
+    ) -> None:
+        """A single-point equity curve has no drawdown."""
+        equity = _series([100.0])
+        assert analyzer.max_drawdown(equity) == 0.0
