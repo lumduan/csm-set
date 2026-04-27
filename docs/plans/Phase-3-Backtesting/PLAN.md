@@ -301,7 +301,8 @@ results/backtest/annual_returns.json    ← Phase 7 public export
 
 ### Phase 3.4 — Backtest Notebook
 
-**Status:** `[ ]` Empty — `notebooks/03_backtest_analysis.ipynb` exists with 0 cells
+**Status:** `[x]` Complete — `notebooks/03_backtest_analysis.ipynb` fully written and executed (2026-04-27)
+**Plan doc:** `[x]` Created — `docs/plans/phase-3-backtesting/phase3.4_backtest_notebook.md` (2026-04-27)
 **Depends On:** 3.1, 3.2, 3.3 complete; Phase 2 feature panel available
 
 **Goal:** Human sign-off that the backtest is sound and the strategy is worth pursuing to Phase 4. This notebook is the Phase 3 exit gate and the input to the Phase 4 portfolio construction decision.
