@@ -336,20 +336,20 @@ class TestSafeModeScaling:
             index_prices[d] = 70.0
         index_prices = index_prices.sort_index()
 
-        # Disable RS filter — test is solely about Safe Mode equity scaling.
+        # Disable soft penalty — test is solely about Safe Mode equity scaling.
         config_bull = BacktestConfig(
             transaction_cost_bps=0.0,
             n_holdings_min=1,
             n_holdings_max=1,
             safe_mode_max_equity=0.2,
-            relative_strength_filter=False,
+            soft_penalty_scoring=False,
         )
         config_safe = BacktestConfig(
             transaction_cost_bps=0.0,
             n_holdings_min=1,
             n_holdings_max=1,
             safe_mode_max_equity=0.2,
-            relative_strength_filter=False,
+            soft_penalty_scoring=False,
         )
         result_bull = backtest.run(
             feature_panel=feature_panel, prices=prices, config=config_bull
@@ -432,10 +432,9 @@ def _make_index_prices_weak_bear(dates: list[pd.Timestamp], tz: str = TZ) -> pd.
     return series.sort_index()
 
 
-class TestRelativeStrengthFilter:
-    def test_excludes_stock_below_index_return(self, backtest: MomentumBacktest) -> None:
-        """A stock with lower 12M return than the index is removed."""
-        # 13-month history: index +20%, stock A +5%, stock B +30%
+class TestSoftPenaltyScoring:
+    def test_penalty_reduces_score_of_underperformers(self, backtest: MomentumBacktest) -> None:
+        """A stock with 12M return below SET index gets its score reduced (not removed)."""
         hist_dates = pd.date_range("2022-01-01", periods=260, freq="B", tz=TZ)
         index_prices = pd.Series(np.linspace(100.0, 120.0, 260), index=hist_dates)
         stock_a = pd.Series(np.linspace(100.0, 105.0, 260), index=hist_dates)  # underperform
@@ -445,30 +444,39 @@ class TestRelativeStrengthFilter:
             {"signal": [1.0, 0.8]}, index=pd.Index(["A", "B"], name="symbol")
         )
         asof = hist_dates[-1]
-        result = backtest._apply_relative_strength_filter(
-            cross_section, prices, index_prices, asof, lookback_months=12
+        result = backtest._apply_soft_penalty(
+            cross_section, prices, index_prices, asof,
+            lookback_months=12, penalty_rank_fraction=0.20,
         )
-        assert "A" not in result.index
+        # Both stocks remain in the cross_section (NOT removed).
+        assert "A" in result.index
         assert "B" in result.index
+        # A's score should be penalized (lowered) while B's stays at 0.8.
+        # A was 1.0 → now 1.0 * 0.8 = 0.8; B stays at 0.8.
+        assert float(result.loc["A", "signal"]) < 1.0
+        assert float(result.loc["B", "signal"]) == 0.8
 
-    def test_keeps_stock_that_matches_or_beats_index(self, backtest: MomentumBacktest) -> None:
-        """A stock with return ≥ index return is retained."""
+    def test_penalty_preserves_outperformers(self, backtest: MomentumBacktest) -> None:
+        """A stock with return ≥ index return is NOT penalized."""
         hist_dates = pd.date_range("2022-01-01", periods=260, freq="B", tz=TZ)
         index_prices = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)
-        stock = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)  # exactly matches
+        stock = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)
         prices = pd.DataFrame({"A": stock})
         cross_section = pd.DataFrame(
             {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
         )
-        result = backtest._apply_relative_strength_filter(
-            cross_section, prices, index_prices, hist_dates[-1], lookback_months=12
+        asof = hist_dates[-1]
+        result = backtest._apply_soft_penalty(
+            cross_section, prices, index_prices, asof,
+            lookback_months=12, penalty_rank_fraction=0.20,
         )
-        assert "A" in result.index
+        # Outperformer — score unchanged.
+        assert float(result.loc["A", "signal"]) == 1.0
 
-    def test_skips_filter_when_benchmark_history_insufficient(
+    def test_penalty_skips_when_benchmark_history_insufficient(
         self, backtest: MomentumBacktest
     ) -> None:
-        """Fewer than 2 index bars → filter is skipped, cross_section returned unchanged."""
+        """Fewer than 2 index bars → penalty is skipped, cross_section unchanged."""
         asof = pd.Timestamp("2023-06-30", tz=TZ)
         index_prices = pd.Series(
             [100.0], index=pd.DatetimeIndex([asof], tz=TZ)
@@ -479,20 +487,51 @@ class TestRelativeStrengthFilter:
         cross_section = pd.DataFrame(
             {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
         )
-        result = backtest._apply_relative_strength_filter(
-            cross_section, prices, index_prices, asof, lookback_months=12
+        result = backtest._apply_soft_penalty(
+            cross_section, prices, index_prices, asof,
+            lookback_months=12, penalty_rank_fraction=0.20,
         )
         assert len(result) == len(cross_section)
+        assert float(result.loc["A", "signal"]) == 1.0
+
+    def test_penalty_with_buffer_preserves_holdings(self, backtest: MomentumBacktest) -> None:
+        """A penalized holding is retained if no replacement ranks buffer_threshold better."""
+        hist_dates = pd.date_range("2022-01-01", periods=260, freq="B", tz=TZ)
+        index_prices = pd.Series(np.linspace(100.0, 120.0, 260), index=hist_dates)
+        # A underperforms but B does not.
+        stock_a = pd.Series(np.linspace(100.0, 105.0, 260), index=hist_dates)
+        stock_b = pd.Series(np.linspace(100.0, 130.0, 260), index=hist_dates)
+        stock_c = pd.Series(np.linspace(100.0, 100.0, 260), index=hist_dates)  # flat
+        prices = pd.DataFrame({"A": stock_a, "B": stock_b, "C": stock_c})
+        asof = hist_dates[-1]
+        cross_section = pd.DataFrame(
+            {"signal": [1.0, 0.95, 0.01]},
+            index=pd.Index(["A", "B", "C"], name="symbol"),
+        )
+        # Apply soft penalty — A gets penalized.
+        penalized = backtest._apply_soft_penalty(
+            cross_section, prices, index_prices, asof,
+            lookback_months=12, penalty_rank_fraction=0.20,
+        )
+        # Now check buffer: A is current holding, ranked equally to candidate B.
+        current = ["A"]
+        # After penalty: A's score = 1.0 * 0.8 = 0.8, B = 0.95, C = 0.01
+        # Composite scores (only signal column): A=0.8, B=0.95, C=0.01
+        # Percentile ranks: C=0.33, A=0.67, B=1.0
+        # Replacements for A from candidates: B (rank 1.0). Diff = 1.0 - 0.67 = 0.33
+        # With buffer_threshold=0.9, A should be kept (0.33 < 0.9).
+        candidates = ["B", "A"]
+        buffered = backtest._apply_buffer_logic(current, candidates, penalized, 0.9)
+        assert "A" in buffered
 
 
 class TestDynamicBearMode:
     def test_strong_bear_uses_zero_equity(self, backtest: MomentumBacktest) -> None:
         """When EMA slope is negative (strong bear), equity weight = 0 → NAV stays flat."""
         rebal_dates, index_prices = _make_bear_index_and_dates(n_rebal=2)
-        # Stock prices are pulled from the same continuous date range.
-        # Use rising stock prices so any equity exposure would increase NAV above 100.
+        # Stock prices also crash so breadth stays low (no EARLY_BULL detection).
         stock_prices = pd.Series(
-            np.linspace(50.0, 80.0, len(index_prices)), index=index_prices.index
+            np.linspace(130.0, 40.0, len(index_prices)), index=index_prices.index
         )
         prices = pd.DataFrame({"A": stock_prices})
         feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
@@ -501,7 +540,7 @@ class TestDynamicBearMode:
             n_holdings_min=1,
             n_holdings_max=1,
             bear_full_cash=True,
-            relative_strength_filter=False,  # isolate the dynamic bear logic
+            soft_penalty_scoring=False,  # isolate the dynamic bear logic
         )
         result = backtest.run(
             feature_panel=feature_panel,
@@ -530,7 +569,7 @@ class TestDynamicBearMode:
             n_holdings_max=1,
             bear_full_cash=False,
             safe_mode_max_equity=0.2,
-            relative_strength_filter=False,
+            soft_penalty_scoring=False,
         )
         result = backtest.run(
             feature_panel=feature_panel,
@@ -542,3 +581,80 @@ class TestDynamicBearMode:
         nav_values = list(result.equity_curve.values())
         assert nav_values, "Expected at least one period in equity curve"
         assert any(nav > 100.0 for nav in nav_values)
+
+
+class TestVolatilityExit:
+    def test_excludes_stopped_out_holding(self, backtest: MomentumBacktest) -> None:
+        """A holding that dropped 2×ATR below trailing peak is excluded."""
+        dates = pd.date_range("2023-01-01", periods=300, freq="B", tz=TZ)
+        asof = dates[-1]
+        prices = pd.DataFrame(
+            {
+                "A": np.concatenate(
+                    [np.linspace(100.0, 150.0, 250), np.linspace(150.0, 110.0, 50)]
+                ),
+                "B": np.linspace(100.0, 150.0, 300),  # always rising
+            },
+            index=dates,
+        )
+        current = ["A", "B"]
+        # A drops from 150 to 110 (peak - 26.6% for atr_window=14). With ATR window 14
+        # and simple close-to-close TR ≈ 0.8, 2×ATR ≈ 1.6. Stop = 150 - 1.6 = 148.4.
+        # Since current price 110 < 148.4, A is stopped out.
+        # B always rises — no stop trigger.
+        result = backtest._apply_volatility_exit(
+            current, prices, asof, atr_window=14, atr_multiplier=2.0, lookback_days=300,
+        )
+        assert "A" not in result
+        assert "B" in result
+
+    def test_keeps_normal_volatility_holding(self, backtest: MomentumBacktest) -> None:
+        """A holding within 2×ATR of trailing peak is kept."""
+        dates = pd.date_range("2023-01-01", periods=100, freq="B", tz=TZ)
+        asof = dates[-1]
+        # Monotonically rising — price at peak, stop never triggered.
+        prices = pd.DataFrame(
+            {"A": np.linspace(100.0, 101.0, 100)},
+            index=dates,
+        )
+        result = backtest._apply_volatility_exit(
+            ["A"], prices, asof, atr_window=14, atr_multiplier=2.0, lookback_days=100,
+        )
+        assert "A" in result
+
+    def test_returns_empty_when_no_holdings(self, backtest: MomentumBacktest) -> None:
+        """Empty holdings input → empty output."""
+        dates = pd.date_range("2023-01-01", periods=100, freq="B", tz=TZ)
+        prices = pd.DataFrame({"A": np.linspace(100.0, 150.0, 100)}, index=dates)
+        result = backtest._apply_volatility_exit(
+            [], prices, dates[-1], atr_window=14, atr_multiplier=2.0, lookback_days=100,
+        )
+        assert result == []
+
+
+class TestEma50Warning:
+    def test_warning_active_when_price_below_ema50(self, backtest: MomentumBacktest) -> None:
+        """SET below EMA50 → True."""
+        dates = pd.date_range("2020-01-01", periods=300, freq="B", tz="Asia/Bangkok")
+        # Start high, recent crash below EMA50.
+        prices_arr = np.concatenate(
+            [np.linspace(100.0, 150.0, 270), np.linspace(150.0, 120.0, 30)]
+        )
+        prices = pd.Series(prices_arr, index=dates)
+        asof = dates[-1]
+        assert backtest._check_ema50_warning(prices, asof, window=50) is True
+
+    def test_warning_inactive_when_price_above_ema50(self, backtest: MomentumBacktest) -> None:
+        """SET above EMA50 → False."""
+        dates = pd.date_range("2020-01-01", periods=300, freq="B", tz="Asia/Bangkok")
+        prices = pd.Series(np.linspace(100.0, 150.0, 300), index=dates)
+        asof = dates[-1]
+        assert backtest._check_ema50_warning(prices, asof, window=50) is False
+
+    def test_warning_inactive_when_insufficient_history(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """Fewer than 50 bars → False (conservative default)."""
+        dates = pd.date_range("2023-01-01", periods=30, freq="B", tz="Asia/Bangkok")
+        prices = pd.Series(np.linspace(100.0, 80.0, 30), index=dates)
+        assert backtest._check_ema50_warning(prices, dates[-1], window=50) is False

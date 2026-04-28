@@ -7,14 +7,22 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from csm.config.constants import (
+    ATR_MULTIPLIER,
+    ATR_WINDOW,
+    BREADTH_EMA_WINDOW,
     BUFFER_RANK_THRESHOLD,
     BULL_MODE_N_HOLDINGS_MAX,
     BULL_MODE_N_HOLDINGS_MIN,
+    BULL_WITH_WARNING_EQUITY,
+    EARLY_BULL_EQUITY_FRACTION,
     EMA_SLOPE_LOOKBACK_DAYS,
     EMA_TREND_WINDOW,
+    EMA_WARNING_WINDOW,
     MIN_ADTV_63D_THB,
+    RS_PENALTY_RANK_FRACTION,
     SAFE_MODE_MAX_EQUITY,
     TIMEZONE,
+    VOLATILITY_EXIT_LOOKBACK_DAYS,
 )
 from csm.data.store import ParquetStore
 from csm.portfolio.optimizer import WeightOptimizer
@@ -44,7 +52,7 @@ class MonthlyPeriodReport(BaseModel):
     net_return: float
     turnover: float
     nav: float
-    mode: str = Field(default="BULL")  # "BULL" | "BEAR" | "NEUTRAL"
+    mode: str = Field(default="BULL")  # "BULL" | "BEAR" | "NEUTRAL" | "EARLY_BULL"
 
     def to_dataframe(self) -> pd.DataFrame:
         """Return a DataFrame of stock-level holdings and contributions for this period."""
@@ -143,8 +151,16 @@ class BacktestConfig(BaseModel):
     # Phase 3.6 improvements
     bear_full_cash: bool = Field(default=True)  # 0% equity when EMA slope is negative
     ema_slope_lookback_days: int = Field(default=EMA_SLOPE_LOOKBACK_DAYS)
-    relative_strength_filter: bool = Field(default=True)  # only hold positive-alpha stocks
-    rs_lookback_months: int = Field(default=12)  # lookback for RS filter vs SET index
+    # Phase 3.7 improvements
+    soft_penalty_scoring: bool = Field(default=True)  # replaces binary RS filter (Phase 3.7)
+    rs_penalty_rank_fraction: float = Field(default=RS_PENALTY_RANK_FRACTION)
+    breadth_ema_window: int = Field(default=BREADTH_EMA_WINDOW)
+    early_bull_equity_fraction: float = Field(default=EARLY_BULL_EQUITY_FRACTION)
+    bull_with_warning_equity: float = Field(default=BULL_WITH_WARNING_EQUITY)
+    ema_warning_window: int = Field(default=EMA_WARNING_WINDOW)
+    atr_multiplier: float = Field(default=ATR_MULTIPLIER)
+    atr_window: int = Field(default=ATR_WINDOW)
+    volatility_exit_lookback_days: int = Field(default=VOLATILITY_EXIT_LOOKBACK_DAYS)
 
 
 class BacktestResult(BaseModel):
@@ -274,7 +290,7 @@ class MomentumBacktest:
         config: BacktestConfig,
         current_holdings: list[str],
     ) -> list[str]:
-        """Select 80–100 holdings using composite z-score + buffer logic.
+        """Select 40–60 holdings using composite z-score + buffer logic.
 
         Falls back to top_quantile selection when cross_section is too small to
         fill n_holdings_min, ensuring at least one symbol is always returned.
@@ -302,10 +318,25 @@ class MomentumBacktest:
         index_prices: pd.Series,
         asof: pd.Timestamp,
         ema_window: int,
+        *,
+        prices: pd.DataFrame | None = None,
+        breadth_ema_window: int = 20,
     ) -> RegimeState:
-        """Return BULL when SET:SET is above its EMA-*ema_window*, else BEAR."""
+        """Return BULL when SET:SET is above its EMA-*ema_window*, else BEAR.
+
+        When *prices* is provided, also checks market breadth for early recovery.
+        If SET is below EMA-*ema_window* but a majority of stocks are trading above
+        their EMA-*breadth_ema_window*, returns ``EARLY_BULL``.
+
+        This allows the portfolio to re-enter equity weeks or months before the
+        SET index itself crosses back above the long-term trend.
+        """
         if self._regime.is_bull_market(index_prices, asof, window=ema_window):
             return RegimeState.BULL
+        if prices is not None and self._has_positive_market_breadth(
+            prices, asof, breadth_ema_window
+        ):
+            return RegimeState.EARLY_BULL
         return RegimeState.BEAR
 
     def _has_negative_ema_slope(
@@ -320,41 +351,149 @@ class MomentumBacktest:
             index_prices, asof, window=ema_window, slope_lookback=slope_lookback
         )
 
-    def _apply_relative_strength_filter(
+    # ━ Phase 3.7: new methods ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _has_positive_market_breadth(
+        self,
+        prices: pd.DataFrame,
+        asof: pd.Timestamp,
+        breadth_ema_window: int,
+        breadth_threshold: float = 0.5,
+    ) -> bool:
+        """Return True when a majority of stocks trade above their EMA-*breadth_ema_window*.
+
+        Used to detect early recovery (``EARLY_BULL``) before the SET index itself
+        crosses above EMA-200.
+        """
+        breadth: float = RegimeDetector.compute_market_breadth(
+            prices, asof, ema_window=breadth_ema_window
+        )
+        return bool(breadth >= breadth_threshold)
+
+    def _check_ema50_warning(
+        self,
+        index_prices: pd.Series,
+        asof: pd.Timestamp,
+        window: int = 50,
+    ) -> bool:
+        """Return True when SET is below its EMA-*window* (warning signal in Bull mode).
+
+        Reduces equity exposure during sharp pullbacks within an otherwise bullish
+        trend.  Returns False (no warning) when there is insufficient history.
+        """
+        history: pd.Series = index_prices.loc[index_prices.index <= asof].dropna()
+        ema: pd.Series = self._regime.compute_ema(history, window)
+        if ema.empty:
+            return False
+        return bool(float(history.iloc[-1]) < float(ema.iloc[-1]))
+
+    def _apply_volatility_exit(
+        self,
+        current_holdings: list[str],
+        prices: pd.DataFrame,
+        asof: pd.Timestamp,
+        atr_window: int,
+        atr_multiplier: float,
+        lookback_days: int,
+    ) -> list[str]:
+        """Remove holdings whose price has fallen below a trailing ATR stop.
+
+        The stop level is ``trailing_peak - atr_multiplier × ATR`` where ATR is
+        computed from daily close-to-close ranges (a proxy for true ATR, since
+        the backtest engine only has close prices).
+
+        Holdings with insufficient price history are kept (conservative — avoids
+        false exits during warm-up).  Returns the reduced list of holdings.
+        """
+        if not current_holdings:
+            return []
+
+        history: pd.DataFrame = prices.loc[:asof].dropna().tail(lookback_days)
+        if len(history) < atr_window + 5:
+            return current_holdings
+
+        keep: list[str] = []
+        for sym in current_holdings:
+            if sym not in history.columns:
+                continue
+            series: pd.Series = history[sym].dropna()
+            if len(series) < atr_window + 5:
+                keep.append(sym)
+                continue
+
+            # Simplified ATR: use rolling 2-day max-min range as proxy for true range
+            rolling_high: pd.Series = series.rolling(2).max()
+            rolling_low: pd.Series = series.rolling(2).min()
+            tr: pd.Series = rolling_high - rolling_low
+            atr_series: pd.Series = tr.ewm(span=atr_window, adjust=False).mean()
+
+            current_price: float = float(series.iloc[-1])
+            peak: float = float(series.max())
+            current_atr: float = float(atr_series.iloc[-1])
+            stop_level: float = peak - atr_multiplier * current_atr
+
+            if current_price >= stop_level:
+                keep.append(sym)
+
+        excluded: int = len(current_holdings) - len(keep)
+        if excluded:
+            logger.debug(
+                "Volatility exit removed %d holdings at %s",
+                excluded,
+                asof,
+            )
+        return keep
+
+    def _apply_soft_penalty(
         self,
         cross_section: pd.DataFrame,
         prices: pd.DataFrame,
         index_prices: pd.Series,
         asof: pd.Timestamp,
         lookback_months: int = 12,
+        penalty_rank_fraction: float = 0.20,
     ) -> pd.DataFrame:
-        """Remove stocks whose 12-month return is below the SET index 12-month return.
+        """Apply a rank penalty to stocks underperforming the SET index 12M return.
+
+        Unlike the old binary RS filter (which removed underperformers entirely,
+        breaking buffer logic), this reduces the composite score of underperforming
+        stocks by ``(1 - penalty_rank_fraction)``.  This drops them roughly
+        *penalty_rank_fraction* percentile ranks but does **not** remove them,
+        so buffer logic still works for existing holdings: a penalised holding
+        can be retained if no replacement candidate is sufficiently better.
 
         Stocks with insufficient price history are excluded conservatively.
-        When benchmark history is insufficient the filter is skipped entirely.
+        When benchmark history is insufficient the penalty is skipped entirely.
         """
         lookback_days: int = lookback_months * 21
         idx_hist: pd.Series = (
             index_prices.loc[index_prices.index <= asof].dropna().tail(lookback_days)
         )
         if len(idx_hist) < 2:
-            logger.debug("RS filter skipped — insufficient benchmark history at %s", asof)
+            logger.debug("Soft penalty skipped — insufficient benchmark history at %s", asof)
             return cross_section
         index_return: float = float(idx_hist.iloc[-1] / idx_hist.iloc[0] - 1.0)
-        keep: list[str] = []
-        for sym in cross_section.index:
+
+        result: pd.DataFrame = cross_section.copy()
+        n_penalised: int = 0
+        for sym in result.index:
             if sym not in prices.columns:
                 continue
             hist: pd.Series = prices[sym].loc[:asof].dropna().tail(lookback_days)
             if len(hist) < 2:
                 continue
             stock_return: float = float(hist.iloc[-1] / hist.iloc[0] - 1.0)
-            if stock_return >= index_return:
-                keep.append(sym)
-        excluded: int = len(cross_section) - len(keep)
-        if excluded:
-            logger.debug("RS filter excluded %d symbols at %s", excluded, asof)
-        return cross_section.loc[keep]
+            if stock_return < index_return:
+                result.loc[sym] = result.loc[sym] * (1.0 - penalty_rank_fraction)
+                n_penalised += 1
+        if n_penalised:
+            logger.debug(
+                "Soft penalty applied to %d symbols at %s (penalty_rank_fraction=%.2f)",
+                n_penalised,
+                asof,
+                penalty_rank_fraction,
+            )
+        return result
 
     def run(
         self,
@@ -422,22 +561,34 @@ class MomentumBacktest:
             if cross_section.empty:
                 continue
 
-            # Apply Relative Strength filter — keep only stocks outperforming SET.
-            if config.relative_strength_filter and index_prices is not None:
-                cross_section = self._apply_relative_strength_filter(
-                    cross_section, prices, index_prices, current_date, config.rs_lookback_months
+            # Apply soft penalty scoring — penalise underperformers vs SET (Phase 3.7).
+            if config.soft_penalty_scoring and index_prices is not None:
+                cross_section = self._apply_soft_penalty(
+                    cross_section, prices, index_prices, current_date,
+                    lookback_months=12, penalty_rank_fraction=config.rs_penalty_rank_fraction,
                 )
             if cross_section.empty:
                 continue
 
-            # Determine market regime (Mode A: Bull / Mode B: Bear).
+            # Determine market regime (Mode A: Bull / Mode B: Bear / Early Bull).
             mode: RegimeState = (
-                self._compute_mode(index_prices, current_date, config.ema_trend_window)
+                self._compute_mode(
+                    index_prices, current_date, config.ema_trend_window,
+                    prices=prices, breadth_ema_window=config.breadth_ema_window,
+                )
                 if index_prices is not None
                 else RegimeState.BULL
             )
 
-            # Select 80-100 holdings with buffer logic.
+            # Volatility exit: remove stopped-out holdings before buffer selection (Phase 3.7).
+            if current_holdings:
+                current_holdings = self._apply_volatility_exit(
+                    current_holdings, prices, current_date,
+                    config.atr_window, config.atr_multiplier,
+                    config.volatility_exit_lookback_days,
+                )
+
+            # Select 40-60 holdings with buffer logic.
             selected: list[str] = self._select_holdings(cross_section, config, current_holdings)
 
             # Filter to symbols present in the price matrix; warn on missing.
@@ -463,13 +614,19 @@ class MomentumBacktest:
             else:
                 target_weights = self._optimizer.equal_weight(selected)
 
-            # Dynamic Bear equity fraction (Mode B).
-            # Strong Bear (EMA falling): 0% equity (100% cash) to stop bleeding.
-            # Weak Bear (EMA flat/rising, just below threshold): safe_mode_max_equity (20%).
-            if mode is RegimeState.BEAR:
-                if (
+            # Dynamic equity fraction (Phase 3.7: EARLY_BULL + EMA50 warning).
+            if index_prices is not None:
+                if mode is RegimeState.BULL:
+                    if self._check_ema50_warning(
+                        index_prices, current_date, config.ema_warning_window
+                    ):
+                        equity_fraction: float = config.bull_with_warning_equity  # 60%
+                    else:
+                        equity_fraction = 1.0
+                elif mode is RegimeState.EARLY_BULL:
+                    equity_fraction = config.early_bull_equity_fraction  # 50%
+                elif (
                     config.bear_full_cash
-                    and index_prices is not None
                     and self._has_negative_ema_slope(
                         index_prices,
                         current_date,
@@ -477,9 +634,9 @@ class MomentumBacktest:
                         config.ema_slope_lookback_days,
                     )
                 ):
-                    equity_fraction: float = 0.0
+                    equity_fraction = 0.0  # strong bear: 100% cash
                 else:
-                    equity_fraction = config.safe_mode_max_equity
+                    equity_fraction = config.safe_mode_max_equity  # 20%
                 target_weights = target_weights * equity_fraction
 
             turnover: float = self._scheduler.compute_turnover(current_weights, target_weights)

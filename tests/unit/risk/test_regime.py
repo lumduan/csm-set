@@ -109,3 +109,40 @@ class TestHasNegativeEmaSlope:
         prices = pd.Series(np.linspace(100.0, 80.0, 210), index=dates)
         # Only 210 bars but we need ≥ 200+22 = 222 → insufficient for slope check.
         assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is False
+
+
+class TestMarketBreadth:
+    def test_all_stocks_above_ema(self) -> None:
+        """All stocks above EMA20 → breadth = 1.0."""
+        dates = pd.date_range("2023-01-01", periods=100, freq="B", tz="Asia/Bangkok")
+        prices = pd.DataFrame(
+            # Both stocks rising — both above EMA
+            {"A": np.linspace(100.0, 150.0, 100), "B": np.linspace(100.0, 120.0, 100)},
+            index=dates,
+        )
+        asof = dates[-1]
+        breadth = RegimeDetector.compute_market_breadth(prices, asof, ema_window=20)
+        assert breadth == 1.0
+
+    def test_no_stocks_above_ema(self) -> None:
+        """No stocks above EMA20 → breadth = 0.0."""
+        dates = pd.date_range("2023-01-01", periods=100, freq="B", tz="Asia/Bangkok")
+        # Prices crash 50% — both far below EMA
+        prices = pd.DataFrame(
+            {"A": np.linspace(150.0, 75.0, 100), "B": np.linspace(120.0, 60.0, 100)},
+            index=dates,
+        )
+        asof = dates[-1]
+        breadth = RegimeDetector.compute_market_breadth(prices, asof, ema_window=20)
+        assert breadth == 0.0
+
+    def test_insufficient_history_returns_neutral(self) -> None:
+        """Insufficient data → breadth = 0.5 (neutral)."""
+        dates = pd.date_range("2023-01-01", periods=10, freq="B", tz="Asia/Bangkok")
+        prices = pd.DataFrame(
+            {"A": np.linspace(100.0, 110.0, 10), "B": np.linspace(100.0, 110.0, 10)},
+            index=dates,
+        )
+        asof = dates[-1]
+        breadth = RegimeDetector.compute_market_breadth(prices, asof, ema_window=20)
+        assert breadth == 0.5

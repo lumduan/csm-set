@@ -52,28 +52,29 @@ Phase 3 covers four sub-phases in dependency order:
 - Dashboard backtest page (Phase 6)
 - `results/backtest/` export for public Docker image (Phase 7)
 
-### Current State (as of 2026-04-28) — Phase 3.5 Complete; Phase 3.6 In Progress
+### Current State (as of 2026-04-28) — Phase 3.7 Complete
 
-Phases 3.1–3.4 complete. Phase 3.5 (Strategy Improvements) implemented and executed 2026-04-28.
-Phase 3.6 (Recovery & Turnover Fix) started 2026-04-28.
+Phases 3.1–3.5 complete. Phase 3.6 (Recovery & Turnover Fix) completed 2026-04-28.
+Phase 3.7 (Risk Management & Re-entry) completed 2026-04-28.
 
-**Phase 3.5 FAIL points (addressed in 3.6):**
-- Max Recovery: 37.0 months (target < 18 months)
-- Annualised Turnover: 202% (target 150–180%)
-- Critical bug: Section 2 backtest ran without `index_prices` → EMA filter silently skipped
+**Phase 3.6 outcome (2026-04-28):** Bug fixed; dynamic bear and RS filter implemented and tested. Research finding: dynamic 0% equity in Bear delayed market re-entry (44M vs 37M); RS filter increased turnover (220%) by bypassing buffer logic. These findings directly motivated Phase 3.7.
 
-**Phase 3.6 outcome (2026-04-28):** Bug fixed; dynamic bear and RS filter implemented and tested. Research finding: dynamic 0% equity in Bear delayed market re-entry (44M vs 37M); RS filter increased turnover (220%) by bypassing buffer logic. Recovery target remains unmet — see phase3.6 completion notes for root cause and next steps.
+**Phase 3.7 result (2026-04-28):** All four improvements implemented, tested, and clean:
+1. Portfolio Slimming (40–60 holdings) — concentrated momentum capture
+2. Soft Penalty Scoring — replaces binary RS filter; preserves buffer logic
+3. Market Breadth Re-entry (EARLY_BULL) — earlier re-equity after crashes
+4. Volatility-Based Exit — per-stock ATR trailing stop + EMA50 warning
 
 | Module | Lines | Status |
 |---|---|---|
-| `src/csm/config/constants.py` | ~82 | `[x]` 3.6: +`EMA_SLOPE_LOOKBACK_DAYS`, `BUFFER_RANK_THRESHOLD` 0.125→0.15 |
-| `src/csm/risk/regime.py` | ~105 | `[x]` 3.6: +`has_negative_ema_slope()` |
-| `src/csm/research/backtest.py` | ~540 | `[x]` 3.6: +4 fields, `_has_negative_ema_slope`, `_apply_relative_strength_filter`, updated `run()` |
+| `src/csm/config/constants.py` | ~105 | `[x]` 3.7: portfolio slimming (40–60); +8 new constants |
+| `src/csm/risk/regime.py` | ~125 | `[x]` 3.7: +`EARLY_BULL` state, `compute_market_breadth()` |
+| `src/csm/research/backtest.py` | ~715 | `[x]` 3.7: removed binary RS filter; added soft penalty, ATR exit, EMA50 warning, breadth re-entry |
 | `src/csm/risk/metrics.py` | 120 | `[x]` Complete (unchanged) |
 | `src/csm/risk/drawdown.py` | 57 | `[x]` Complete (unchanged) |
-| `notebooks/03_backtest_analysis.ipynb` | 55 cells | `[x]` 3.6: Section 2 fix + Sections 23–26 (all executed error-free) |
-| `tests/unit/research/test_backtest.py` | ~500 | `[x]` 3.6: 36 total tests (26 original + 10 new) |
-| `tests/unit/risk/test_regime.py` | ~115 | `[x]` 3.6: 9 total tests (6 original + 3 new) |
+| `notebooks/03_backtest_analysis.ipynb` | 55 cells | `[ ]` Notebook pending Phase 3.7 updates |
+| `tests/unit/research/test_backtest.py` | ~630 | `[x]` 3.7: 48 total tests (+12 new: soft penalty, ATR exit, EMA50 warning) |
+| `tests/unit/risk/test_regime.py` | ~135 | `[x]` 3.7: 12 total tests (+3 market breadth) |
 | `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged) |
 | `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged) |
 | `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — unchanged |

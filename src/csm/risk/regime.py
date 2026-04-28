@@ -14,6 +14,7 @@ class RegimeState(StrEnum):
     BULL = "BULL"
     BEAR = "BEAR"
     NEUTRAL = "NEUTRAL"
+    EARLY_BULL = "EARLY_BULL"  # SET < EMA-200 but market breadth recovering (Phase 3.7)
 
 
 class RegimeDetector:
@@ -98,6 +99,36 @@ class RegimeDetector:
             )
             return False
         return bool(float(ema.iloc[-1]) < float(ema.iloc[-(slope_lookback + 1)]))
+
+    @staticmethod
+    def compute_market_breadth(
+        prices: pd.DataFrame,
+        asof: pd.Timestamp,
+        ema_window: int = 20,
+    ) -> float:
+        """Return the fraction of stocks trading above their EMA-*ema_window* at *asof*.
+
+        Uses the full *prices* matrix as a proxy for SET100 breadth. Returns 0.5
+        (neutral) when there is insufficient history to compute the EMA, avoiding
+        false signals during the warm-up period.
+
+        Args:
+            prices: Wide close-price DataFrame (date rows × symbol columns).
+            asof: Evaluation date — only data up to this date is used.
+            ema_window: Exponential moving average window in trading days.
+
+        Returns:
+            Fraction in [0.0, 1.0]; 0.5 when history is insufficient.
+        """
+        history: pd.DataFrame = prices.loc[:asof].dropna()
+        if len(history) < ema_window + 5:
+            return 0.5
+        ema: pd.DataFrame = history.ewm(
+            span=ema_window, adjust=False, min_periods=ema_window
+        ).mean()
+        above: int = int((history.iloc[-1] > ema.iloc[-1]).sum())
+        total: int = len(history.columns)
+        return float(above / total) if total > 0 else 0.5
 
 
 __all__: list[str] = ["RegimeDetector", "RegimeState"]
