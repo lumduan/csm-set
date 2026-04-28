@@ -1,6 +1,6 @@
-# Phase 3.7 — Risk Management & Re-entry: Soft Penalty, Breadth Re-entry, Volatility Exit, Portfolio Slimming
+# Phase 3.7 — Entry-Only RS Filter, EMA50 Fast Re-entry, Buffer Tuning
 
-**Feature:** Backtesting Strategy — Improve recovery time, reduce turnover from RS filter interaction, add intelligent re-entry, add risk management exits
+**Feature:** Backtesting Strategy — Entry-only RS gate (fixes buffer bypass), EMA50 fast crash re-entry, buffer 20%
 **Branch:** `feature/phase-3-backtesting`
 **Created:** 2026-04-28
 **Status:** Planning
@@ -490,8 +490,9 @@ Phase 3.7 implemented 2026-04-28. All code delivered; all unit tests pass (244 p
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 2.0
 **Author:** AI Agent (Claude Sonnet 4.6)
-**Status:** Complete
+**Status:** Complete (revised)
 **Created:** 2026-04-28
 **Completed:** 2026-04-28
+**Revised:** 2026-04-28 — replaced soft-penalty/breadth/ATR with entry-only RS + EMA50 fast re-entry per user spec

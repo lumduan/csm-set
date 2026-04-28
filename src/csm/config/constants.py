@@ -45,26 +45,13 @@ BULL_MODE_N_HOLDINGS_MIN: int = 40  # reduced from 80 in Phase 3.7 — portfolio
 BULL_MODE_N_HOLDINGS_MAX: int = 60  # reduced from 100 in Phase 3.7 — portfolio slimming
 
 # Buffer logic — only evict a holding when new candidate ranks this many percentile points better
-BUFFER_RANK_THRESHOLD: float = 0.15  # raised from 0.125 in Phase 3.6 to reduce turnover
+BUFFER_RANK_THRESHOLD: float = 0.20  # raised from 0.15 in Phase 3.7 to reduce turnover
 
 # EMA slope detection for dynamic Safe Mode (Phase 3.6)
 EMA_SLOPE_LOOKBACK_DAYS: int = 21  # ~1 trading month; negative slope → 100% cash in Bear
 
-# Soft penalty scoring (Phase 3.7 — replaces binary RS filter)
-RS_PENALTY_RANK_FRACTION: float = 0.20  # rank penalty multiplier for 12M underperformers vs SET
-
-# Market breadth re-entry (Phase 3.7)
-BREADTH_EMA_WINDOW: int = 20  # EMA window for market breadth computation
-EARLY_BULL_EQUITY_FRACTION: float = 0.50  # equity fraction in Early Bull (breadth recovering)
-
-# EMA50 warning for Bull mode (Phase 3.7)
-BULL_WITH_WARNING_EQUITY: float = 0.60  # equity fraction in Bull when SET < EMA50
-EMA_WARNING_WINDOW: int = 50  # EMA window for pullback warning
-
-# Volatility-based exit (Phase 3.7)
-ATR_MULTIPLIER: float = 2.0  # ATR multiplier for trailing stop
-ATR_WINDOW: int = 14  # ATR calculation window (trading days)
-VOLATILITY_EXIT_LOOKBACK_DAYS: int = 252  # trailing peak lookback for ATR stop
+# Fast re-entry trigger (Phase 3.7)
+FAST_REENTRY_EMA_WINDOW: int = 50  # EMA window for fast re-entry: SET > EMA50 → full equity
 
 # Transaction cost (one-way, basis points)
 TRANSACTION_COST_BPS: float = 15.0
@@ -76,20 +63,15 @@ TIMEZONE: str = "Asia/Bangkok"
 RISK_FREE_RATE_ANNUAL: float = 0.02
 
 __all__: list[str] = [
-    "ATR_MULTIPLIER",
-    "ATR_WINDOW",
-    "BREADTH_EMA_WINDOW",
     "BUFFER_RANK_THRESHOLD",
     "BULL_MODE_N_HOLDINGS_MAX",
     "BULL_MODE_N_HOLDINGS_MIN",
-    "BULL_WITH_WARNING_EQUITY",
     "DEFAULT_LOOKBACK_MONTHS",
     "DEFAULT_SKIP_MONTHS",
     "DEFAULT_TOP_QUANTILE",
-    "EARLY_BULL_EQUITY_FRACTION",
     "EMA_SLOPE_LOOKBACK_DAYS",
     "EMA_TREND_WINDOW",
-    "EMA_WARNING_WINDOW",
+    "FAST_REENTRY_EMA_WINDOW",
     "INDEX_SYMBOL",
     "LOOKBACK_YEARS",
     "MIN_ADTV_63D_THB",
@@ -98,10 +80,8 @@ __all__: list[str] = [
     "MIN_PRICE_THB",
     "REBALANCE_FREQ",
     "RISK_FREE_RATE_ANNUAL",
-    "RS_PENALTY_RANK_FRACTION",
     "SAFE_MODE_MAX_EQUITY",
     "SET_SECTOR_CODES",
     "TIMEZONE",
     "TRANSACTION_COST_BPS",
-    "VOLATILITY_EXIT_LOOKBACK_DAYS",
 ]
