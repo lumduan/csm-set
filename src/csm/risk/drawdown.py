@@ -41,13 +41,15 @@ class DrawdownAnalyzer:
                 trough_depth = float(value)
             elif value >= 0.0 and in_drawdown and start is not None and trough is not None:
                 recovery: pd.Timestamp = pd.Timestamp(date)
+                duration_days = int((recovery - start).days)
                 rows.append(
                     {
                         "start": start,
                         "trough": trough,
                         "recovery": recovery,
                         "depth": trough_depth,
-                        "duration_days": int((recovery - start).days),
+                        "duration_days": duration_days,
+                        "recovery_months": round(duration_days / 30.5, 1),
                     }
                 )
                 in_drawdown = False

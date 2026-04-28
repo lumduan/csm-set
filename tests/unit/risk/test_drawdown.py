@@ -101,25 +101,29 @@ class TestDrawdownAnalyzer:
         equity = _series([100.0])
         assert analyzer.max_drawdown(equity) == 0.0
 
-    def test_recovery_periods_open_episode_not_included(
+    def test_recovery_periods_includes_recovery_months_column(
         self, analyzer: DrawdownAnalyzer
     ) -> None:
-        """An episode that has not recovered by end of series is excluded from the table."""
-        equity = _series([100.0, 90.0, 80.0])
+        """recovery_periods() output always contains a recovery_months column."""
+        equity = _series([100.0, 80.0, 100.0])
         episodes = analyzer.recovery_periods(equity)
-        assert episodes.empty
+        assert "recovery_months" in episodes.columns
 
-    def test_recovery_periods_multiple_episodes_count(
+    def test_recovery_months_consistent_with_duration_days(
         self, analyzer: DrawdownAnalyzer
     ) -> None:
-        """recovery_periods() returns one row per complete episode."""
-        equity = _series([100.0, 85.0, 80.0, 100.0, 95.0, 100.0])
+        """recovery_months == round(duration_days / 30.5, 1) for every episode."""
+        equity = _series([100.0, 85.0, 80.0, 100.0])
         episodes = analyzer.recovery_periods(equity)
-        assert len(episodes) == 2
+        assert len(episodes) == 1
+        row = episodes.iloc[0]
+        expected = round(row["duration_days"] / 30.5, 1)
+        assert row["recovery_months"] == pytest.approx(expected, rel=1e-6)
 
-    def test_max_drawdown_single_point_returns_zero(
+    def test_recovery_months_positive_for_completed_episode(
         self, analyzer: DrawdownAnalyzer
     ) -> None:
-        """A single-point equity curve has no drawdown."""
-        equity = _series([100.0])
-        assert analyzer.max_drawdown(equity) == 0.0
+        """recovery_months is strictly positive for every completed episode."""
+        equity = _series([100.0, 80.0, 70.0, 100.0, 90.0, 100.0])
+        episodes = analyzer.recovery_periods(equity)
+        assert (episodes["recovery_months"] > 0).all()

@@ -99,5 +99,20 @@ class PerformanceMetrics:
         logger.info("Computed performance metrics", extra={"periods": periods})
         return metrics
 
+    @staticmethod
+    def rolling_cagr(nav: pd.Series, window_months: int) -> pd.Series:
+        """Annualised CAGR over a rolling window of *window_months* months.
+
+        Uses pct_change(window_months) so the result is NaN for the first
+        *window_months* observations.  Index is preserved from *nav*.
+        """
+        if window_months < 1:
+            raise ValueError("window_months must be >= 1")
+        raw_change: pd.Series = nav.pct_change(window_months)
+        annualised: pd.Series = raw_change.apply(
+            lambda r: (1.0 + r) ** (12.0 / window_months) - 1.0 if pd.notna(r) else float("nan")
+        )
+        return annualised
+
 
 __all__: list[str] = ["PerformanceMetrics"]

@@ -100,3 +100,42 @@ def test_beta_equals_one_for_identical_series() -> None:
     # Same series as both portfolio and benchmark → β = cov(r,r)/var(r) = 1.0.
     metrics = PerformanceMetrics().summary(equity, benchmark=equity.copy())
     assert pytest.approx(metrics["beta"], abs=1e-6) == 1.0
+
+
+class TestRollingCagr:
+    def test_first_window_values_are_nan(self) -> None:
+        """rolling_cagr returns NaN for the first window_months observations."""
+        nav = _monthly_equity([100.0, 102.0, 104.0, 106.0, 108.0])
+        result = PerformanceMetrics.rolling_cagr(nav, window_months=3)
+        assert result.iloc[:3].isna().all()
+
+    def test_known_12m_cagr_is_correct(self) -> None:
+        """A flat 10% annual gain over 12 months gives rolling_cagr of 0.10."""
+        # NAV grows from 100 to 110 in exactly 12 months.
+        values = [100.0 * (1.10 ** (i / 12.0)) for i in range(13)]
+        nav = _monthly_equity(values)
+        result = PerformanceMetrics.rolling_cagr(nav, window_months=12)
+        # Last value: (nav[12]/nav[0])^(12/12) - 1 = 1.10 - 1 = 0.10.
+        assert pytest.approx(result.iloc[-1], rel=1e-4) == 0.10
+
+    def test_output_index_matches_input(self) -> None:
+        """rolling_cagr preserves the index of the input Series."""
+        nav = _monthly_equity([100.0, 102.0, 104.0, 106.0])
+        result = PerformanceMetrics.rolling_cagr(nav, window_months=2)
+        assert list(result.index) == list(nav.index)
+
+    def test_raises_on_zero_window(self) -> None:
+        """rolling_cagr raises ValueError for window_months < 1."""
+        nav = _monthly_equity([100.0, 102.0])
+        with pytest.raises(ValueError, match="window_months must be >= 1"):
+            PerformanceMetrics.rolling_cagr(nav, window_months=0)
+
+    def test_annualisation_factor(self) -> None:
+        """A 24-month window annualises with factor 12/24 = 0.5."""
+        # NAV grows uniformly 20% over 24 months.
+        # Annualised: (1.20)^(12/24) - 1 = sqrt(1.20) - 1 ≈ 0.0954.
+        values = [100.0 * (1.20 ** (i / 24.0)) for i in range(25)]
+        nav = _monthly_equity(values)
+        result = PerformanceMetrics.rolling_cagr(nav, window_months=24)
+        expected = (1.20 ** (12.0 / 24.0)) - 1.0
+        assert pytest.approx(result.iloc[-1], rel=1e-4) == expected
