@@ -16,6 +16,102 @@ from csm.risk.metrics import PerformanceMetrics
 logger: logging.Logger = logging.getLogger(__name__)
 
 
+class MonthlyHoldingRecord(BaseModel):
+    """Per-stock holding record within a single rebalance period."""
+
+    symbol: str
+    weight: float
+    return_pct: float
+
+
+class MonthlyPeriodReport(BaseModel):
+    """Holdings and P&L for one rebalance period."""
+
+    period_end: str
+    holdings: list[MonthlyHoldingRecord]
+    gross_return: float
+    cost: float
+    net_return: float
+    turnover: float
+    nav: float
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Return a DataFrame of stock-level holdings and contributions for this period."""
+        rows: list[dict[str, object]] = [
+            {
+                "symbol": h.symbol,
+                "weight": h.weight,
+                "return_pct": h.return_pct,
+                "weighted_contribution": h.weight * h.return_pct,
+            }
+            for h in self.holdings
+        ]
+        df: pd.DataFrame = pd.DataFrame(rows)
+        if not df.empty:
+            total_row: pd.DataFrame = pd.DataFrame(
+                [
+                    {
+                        "symbol": "TOTAL",
+                        "weight": df["weight"].sum(),
+                        "return_pct": float("nan"),
+                        "weighted_contribution": self.gross_return,
+                    }
+                ]
+            )
+            df = pd.concat([df, total_row], ignore_index=True)
+        return df
+
+
+class MonthlyRebalanceReport(BaseModel):
+    """Aggregated monthly rebalance report across all backtest periods."""
+
+    periods: list[MonthlyPeriodReport]
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Return a flat DataFrame with one row per (period, stock).
+
+        Columns: period_end, symbol, weight, return_pct, weighted_contribution,
+                 portfolio_gross_return, portfolio_cost, portfolio_net_return, turnover, nav.
+        """
+        rows: list[dict[str, object]] = []
+        for period in self.periods:
+            for h in period.holdings:
+                rows.append(
+                    {
+                        "period_end": period.period_end,
+                        "symbol": h.symbol,
+                        "weight": h.weight,
+                        "return_pct": h.return_pct,
+                        "weighted_contribution": h.weight * h.return_pct,
+                        "portfolio_gross_return": period.gross_return,
+                        "portfolio_cost": period.cost,
+                        "portfolio_net_return": period.net_return,
+                        "turnover": period.turnover,
+                        "nav": period.nav,
+                    }
+                )
+        return pd.DataFrame(rows)
+
+    def period_summary(self) -> pd.DataFrame:
+        """Return one row per rebalance period with portfolio-level P&L.
+
+        Columns: period_end, n_holdings, gross_return, cost, net_return, turnover, nav.
+        """
+        rows: list[dict[str, object]] = [
+            {
+                "period_end": p.period_end,
+                "n_holdings": len(p.holdings),
+                "gross_return": p.gross_return,
+                "cost": p.cost,
+                "net_return": p.net_return,
+                "turnover": p.turnover,
+                "nav": p.nav,
+            }
+            for p in self.periods
+        ]
+        return pd.DataFrame(rows)
+
+
 class BacktestConfig(BaseModel):
     """Configuration for a momentum backtest run."""
 
@@ -38,6 +134,7 @@ class BacktestResult(BaseModel):
     positions: dict[str, list[str]]
     turnover: dict[str, float]
     metrics: dict[str, float]
+    monthly_report: MonthlyRebalanceReport
 
     def metrics_dict(self) -> dict[str, object]:
         """Return metrics as a JSON-serialisable dict. No raw price data."""
@@ -124,6 +221,7 @@ class MomentumBacktest:
         annual_returns: dict[str, float] = {}
         positions: dict[str, list[str]] = {}
         turnover_map: dict[str, float] = {}
+        period_reports: list[MonthlyPeriodReport] = []
 
         for current_date, next_date in zip(rebalance_dates[:-1], rebalance_dates[1:], strict=False):
             # Slice cross-section at current rebalance date.
@@ -161,12 +259,16 @@ class MomentumBacktest:
                 target_weights = self._optimizer.equal_weight(selected)
 
             turnover: float = self._scheduler.compute_turnover(current_weights, target_weights)
-            period_returns: pd.Series = (
-                prices[selected].loc[current_date:next_date].pct_change().dropna(how="all").mean()
-            )
-            gross_return: float = float(
-                period_returns.reindex(target_weights.index).fillna(0.0).dot(target_weights)
-            )
+            prices_window: pd.DataFrame = prices[selected].loc[current_date:next_date]
+            if len(prices_window) < 2:
+                logger.warning(
+                    "Insufficient price data for period — skipping",
+                    extra={"current_date": str(current_date), "next_date": str(next_date)},
+                )
+                continue
+            period_returns: pd.Series = prices_window.iloc[-1] / prices_window.iloc[0] - 1.0
+            aligned_returns: pd.Series = period_returns.reindex(target_weights.index).fillna(0.0)
+            gross_return: float = float(aligned_returns.dot(target_weights))
             cost: float = turnover * (config.transaction_cost_bps / 10_000.0)
             nav *= 1.0 + gross_return - cost
 
@@ -177,6 +279,26 @@ class MomentumBacktest:
             annual_returns.setdefault(next_date.strftime("%Y"), 0.0)
             annual_returns[next_date.strftime("%Y")] += gross_return - cost
             current_weights = target_weights
+
+            holdings: list[MonthlyHoldingRecord] = [
+                MonthlyHoldingRecord(
+                    symbol=sym,
+                    weight=float(target_weights[sym]),
+                    return_pct=float(aligned_returns[sym]),
+                )
+                for sym in target_weights.index
+            ]
+            period_reports.append(
+                MonthlyPeriodReport(
+                    period_end=date_key,
+                    holdings=holdings,
+                    gross_return=gross_return,
+                    cost=cost,
+                    net_return=gross_return - cost,
+                    turnover=turnover,
+                    nav=nav,
+                )
+            )
 
         equity_series: pd.Series = pd.Series(equity_curve, dtype=float)
         if equity_series.empty:
@@ -191,10 +313,18 @@ class MomentumBacktest:
             positions=positions,
             turnover={key: float(value) for key, value in turnover_map.items()},
             metrics=metrics,
+            monthly_report=MonthlyRebalanceReport(periods=period_reports),
         )
         self._store.save("backtest_equity_curve", equity_series.to_frame(name="nav"))
         logger.info("Completed backtest", extra={"periods": len(equity_curve)})
         return result
 
 
-__all__: list[str] = ["BacktestConfig", "BacktestResult", "MomentumBacktest"]
+__all__: list[str] = [
+    "BacktestConfig",
+    "BacktestResult",
+    "MomentumBacktest",
+    "MonthlyHoldingRecord",
+    "MonthlyPeriodReport",
+    "MonthlyRebalanceReport",
+]
