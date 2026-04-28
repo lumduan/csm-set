@@ -52,20 +52,23 @@ Phase 3 covers four sub-phases in dependency order:
 - Dashboard backtest page (Phase 6)
 - `results/backtest/` export for public Docker image (Phase 7)
 
-### Current State (as of 2026-04-27)
+### Current State (as of 2026-04-28) — Phase 3.5 Complete
 
-Phases 3.1–3.3 are structurally complete — the core modules were scaffolded during earlier phases. What remains is **completing the unit test suite** and **writing the research notebook**.
+Phases 3.1–3.4 complete. Phase 3.5 (Strategy Improvements) implemented and executed 2026-04-28.
 
 | Module | Lines | Status |
 |---|---|---|
-| `src/csm/research/backtest.py` | 175 | `[x]` Implemented + bug-fixed (2026-04-27) — `CrossSectionalRanker` misuse removed; `_select_top_quantile()` added |
-| `src/csm/risk/metrics.py` | 103 | `[x]` Implemented + ddof-fix (2026-04-27) — beta now uses `cov(ddof=0)` for consistency |
-| `src/csm/risk/drawdown.py` | 57 | `[x]` Implemented — `DrawdownAnalyzer` with underwater curve and episode table |
-| `notebooks/03_backtest_analysis.ipynb` | 0 | `[ ]` Empty — needs all cells written |
-| `tests/unit/research/test_backtest.py` | 130 | `[x]` Complete (2026-04-27) — 8 unit tests, all pass |
-| `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (2026-04-27) — 9 unit tests (extended from 1), all pass |
-| `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (2026-04-27) — 6 unit tests, all pass |
-| `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — prices→features→backtest round-trip |
+| `src/csm/config/constants.py` | ~75 | `[x]` 6 new constants: `MIN_ADTV_63D_THB`, `EMA_TREND_WINDOW`, `SAFE_MODE_MAX_EQUITY`, `BULL_MODE_N_HOLDINGS_MIN/MAX`, `BUFFER_RANK_THRESHOLD` |
+| `src/csm/risk/regime.py` | ~80 | `[x]` Extended: `compute_ema()` staticmethod + `is_bull_market()` (EMA-200, not SMA) |
+| `src/csm/research/backtest.py` | ~400 | `[x]` Extended: `BacktestConfig` (+6 fields), `MonthlyPeriodReport` (+mode), `_apply_adtv_filter`, `_apply_buffer_logic`, `_select_holdings`, `_compute_mode`, updated `run()` |
+| `src/csm/risk/metrics.py` | 120 | `[x]` Complete (unchanged in 3.5) |
+| `src/csm/risk/drawdown.py` | 57 | `[x]` Complete (unchanged in 3.5) |
+| `notebooks/03_backtest_analysis.ipynb` | 47 cells | `[x]` Sections 18–22 added + executed error-free (2026-04-28) |
+| `tests/unit/research/test_backtest.py` | ~310 | `[x]` Extended: 20 total tests (8 original + 12 new for ADTV, buffer, holdings, mode, Safe Mode) |
+| `tests/unit/risk/test_regime.py` | ~70 | `[x]` Extended: 6 total tests (1 original fixed + 5 new EMA/is_bull_market tests) |
+| `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged in 3.5) |
+| `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged in 3.5) |
+| `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — unchanged |
 
 ---
 
