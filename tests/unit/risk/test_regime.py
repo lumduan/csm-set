@@ -80,3 +80,32 @@ class TestIsBullMarket:
         prices = pd.Series(prices_arr, index=dates)
         # Cut off at bar 250 — should still be Bull.
         assert detector.is_bull_market(prices, dates[249], window=200) is True
+
+
+class TestHasNegativeEmaSlope:
+    def test_returns_true_when_ema_is_falling(self) -> None:
+        """Sustained decline → EMA is falling → True."""
+        detector = RegimeDetector()
+        # 250 rising bars to warm up, then 50 sharply falling to make EMA slope negative.
+        dates = pd.date_range("2020-01-01", periods=300, freq="B", tz="Asia/Bangkok")
+        prices_arr = np.concatenate(
+            [np.linspace(100.0, 130.0, 250), np.linspace(130.0, 60.0, 50)]
+        )
+        prices = pd.Series(prices_arr, index=dates)
+        # At the last date the EMA should be declining.
+        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is True
+
+    def test_returns_false_when_ema_is_rising(self) -> None:
+        """Sustained rise → EMA is rising → False."""
+        detector = RegimeDetector()
+        dates = pd.date_range("2020-01-01", periods=260, freq="B", tz="Asia/Bangkok")
+        prices = pd.Series(np.linspace(100.0, 150.0, 260), index=dates)
+        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is False
+
+    def test_returns_false_when_insufficient_history(self) -> None:
+        """Fewer than window + slope_lookback bars → False (conservative default)."""
+        detector = RegimeDetector()
+        dates = pd.date_range("2023-01-01", periods=210, freq="B", tz="Asia/Bangkok")
+        prices = pd.Series(np.linspace(100.0, 80.0, 210), index=dates)
+        # Only 210 bars but we need ≥ 200+22 = 222 → insufficient for slope check.
+        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is False

@@ -336,11 +336,20 @@ class TestSafeModeScaling:
             index_prices[d] = 70.0
         index_prices = index_prices.sort_index()
 
+        # Disable RS filter — test is solely about Safe Mode equity scaling.
         config_bull = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1, safe_mode_max_equity=0.2
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            safe_mode_max_equity=0.2,
+            relative_strength_filter=False,
         )
         config_safe = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1, safe_mode_max_equity=0.2
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            safe_mode_max_equity=0.2,
+            relative_strength_filter=False,
         )
         result_bull = backtest.run(
             feature_panel=feature_panel, prices=prices, config=config_bull
@@ -384,3 +393,152 @@ class TestSafeModeScaling:
         )
         modes = [p.mode for p in result.monthly_report.periods]
         assert all(m == "BULL" for m in modes)
+
+
+def _make_bear_index_and_dates(
+    n_rebal: int = 2, tz: str = TZ
+) -> tuple[list[pd.Timestamp], pd.Series]:
+    """Return (rebalance_dates, index_prices) where the index is in a confirmed downtrend.
+
+    The price series is one continuous array: 210 warm-up bars (rising) + 90 crash bars
+    (falling). Rebalance dates are the last n_rebal+1 bars of the crash zone. This
+    guarantees both price < EMA-200 AND a negative EMA slope at each rebalance date.
+    """
+    n_total = 310
+    all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=tz)
+    prices_arr = np.concatenate(
+        [
+            np.linspace(100.0, 130.0, 210),  # warm-up: rising
+            np.linspace(130.0, 40.0, 100),   # crash: sharp 70% drop
+        ]
+    )
+    index_prices = pd.Series(prices_arr, index=all_dates)
+    # Rebalance dates = last n_rebal+1 bars (deep in crash zone).
+    rebal_dates = list(all_dates[-(n_rebal + 1):])
+    return rebal_dates, index_prices
+
+
+def _make_index_prices_weak_bear(dates: list[pd.Timestamp], tz: str = TZ) -> pd.Series:
+    """Build an index price series below EMA-200 but with a flat/rising EMA slope.
+
+    Only the very last bar drops below EMA, so the slope is still rising/flat.
+    """
+    warm_dates = pd.date_range("2018-01-01", periods=261, freq="B", tz=tz)
+    warm_prices = np.linspace(100.0, 130.0, 261)
+    warm_prices[-1] = 80.0  # single-bar dip below EMA; slope stays rising
+    series = pd.Series(dict(zip(warm_dates, warm_prices)))
+    for d in dates:
+        series[d] = 80.0
+    return series.sort_index()
+
+
+class TestRelativeStrengthFilter:
+    def test_excludes_stock_below_index_return(self, backtest: MomentumBacktest) -> None:
+        """A stock with lower 12M return than the index is removed."""
+        # 13-month history: index +20%, stock A +5%, stock B +30%
+        hist_dates = pd.date_range("2022-01-01", periods=260, freq="B", tz=TZ)
+        index_prices = pd.Series(np.linspace(100.0, 120.0, 260), index=hist_dates)
+        stock_a = pd.Series(np.linspace(100.0, 105.0, 260), index=hist_dates)  # underperform
+        stock_b = pd.Series(np.linspace(100.0, 130.0, 260), index=hist_dates)  # outperform
+        prices = pd.DataFrame({"A": stock_a, "B": stock_b})
+        cross_section = pd.DataFrame(
+            {"signal": [1.0, 0.8]}, index=pd.Index(["A", "B"], name="symbol")
+        )
+        asof = hist_dates[-1]
+        result = backtest._apply_relative_strength_filter(
+            cross_section, prices, index_prices, asof, lookback_months=12
+        )
+        assert "A" not in result.index
+        assert "B" in result.index
+
+    def test_keeps_stock_that_matches_or_beats_index(self, backtest: MomentumBacktest) -> None:
+        """A stock with return ≥ index return is retained."""
+        hist_dates = pd.date_range("2022-01-01", periods=260, freq="B", tz=TZ)
+        index_prices = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)
+        stock = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)  # exactly matches
+        prices = pd.DataFrame({"A": stock})
+        cross_section = pd.DataFrame(
+            {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
+        )
+        result = backtest._apply_relative_strength_filter(
+            cross_section, prices, index_prices, hist_dates[-1], lookback_months=12
+        )
+        assert "A" in result.index
+
+    def test_skips_filter_when_benchmark_history_insufficient(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """Fewer than 2 index bars → filter is skipped, cross_section returned unchanged."""
+        asof = pd.Timestamp("2023-06-30", tz=TZ)
+        index_prices = pd.Series(
+            [100.0], index=pd.DatetimeIndex([asof], tz=TZ)
+        )
+        prices = pd.DataFrame(
+            {"A": [100.0]}, index=pd.DatetimeIndex([asof], tz=TZ)
+        )
+        cross_section = pd.DataFrame(
+            {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
+        )
+        result = backtest._apply_relative_strength_filter(
+            cross_section, prices, index_prices, asof, lookback_months=12
+        )
+        assert len(result) == len(cross_section)
+
+
+class TestDynamicBearMode:
+    def test_strong_bear_uses_zero_equity(self, backtest: MomentumBacktest) -> None:
+        """When EMA slope is negative (strong bear), equity weight = 0 → NAV stays flat."""
+        rebal_dates, index_prices = _make_bear_index_and_dates(n_rebal=2)
+        # Stock prices are pulled from the same continuous date range.
+        # Use rising stock prices so any equity exposure would increase NAV above 100.
+        stock_prices = pd.Series(
+            np.linspace(50.0, 80.0, len(index_prices)), index=index_prices.index
+        )
+        prices = pd.DataFrame({"A": stock_prices})
+        feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
+        config = BacktestConfig(
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            bear_full_cash=True,
+            relative_strength_filter=False,  # isolate the dynamic bear logic
+        )
+        result = backtest.run(
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
+            index_prices=index_prices,
+        )
+        # In confirmed strong bear, equity fraction = 0 → NAV must stay exactly at 100.
+        nav_values = list(result.equity_curve.values())
+        assert nav_values, "Expected at least one period in equity curve"
+        assert all(abs(nav - 100.0) < 1e-9 for nav in nav_values)
+
+    def test_bear_full_cash_false_uses_safe_mode_equity(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """When bear_full_cash=False, safe_mode_max_equity is used even in strong bear."""
+        rebal_dates, index_prices = _make_bear_index_and_dates(n_rebal=2)
+        stock_prices = pd.Series(
+            np.linspace(50.0, 80.0, len(index_prices)), index=index_prices.index
+        )
+        prices = pd.DataFrame({"A": stock_prices})
+        feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
+        config = BacktestConfig(
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            bear_full_cash=False,
+            safe_mode_max_equity=0.2,
+            relative_strength_filter=False,
+        )
+        result = backtest.run(
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
+            index_prices=index_prices,
+        )
+        # Some equity exposure (20%) → NAV should differ from 100 (rising stock → above 100).
+        nav_values = list(result.equity_curve.values())
+        assert nav_values, "Expected at least one period in equity curve"
+        assert any(nav > 100.0 for nav in nav_values)

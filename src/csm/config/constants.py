@@ -45,7 +45,10 @@ BULL_MODE_N_HOLDINGS_MIN: int = 80
 BULL_MODE_N_HOLDINGS_MAX: int = 100
 
 # Buffer logic — only evict a holding when new candidate ranks this many percentile points better
-BUFFER_RANK_THRESHOLD: float = 0.125  # midpoint of 10–15% band
+BUFFER_RANK_THRESHOLD: float = 0.15  # raised from 0.125 in Phase 3.6 to reduce turnover
+
+# EMA slope detection for dynamic Safe Mode (Phase 3.6)
+EMA_SLOPE_LOOKBACK_DAYS: int = 21  # ~1 trading month; negative slope → 100% cash in Bear
 
 # Transaction cost (one-way, basis points)
 TRANSACTION_COST_BPS: float = 15.0
@@ -63,6 +66,7 @@ __all__: list[str] = [
     "DEFAULT_LOOKBACK_MONTHS",
     "DEFAULT_SKIP_MONTHS",
     "DEFAULT_TOP_QUANTILE",
+    "EMA_SLOPE_LOOKBACK_DAYS",
     "EMA_TREND_WINDOW",
     "INDEX_SYMBOL",
     "LOOKBACK_YEARS",

@@ -76,5 +76,28 @@ class RegimeDetector:
             return True
         return bool(float(history.iloc[-1]) > float(ema.iloc[-1]))
 
+    def has_negative_ema_slope(
+        self,
+        index_prices: pd.Series,
+        asof: pd.Timestamp,
+        window: int = 200,
+        slope_lookback: int = 21,
+    ) -> bool:
+        """Return True when EMA-*window* is falling at *asof*.
+
+        Compares EMA at asof vs EMA *slope_lookback* bars earlier.
+        Returns False (conservative) when there is insufficient history —
+        avoids triggering 100% cash prematurely during warm-up.
+        """
+        history: pd.Series = index_prices.loc[index_prices.index <= asof].dropna()
+        ema: pd.Series = self.compute_ema(history, window)
+        if len(ema) < slope_lookback + 1:
+            logger.debug(
+                "Insufficient EMA history for slope check at %s — defaulting to flat",
+                asof,
+            )
+            return False
+        return bool(float(ema.iloc[-1]) < float(ema.iloc[-(slope_lookback + 1)]))
+
 
 __all__: list[str] = ["RegimeDetector", "RegimeState"]

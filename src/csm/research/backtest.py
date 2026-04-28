@@ -10,6 +10,7 @@ from csm.config.constants import (
     BUFFER_RANK_THRESHOLD,
     BULL_MODE_N_HOLDINGS_MAX,
     BULL_MODE_N_HOLDINGS_MIN,
+    EMA_SLOPE_LOOKBACK_DAYS,
     EMA_TREND_WINDOW,
     MIN_ADTV_63D_THB,
     SAFE_MODE_MAX_EQUITY,
@@ -139,6 +140,11 @@ class BacktestConfig(BaseModel):
     n_holdings_min: int = Field(default=BULL_MODE_N_HOLDINGS_MIN)
     n_holdings_max: int = Field(default=BULL_MODE_N_HOLDINGS_MAX)
     buffer_rank_threshold: float = Field(default=BUFFER_RANK_THRESHOLD)
+    # Phase 3.6 improvements
+    bear_full_cash: bool = Field(default=True)  # 0% equity when EMA slope is negative
+    ema_slope_lookback_days: int = Field(default=EMA_SLOPE_LOOKBACK_DAYS)
+    relative_strength_filter: bool = Field(default=True)  # only hold positive-alpha stocks
+    rs_lookback_months: int = Field(default=12)  # lookback for RS filter vs SET index
 
 
 class BacktestResult(BaseModel):
@@ -302,6 +308,54 @@ class MomentumBacktest:
             return RegimeState.BULL
         return RegimeState.BEAR
 
+    def _has_negative_ema_slope(
+        self,
+        index_prices: pd.Series,
+        asof: pd.Timestamp,
+        ema_window: int,
+        slope_lookback: int,
+    ) -> bool:
+        """Return True when EMA-*ema_window* is falling at *asof*."""
+        return self._regime.has_negative_ema_slope(
+            index_prices, asof, window=ema_window, slope_lookback=slope_lookback
+        )
+
+    def _apply_relative_strength_filter(
+        self,
+        cross_section: pd.DataFrame,
+        prices: pd.DataFrame,
+        index_prices: pd.Series,
+        asof: pd.Timestamp,
+        lookback_months: int = 12,
+    ) -> pd.DataFrame:
+        """Remove stocks whose 12-month return is below the SET index 12-month return.
+
+        Stocks with insufficient price history are excluded conservatively.
+        When benchmark history is insufficient the filter is skipped entirely.
+        """
+        lookback_days: int = lookback_months * 21
+        idx_hist: pd.Series = (
+            index_prices.loc[index_prices.index <= asof].dropna().tail(lookback_days)
+        )
+        if len(idx_hist) < 2:
+            logger.debug("RS filter skipped — insufficient benchmark history at %s", asof)
+            return cross_section
+        index_return: float = float(idx_hist.iloc[-1] / idx_hist.iloc[0] - 1.0)
+        keep: list[str] = []
+        for sym in cross_section.index:
+            if sym not in prices.columns:
+                continue
+            hist: pd.Series = prices[sym].loc[:asof].dropna().tail(lookback_days)
+            if len(hist) < 2:
+                continue
+            stock_return: float = float(hist.iloc[-1] / hist.iloc[0] - 1.0)
+            if stock_return >= index_return:
+                keep.append(sym)
+        excluded: int = len(cross_section) - len(keep)
+        if excluded:
+            logger.debug("RS filter excluded %d symbols at %s", excluded, asof)
+        return cross_section.loc[keep]
+
     def run(
         self,
         feature_panel: pd.DataFrame,
@@ -368,6 +422,14 @@ class MomentumBacktest:
             if cross_section.empty:
                 continue
 
+            # Apply Relative Strength filter — keep only stocks outperforming SET.
+            if config.relative_strength_filter and index_prices is not None:
+                cross_section = self._apply_relative_strength_filter(
+                    cross_section, prices, index_prices, current_date, config.rs_lookback_months
+                )
+            if cross_section.empty:
+                continue
+
             # Determine market regime (Mode A: Bull / Mode B: Bear).
             mode: RegimeState = (
                 self._compute_mode(index_prices, current_date, config.ema_trend_window)
@@ -401,9 +463,24 @@ class MomentumBacktest:
             else:
                 target_weights = self._optimizer.equal_weight(selected)
 
-            # Safe Mode (Mode B): scale equity exposure down, remainder is cash.
+            # Dynamic Bear equity fraction (Mode B).
+            # Strong Bear (EMA falling): 0% equity (100% cash) to stop bleeding.
+            # Weak Bear (EMA flat/rising, just below threshold): safe_mode_max_equity (20%).
             if mode is RegimeState.BEAR:
-                target_weights = target_weights * config.safe_mode_max_equity
+                if (
+                    config.bear_full_cash
+                    and index_prices is not None
+                    and self._has_negative_ema_slope(
+                        index_prices,
+                        current_date,
+                        config.ema_trend_window,
+                        config.ema_slope_lookback_days,
+                    )
+                ):
+                    equity_fraction: float = 0.0
+                else:
+                    equity_fraction = config.safe_mode_max_equity
+                target_weights = target_weights * equity_fraction
 
             turnover: float = self._scheduler.compute_turnover(current_weights, target_weights)
             prices_window: pd.DataFrame = prices[selected].loc[current_date:next_date]

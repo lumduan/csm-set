@@ -52,22 +52,30 @@ Phase 3 covers four sub-phases in dependency order:
 - Dashboard backtest page (Phase 6)
 - `results/backtest/` export for public Docker image (Phase 7)
 
-### Current State (as of 2026-04-28) — Phase 3.5 Complete
+### Current State (as of 2026-04-28) — Phase 3.5 Complete; Phase 3.6 In Progress
 
 Phases 3.1–3.4 complete. Phase 3.5 (Strategy Improvements) implemented and executed 2026-04-28.
+Phase 3.6 (Recovery & Turnover Fix) started 2026-04-28.
+
+**Phase 3.5 FAIL points (addressed in 3.6):**
+- Max Recovery: 37.0 months (target < 18 months)
+- Annualised Turnover: 202% (target 150–180%)
+- Critical bug: Section 2 backtest ran without `index_prices` → EMA filter silently skipped
+
+**Phase 3.6 outcome (2026-04-28):** Bug fixed; dynamic bear and RS filter implemented and tested. Research finding: dynamic 0% equity in Bear delayed market re-entry (44M vs 37M); RS filter increased turnover (220%) by bypassing buffer logic. Recovery target remains unmet — see phase3.6 completion notes for root cause and next steps.
 
 | Module | Lines | Status |
 |---|---|---|
-| `src/csm/config/constants.py` | ~75 | `[x]` 6 new constants: `MIN_ADTV_63D_THB`, `EMA_TREND_WINDOW`, `SAFE_MODE_MAX_EQUITY`, `BULL_MODE_N_HOLDINGS_MIN/MAX`, `BUFFER_RANK_THRESHOLD` |
-| `src/csm/risk/regime.py` | ~80 | `[x]` Extended: `compute_ema()` staticmethod + `is_bull_market()` (EMA-200, not SMA) |
-| `src/csm/research/backtest.py` | ~400 | `[x]` Extended: `BacktestConfig` (+6 fields), `MonthlyPeriodReport` (+mode), `_apply_adtv_filter`, `_apply_buffer_logic`, `_select_holdings`, `_compute_mode`, updated `run()` |
-| `src/csm/risk/metrics.py` | 120 | `[x]` Complete (unchanged in 3.5) |
-| `src/csm/risk/drawdown.py` | 57 | `[x]` Complete (unchanged in 3.5) |
-| `notebooks/03_backtest_analysis.ipynb` | 47 cells | `[x]` Sections 18–22 added + executed error-free (2026-04-28) |
-| `tests/unit/research/test_backtest.py` | ~310 | `[x]` Extended: 20 total tests (8 original + 12 new for ADTV, buffer, holdings, mode, Safe Mode) |
-| `tests/unit/risk/test_regime.py` | ~70 | `[x]` Extended: 6 total tests (1 original fixed + 5 new EMA/is_bull_market tests) |
-| `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged in 3.5) |
-| `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged in 3.5) |
+| `src/csm/config/constants.py` | ~82 | `[x]` 3.6: +`EMA_SLOPE_LOOKBACK_DAYS`, `BUFFER_RANK_THRESHOLD` 0.125→0.15 |
+| `src/csm/risk/regime.py` | ~105 | `[x]` 3.6: +`has_negative_ema_slope()` |
+| `src/csm/research/backtest.py` | ~540 | `[x]` 3.6: +4 fields, `_has_negative_ema_slope`, `_apply_relative_strength_filter`, updated `run()` |
+| `src/csm/risk/metrics.py` | 120 | `[x]` Complete (unchanged) |
+| `src/csm/risk/drawdown.py` | 57 | `[x]` Complete (unchanged) |
+| `notebooks/03_backtest_analysis.ipynb` | 55 cells | `[x]` 3.6: Section 2 fix + Sections 23–26 (all executed error-free) |
+| `tests/unit/research/test_backtest.py` | ~500 | `[x]` 3.6: 36 total tests (26 original + 10 new) |
+| `tests/unit/risk/test_regime.py` | ~115 | `[x]` 3.6: 9 total tests (6 original + 3 new) |
+| `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged) |
+| `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged) |
 | `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — unchanged |
 
 ---
