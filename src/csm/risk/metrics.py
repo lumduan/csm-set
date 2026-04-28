@@ -100,19 +100,20 @@ class PerformanceMetrics:
         return metrics
 
     @staticmethod
-    def rolling_cagr(nav: pd.Series, window_months: int) -> pd.Series:
-        """Annualised CAGR over a rolling window of *window_months* months.
+    def rolling_cagr(equity_curve: pd.Series, window_months: int) -> pd.Series:
+        """Compute rolling annualised CAGR over a sliding window of months.
 
-        Uses pct_change(window_months) so the result is NaN for the first
-        *window_months* observations.  Index is preserved from *nav*.
+        Args:
+            equity_curve: NAV series indexed by date.
+            window_months: Number of months in the rolling window.
+
+        Returns:
+            Series of annualised CAGR values; NaN for the first `window_months` entries.
         """
         if window_months < 1:
             raise ValueError("window_months must be >= 1")
-        raw_change: pd.Series = nav.pct_change(window_months)
-        annualised: pd.Series = raw_change.apply(
-            lambda r: (1.0 + r) ** (12.0 / window_months) - 1.0 if pd.notna(r) else float("nan")
-        )
-        return annualised
+        years: float = window_months / 12.0
+        return (equity_curve / equity_curve.shift(window_months)) ** (1.0 / years) - 1.0
 
 
 __all__: list[str] = ["PerformanceMetrics"]
