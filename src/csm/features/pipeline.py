@@ -98,6 +98,9 @@ class FeaturePipeline:
         self._sector: SectorFeatures = SectorFeatures()
         # Immutable close-series snapshots cached from the last build() call.
         self._last_close_cache: dict[str, pd.Series] = {}
+        # Volume snapshots cached from the last build() call (Phase 3.8).
+        # Used by build_volume_matrix() to thread volume into the backtest's ADTV filter.
+        self._last_volume_cache: dict[str, pd.Series] = {}
         self._last_rebalance_dates: list[pd.Timestamp] = []
 
     def build(
@@ -271,6 +274,12 @@ class FeaturePipeline:
 
         # Cache immutable close-series snapshots for build_forward_returns().
         self._last_close_cache = {sym: frame["close"].copy() for sym, frame in prices.items()}
+        # Cache volume snapshots for build_volume_matrix() (Phase 3.8 — ADTV filter).
+        self._last_volume_cache = {
+            sym: frame["volume"].copy()
+            for sym, frame in prices.items()
+            if "volume" in frame.columns
+        }
         self._last_rebalance_dates = list(rebalance_dates)
 
         if not panel_frames:
@@ -453,6 +462,39 @@ class FeaturePipeline:
         latest: pd.DataFrame = self._store.load(key="features_latest")
         latest["date"] = pd.to_datetime(latest["date"])
         return latest.set_index(["date", "symbol"]).sort_index()
+
+    def build_volume_matrix(self, exclude: tuple[str, ...] = (_INDEX_SYMBOL,)) -> pd.DataFrame:
+        """Return wide volume matrix from the last build() call (Phase 3.8).
+
+        The matrix has a DatetimeIndex (union of per-symbol indices) and one
+        float column per stock symbol, ready to pass to
+        ``MomentumBacktest.run(..., volumes=...)`` so the ADTV hard filter
+        actually fires.
+
+        Args:
+            exclude: Symbols to drop from the matrix (defaults to the SET index
+                     itself, since ADTV applies to stocks only).
+
+        Returns:
+            Sorted, ascending-DatetimeIndex DataFrame. Empty when build() has
+            not been called or no symbol exposed a 'volume' column — caller
+            should treat empty as a hard error since the ADTV filter is
+            essential to the backtest's universe.
+        """
+        if not self._last_volume_cache:
+            logger.warning(
+                "build_volume_matrix() called but volume cache is empty — "
+                "rebuild the feature panel from OHLCV frames containing 'volume'",
+            )
+            return pd.DataFrame()
+        cols: dict[str, pd.Series] = {
+            sym: series for sym, series in self._last_volume_cache.items() if sym not in exclude
+        }
+        if not cols:
+            return pd.DataFrame()
+        matrix: pd.DataFrame = pd.DataFrame(cols)
+        matrix.index = pd.to_datetime(matrix.index)
+        return matrix.sort_index()
 
 
 __all__: list[str] = ["FeaturePipeline"]

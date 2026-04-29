@@ -1,10 +1,10 @@
-# Symbol Normalization Layer Implementation Plan
+# Phase 1 — Data Pipeline Master Plan
 
-**Feature:** Canonical Symbol Formatting Across tvkit (`tvkit.symbols`)
-**Branch:** `feature/symbol-normalization-layer`
-**Created:** 2026-04-07
-**Status:** Complete — All Phases (0–5) done — Released as v0.8.0
-**Positioning:** Core data infrastructure — deterministic symbol identity across cache keys, storage paths, batch downloads, and validation systems
+**Feature:** Reliable OHLCV Data Pipeline for All SET Symbols
+**Branch:** `feature/phase-1-data-pipeline`
+**Created:** 2026-04-21
+**Status:** Complete — 1.1–1.8 complete (2026-04-24)
+**Positioning:** Foundation layer — all signal research, backtesting, and portfolio construction depend on clean, versioned parquet data produced here
 
 ---
 
@@ -14,15 +14,13 @@
 2. [Problem Statement](#problem-statement)
 3. [Design Rationale](#design-rationale)
 4. [Architecture](#architecture)
-5. [API Design](#api-design)
-6. [Implementation Phases](#implementation-phases)
-7. [Data Models](#data-models)
-8. [Error Handling Strategy](#error-handling-strategy)
-9. [Testing Strategy](#testing-strategy)
-10. [Success Criteria](#success-criteria)
-11. [Future Enhancements](#future-enhancements)
-12. [Issue Description](#issue-description)
-13. [Commit & PR Templates](#commit--pr-templates)
+5. [Implementation Phases](#implementation-phases)
+6. [Data Models](#data-models)
+7. [Error Handling Strategy](#error-handling-strategy)
+8. [Testing Strategy](#testing-strategy)
+9. [Success Criteria](#success-criteria)
+10. [Future Enhancements](#future-enhancements)
+11. [Commit & PR Templates](#commit--pr-templates)
 
 ---
 
@@ -30,628 +28,604 @@
 
 ### Purpose
 
-This feature implements a **symbol normalization layer** — `tvkit.symbols` — that resolves every TradingView instrument reference that carries explicit exchange information into a single canonical form: `EXCHANGE:SYMBOL` (uppercase, colon-separated). It is the first pillar of the Core Data Infrastructure roadmap track and a prerequisite for the Data Caching Layer and the Async Batch Downloader.
+Phase 1 builds the **data pipeline** that makes the entire csm-set system possible. It ingests raw OHLCV data for all SET-listed symbols via tvkit, applies deterministic cleaning, assembles dated universe snapshots, and writes everything to versioned parquet files. Every downstream phase (Signal Research, Backtesting, Portfolio Construction, API, Dashboard) depends entirely on the artefacts produced here.
 
 ### Scope
 
-**Phase 1 only handles symbols that already carry explicit exchange information.** Bare tickers (e.g. `AAPL` with no exchange prefix) and crypto slash-pairs (e.g. `BTC/USDT` requiring exchange inference) are out of scope for Phase 1. They are documented as future enhancements.
+Phase 1 covers seven sub-phases in dependency order:
 
-Phase 1 handles:
-
-| Variant | Example | Canonical output |
+| Sub-phase | Deliverable | Purpose |
 |---|---|---|
-| Colon, already canonical | `NASDAQ:AAPL` | `NASDAQ:AAPL` |
-| Colon, lowercase | `nasdaq:aapl` | `NASDAQ:AAPL` |
-| Dash notation | `NASDAQ-AAPL` | `NASDAQ:AAPL` |
-| Dash notation, lowercase | `nasdaq-aapl` | `NASDAQ:AAPL` |
-| Whitespace padding | `  NASDAQ:AAPL  ` | `NASDAQ:AAPL` |
-| Crypto colon | `BINANCE:BTCUSDT` | `BINANCE:BTCUSDT` |
-| Crypto colon, lowercase | `binance:btcusdt` | `BINANCE:BTCUSDT` |
+| 1.1 | Config & Constants | `Settings` model + SET-specific constants |
+| 1.2 | Storage Layer | `ParquetStore` — save / load / exists / list |
+| 1.3 | tvkit Loader | `OHLCVLoader` — async fetch with retry |
+| 1.4 | Universe Builder | Filtered symbol list + dated snapshots |
+| 1.5 | Price Cleaner | Gap-fill, winsorise, drop low-coverage symbols |
+| 1.6 | Bulk Fetch Script | `scripts/fetch_history.py` — idempotent 20-year pull |
+| 1.7 | Data Quality Check | `01_data_exploration.ipynb` — audit and sign-off |
+| 1.8 | Dividend Adjustment | Re-fetch all symbols with `Adjustment.DIVIDENDS`; adjust storage layout and pipeline |
 
-Phase 1 does **not** handle (Phase 2+):
+**Out of scope for Phase 1:**
 
-| Variant | Example | Status |
-|---|---|---|
-| Bare ticker | `AAPL` | Out of scope — Phase 2 |
-| Slash crypto pair | `BTC/USDT` | Out of scope — Phase 2 |
-| Bare crypto pair | `BTCUSDT` | Out of scope — Phase 2 |
+- Momentum signal calculation (Phase 2)
+- Backtesting engine (Phase 3)
+- API or UI layer (Phases 5–6)
+- Any live or scheduled data refresh (Phase 5)
 
-### Normalization and Validation Ordering
+### Public Mode Boundary
 
-A critical constraint for all Phase 3 integration work: **normalization must run before validation**. The existing pattern in `ohlcv.py` calls `validate_symbols` on the raw input, then calls `convert_symbol_format`. This means non-canonical inputs (e.g. lowercase) pass through an HTTP round-trip before format correction. The new ordering is:
-
-```python
-# ✅ Phase 3 target ordering — normalize first (no I/O), then validate
-canonical: str = normalize_symbol(exchange_symbol)
-await validate_symbols(canonical)
-```
-
-This ensures `validate_symbols` always receives a canonical `EXCHANGE:SYMBOL` string and that normalizable inputs (e.g. `nasdaq:aapl`) are accepted without errors.
+This phase introduces `public_mode: bool` in `Settings`. When `CSM_PUBLIC_MODE=true`, `OHLCVLoader` raises `DataAccessError` immediately on any fetch attempt — the pipeline cannot run without tvkit credentials. All downstream public-mode consumers read from pre-computed `results/` artefacts, never from the live data layer built here.
 
 ---
 
 ## Problem Statement
 
-TradingView instruments can appear in multiple string representations across user code, external data files, and environment variables:
+The csm-set strategy requires accurate, survivorship-bias-safe daily OHLCV data for 400+ SET symbols spanning 15+ years. Several non-trivial problems must be solved before any quantitative research is possible:
 
-```
-NASDAQ:AAPL    (canonical)
-nasdaq:aapl    (lowercase)
-NASDAQ-AAPL    (dash notation)
-  NASDAQ:AAPL  (whitespace padding)
-```
-
-Without a normalization layer:
-
-- Cache keys diverge: `NASDAQ:AAPL` and `nasdaq:aapl` refer to the same instrument but hash differently
-- Storage paths produced by `DataExporter` are inconsistent across pipelines
-- Batch download deduplication fails silently when the same symbol appears in multiple formats
-- Each consumer implements its own ad-hoc normalization, which fragments over time
-- `validate_symbols` called on `nasdaq:aapl` may fail or produce unexpected results because the raw lowercased string reaches the HTTP endpoint before format correction
+1. **No data on disk yet** — the raw OHLCV store does not exist; every run must fetch from tvkit, which is slow and rate-limited.
+2. **Idempotency** — re-running the fetch script must not re-download already-fetched symbols or corrupt existing parquet files.
+3. **Public mode safety** — the public-facing Docker image must never attempt to call tvkit (no credentials available). Any code path that accesses live data must raise immediately when `CSM_PUBLIC_MODE=true`.
+4. **Data quality** — SET includes thinly traded names, suspended symbols, and gap-heavy histories. Signals computed on uncleaned data produce spurious results.
+5. **Universe definition** — the tradeable universe must be defined deterministically and dated (one snapshot per rebalance date) to avoid survivorship bias in downstream research.
+6. **Reproducibility** — a contributor cloning the repo must be able to reproduce the full data pipeline from a `.env` file with valid tvkit credentials and a single script.
 
 ---
 
 ## Design Rationale
 
-### Synchronous First
+### Parquet as the Storage Format
 
-Symbol normalization is a pure-string transformation. Making it async would be misleading and would prevent its use in synchronous contexts (e.g., logging formatters, DataFrame column normalization, dict key construction). All Phase 1 functions are synchronous. Network-backed validation (`validate_symbols`) remains async and is a separate concern.
+Parquet is columnar, compressed, and natively supported by pandas and pyarrow. It preserves DataFrame dtypes (including DatetimeIndex with timezone info) across save/load cycles. CSV would lose dtype information and be 5–10× larger on disk. Parquet files are gitignored; only derived `results/` artefacts (NAV curves, z-scores, quintiles) are committed.
 
-### Fail-Fast on Ambiguity
+### Async Fetch with Concurrency Limit
 
-When a symbol is ambiguous — no exchange prefix and no `default_exchange` configured — `normalize_symbol` raises `SymbolNormalizationError` rather than silently guessing. Guessing produces wrong cache keys, which is harder to debug than an explicit error.
+tvkit's `OHLCV` API is async. `OHLCVLoader.fetch_batch()` runs concurrent fetches with `asyncio.Semaphore` to stay within tvkit's rate limit. Sequential fetching of 400+ symbols would take hours; controlled concurrency brings it to minutes.
 
-### No Additional Dependencies in Phase 1
+### Deterministic Universe Snapshots
 
-`pydantic-settings` is a separate package from `pydantic` under Pydantic v2 and is not currently declared in `pyproject.toml`. Phase 1 uses a plain Pydantic `BaseModel` (not `BaseSettings`) for `NormalizationConfig`. There are no new runtime dependencies in Phase 1.
+Rather than a single static symbol list, the universe is stored as dated snapshots: one parquet file per rebalance date containing the symbols eligible that month. This is the only way to avoid survivorship bias — a backtest using a 2024 symbol list applied to 2010 data silently includes companies that only became liquid after 2010.
 
-Environment variable support (`TVKIT_DEFAULT_EXCHANGE`) via `pydantic-settings` is deferred to Phase 2, which will explicitly add `pydantic-settings` to `pyproject.toml` as a dependency.
+### Settings via pydantic-settings
 
-### Extend, Don't Replace
+All runtime configuration is in a single `Settings` class (pydantic-settings `BaseSettings`). This makes the public mode flag, tvkit credentials, directory paths, and tunable thresholds injectable via environment variables and `.env`, with full type safety and validation at startup. No hardcoded constants outside `constants.py`.
 
-`convert_symbol_format` in `tvkit.api.utils` is kept for backward compatibility. `tvkit.symbols.normalize_symbol` is the new canonical entry point for all new code. In Phase 3, internal call sites are migrated and `convert_symbol_format` is deprecated with `warnings.warn`. `SymbolConversionResult` follows the same deprecation path since it is a public export. Both remain importable until the next major version.
+### Fail-Fast on Public Mode
 
-### Zero Dependencies on Other tvkit Modules
+`OHLCVLoader` checks `settings.public_mode` before any network call and raises `DataAccessError` immediately. The check is in the loader, not scattered across scripts, so every call site is protected automatically.
 
-`tvkit.symbols` must not import from `tvkit.api` to avoid circular imports. It is a leaf module.
+### Repository Layout Validation
+
+This plan matches the current repository layout and does not introduce speculative paths. The implementation targets the existing `src/csm/` package, the existing `notebooks/` directory, and the existing gitignored `data/` tree (`data/raw/`, `data/processed/`, `data/universe/`). Phase 1 work should be executed against those paths directly rather than assuming a future reorganisation.
+
+### DataFrame Boundary and Pydantic Compliance
+
+Project instructions require typed, validated boundaries, and this phase keeps that rule for configuration, settings, exceptions, and public-facing contracts. The explicit exception is the internal OHLCV tabular payload: pandas `DataFrame` is the canonical in-memory container for columnar price history because parquet I/O, rolling-window analytics, gap analysis, and vectorised cleaning are all DataFrame-native operations. To keep the architecture defensible, every pipeline boundary that accepts or returns OHLCV tabular data must enforce the documented DataFrame schema, while all non-tabular structures remain fully typed and Pydantic-validated.
 
 ---
 
 ## Architecture
 
-### Module Structure
+### Directory Layout
 
 ```
-tvkit/
-└── symbols/
-    ├── __init__.py          # Public API: normalize_symbol, normalize_symbols,
-    │                        #   normalize_symbol_detailed, NormalizedSymbol,
-    │                        #   NormalizationConfig, NormalizationType,
-    │                        #   SymbolNormalizationError
-    ├── normalizer.py        # Core normalization logic
-    ├── models.py            # Pydantic models: NormalizedSymbol, NormalizationConfig,
-    │                        #   NormalizationType enum
-    └── exceptions.py        # SymbolNormalizationError
+src/csm/
+├── config/
+│   ├── constants.py          # SET sector codes, index symbol, thresholds (no env vars)
+│   └── settings.py           # Settings(BaseSettings) — env var binding via pydantic-settings
+├── data/
+│   ├── store.py              # ParquetStore — save / load / exists / list_keys
+│   ├── loader.py             # OHLCVLoader — async tvkit wrapper + DataAccessError
+│   ├── universe.py           # UniverseBuilder — filter + dated snapshots
+│   └── cleaner.py            # PriceCleaner — gap-fill / winsorise / drop
+
+scripts/
+├── fetch_history.py          # Entry point: fetch 20Y history for universe symbols
+└── build_universe.py         # Entry point: build dated universe snapshots
+
+data/                         # gitignored entirely
+├── raw/                      # One parquet per symbol: {SYMBOL}.parquet
+├── processed/                # Cleaned OHLCV after PriceCleaner
+└── universe/                 # symbols.json + dated snapshots
+
+notebooks/
+└── 01_data_exploration.ipynb # Data quality audit notebook
+
+tests/
+├── config/
+│   └── test_settings.py
+├── data/
+│   ├── test_store.py
+│   ├── test_loader.py
+│   ├── test_universe.py
+│   └── test_cleaner.py
 ```
+
+This directory layout is already present in the repository today: `src/csm/` exists as the application package root, `notebooks/` already contains the exploratory notebooks, and `data/` already contains `raw/`, `processed/`, and `universe/` directories. Phase 1 should extend these existing locations rather than creating parallel alternatives.
 
 ### Dependency Graph
 
 ```
-tvkit.symbols         (leaf — no tvkit imports)
+Settings + constants (no deps)
     ↑ used by
-tvkit.api.chart.ohlcv
-tvkit.api.scanner.services.scanner_service
-tvkit.export.DataExporter
+ParquetStore          (pyarrow, pandas — no tvkit)
+    ↑ used by
+OHLCVLoader           (tvkit, asyncio — checks public_mode)
+    ↑ used by
+UniverseBuilder       (OHLCVLoader, ParquetStore)
+    ↑ used by
+PriceCleaner          (pandas, numpy — pure transform, no I/O)
+    ↑ used by
+fetch_history.py      (OHLCVLoader, ParquetStore)
+build_universe.py     (UniverseBuilder, ParquetStore)
 ```
 
-### Relationship to Existing Code
-
-**Before (current pattern in `ohlcv.py`):**
+### Data Flow
 
 ```
-OHLCV.get_historical_ohlcv(exchange_symbol)
-  1. await validate_symbols(exchange_symbol)   ← raw input, may fail on lowercase
-  2. convert_symbol_format(exchange_symbol)    ← dash → colon only
+tvkit OHLCV API
+    ↓  OHLCVLoader.fetch_batch()
+data/raw/{SYMBOL}.parquet           ← raw, uncleaned
+    ↓  PriceCleaner
+data/processed/{SYMBOL}.parquet     ← gap-filled, winsorised
+    ↓  UniverseBuilder
+data/universe/symbols.json          ← full candidate list
+data/universe/{YYYY-MM-DD}.parquet  ← dated snapshots per rebalance date
 ```
-
-**After (Phase 3 target):**
-
-```
-OHLCV.get_historical_ohlcv(exchange_symbol)
-  1. normalize_symbol(exchange_symbol)         ← pure-string, zero I/O, comprehensive
-  2. await validate_symbols(canonical)         ← always receives canonical form
-```
-
----
-
-## API Design
-
-### Primary Entry Points
-
-```python
-from tvkit.symbols import normalize_symbol, normalize_symbols, SymbolNormalizationError
-
-# Single symbol — returns canonical string directly
-canonical: str = normalize_symbol("nasdaq:aapl")
-# → "NASDAQ:AAPL"
-
-canonical = normalize_symbol("NASDAQ-AAPL")
-# → "NASDAQ:AAPL"
-
-canonical = normalize_symbol("BINANCE:btcusdt")
-# → "BINANCE:BTCUSDT"
-
-# Batch normalization — 1:1 mapping, preserves input order, raises on first error
-canonicals: list[str] = normalize_symbols(["NASDAQ:AAPL", "BINANCE:btcusdt"])
-# → ["NASDAQ:AAPL", "BINANCE:BTCUSDT"]
-
-# Ambiguous bare ticker — raises (Phase 2 adds default_exchange resolution)
-try:
-    normalize_symbol("AAPL")
-except SymbolNormalizationError as exc:
-    print(exc)  # "Cannot normalize 'AAPL': no exchange prefix"
-```
-
-### Detailed Result
-
-`normalize_symbol` returns a plain `str` for ergonomics. A richer `NormalizedSymbol` model is available when metadata is needed:
-
-```python
-from tvkit.symbols import normalize_symbol_detailed, NormalizedSymbol
-
-result: NormalizedSymbol = normalize_symbol_detailed("NASDAQ-AAPL")
-print(result.canonical)          # "NASDAQ:AAPL"
-print(result.exchange)           # "NASDAQ"
-print(result.ticker)             # "AAPL"
-print(result.original)           # "NASDAQ-AAPL"
-print(result.normalization_type) # NormalizationType.DASH_TO_COLON
-```
-
-### Configuration Model (Phase 1 — no env-var support)
-
-Phase 1 uses a plain Pydantic `BaseModel`, not `BaseSettings`. Environment variable support is added in Phase 2 when `pydantic-settings` is added as a dependency.
-
-```python
-from tvkit.symbols import NormalizationConfig
-
-# Phase 1: explicit config only
-config = NormalizationConfig(default_exchange="NASDAQ")
-canonical = normalize_symbol("AAPL", config=config)
-# → "NASDAQ:AAPL"  (Phase 2 feature — bare ticker via config)
-```
-
-> **Note:** `default_exchange` in `NormalizationConfig` and bare-ticker resolution are **Phase 2** features. The `NormalizationConfig` model ships in Phase 1 as a placeholder with `default_exchange=None` (which raises `SymbolNormalizationError` on bare tickers, same as the config-free path). Phase 2 activates the resolution logic and adds env var support.
 
 ---
 
 ## Implementation Phases
 
-### Phase 0: Planning & Scaffolding
+### Phase 1.1 — Config & Constants
 
-**Status:** Complete — 2026-04-07
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.1-config-and-constants.md`
 
-**Tasks:**
-
-- [x] Create branch: `feature/symbol-normalization-layer`
-- [x] Add `docs/plans/symbol_normalization_layer/PLAN.md`
-- [x] Create `tvkit/symbols/` package skeleton with empty modules
-- [x] Add `docs/reference/symbols/normalizer.md` (completed in Phase 1)
-- [x] Phase plan: `docs/plans/symbol_normalization_layer/phase0-planning-scaffolding.md`
-
----
-
-### Phase 1: Core Normalization — Exchange-Aware Inputs Only
-
-**Status:** Complete — 2026-04-07
-
-**Goal:** Handle all symbol variants that already carry explicit exchange information. No network calls. No bare-ticker resolution.
+**Goal:** Establish the typed configuration layer that all other sub-phases depend on. No business logic here — only settings and compile-time constants.
 
 **Deliverables:**
 
-- [x] `tvkit/symbols/exceptions.py` — `SymbolNormalizationError`
-- [x] `tvkit/symbols/models.py` — `NormalizedSymbol`, `NormalizationConfig` (BaseModel, no BaseSettings), `NormalizationType` enum
-- [x] `tvkit/symbols/normalizer.py` — `normalize_symbol()`, `normalize_symbols()`, `normalize_symbol_detailed()`
-- [x] `tvkit/symbols/__init__.py` — Public re-exports
-- [x] `tests/test_symbols_normalizer.py` — 73 tests, 100% line + branch coverage
-- [x] `docs/reference/symbols/normalizer.md` — API reference
-- [x] Phase plan: `docs/plans/symbol_normalization_layer/phase1-core-normalization.md`
+- [x] `src/csm/config/constants.py`
+  - [x] `INDEX_SYMBOL: str = "SET:SET"` — benchmark symbol for tvkit
+  - [x] `SET_SECTOR_CODES: dict[str, str]` — sector code → sector name mapping
+  - [x] `MIN_PRICE_THB: float = 1.0` — universe filter floor
+  - [x] `MIN_AVG_DAILY_VOLUME: float = 1_000_000.0` — liquidity threshold (THB avg daily turnover; `float` retained over plan's `int` to avoid truncation in downstream arithmetic)
+  - [x] `MIN_DATA_COVERAGE: float = 0.80` — 80% minimum valid bars in lookback window
+  - [x] `LOOKBACK_YEARS: int = 15` — history depth for full backtest
+  - [x] `REBALANCE_FREQ: str = "BME"` — pandas offset alias for business month-end
+- [x] `src/csm/config/settings.py`
+  - [x] `class Settings(BaseSettings)` with `model_config = SettingsConfigDict(env_prefix="CSM_", env_file=".env", frozen=True)`
+  - [x] `public_mode: bool = False` — blocks data access when `CSM_PUBLIC_MODE=true`
+  - [x] `results_dir: Path = Path("./results")` — output root for git-committed artefacts
+  - [x] `data_dir: Path = Path("./data")` — gitignored data root
+  - [x] `tvkit_concurrency: int = 5` — semaphore limit for `fetch_batch`, constrained `gt=0`
+  - [x] `tvkit_retry_attempts: int = 3` — retry count for transient errors, constrained `ge=0`
+  - [x] `log_level: str = "INFO"`
+  - [x] `get_settings()` singleton via `@lru_cache(maxsize=1)`
+- [x] Unit test: `Settings` loads correctly with correct defaults
+- [x] Unit test: `Settings.public_mode` defaults to `False` with no env var set
+- [x] Unit test: `Settings.public_mode` is `True` when `CSM_PUBLIC_MODE=true` in env
+- [x] Unit test: `get_settings()` returns cached singleton
+- [x] Unit test: `Settings` is frozen (attribute assignment raises)
 
-**Implementation notes (2026-04-07):**
+**Implementation notes:**
 
-1. **Validation regex broadened** — The plan specified `^[A-Z0-9]+:[A-Z0-9]+$`. Upon review of
-   existing tvkit symbol usage (`FX_IDC:EURUSD` in `tvkit/quickstart.py`, futures like `CME_MINI:ES1!`,
-   `NYSE:BRK.B`), the regex was broadened to `^[A-Z0-9_]+:[A-Z0-9._!]+$` to support underscores in
-   exchange names and dots/exclamation marks in ticker components.
+- `constants.py` uses only Python builtins — no pydantic, no env vars
+- `pydantic-settings>=2.3` is already declared in `pyproject.toml`
+- `Settings` is a singleton: `get_settings()` with `functools.lru_cache(maxsize=1)`
+- `.gitignore` `data/` pattern fixed to `/data/` — the unanchored form was silently excluding all of `src/csm/data/` from git tracking
+- `tests/conftest.py` `client` fixture updated: `api.*` imports moved inside body to fix pytest collection for unit-only runs
 
-2. **`normalize_symbols` container validation** — Added a `isinstance(symbols, list)` guard that raises
-   `SymbolNormalizationError` when a plain `str` is passed, preventing silent character-by-character
-   iteration.
+---
 
-3. **Whitespace error message refinement** — `"INVALID SYMBOL"` (internal whitespace) and
-   `" NASDAQ:AAPL "` with `strip_whitespace=False` (leading/trailing whitespace) now produce distinct
-   error messages. The check for internal whitespace was moved above the "no exchange prefix" branch
-   in the validation logic.
+### Phase 1.2 — Storage Layer
 
-4. **`NormalizationConfig` remains `BaseModel`** — No new dependencies added in Phase 1. This is a
-   documented temporary deviation from the project's Pydantic Settings requirement. Phase 2 upgrades
-   to `BaseSettings` when `pydantic-settings` is added.
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.2-storage-layer.md`
 
-**Normalization Rules (applied in order):**
+**Goal:** Encapsulate all parquet I/O behind a single class. Callers never touch pyarrow or file paths directly.
 
-1. Strip leading/trailing whitespace (if `strip_whitespace=True`, default)
-2. Raise `SymbolNormalizationError` if string is empty after step 1
-3. Uppercase the entire string
-4. If no `:` present and exactly one `-` present: replace first `-` with `:`
-5. Validate the resulting string matches `^[A-Z0-9]+:[A-Z0-9]+$` — if not, raise `SymbolNormalizationError`
-6. Return canonical string
+**Deliverables:**
 
-**Input → Output mapping:**
+- [x] `src/csm/data/store.py` — `ParquetStore`
+  - [x] `__init__(self, base_dir: Path)` — accepts data root, creates directory if absent
+  - [x] `save(key: str, df: pd.DataFrame) -> None` — writes `{base_dir}/{encoded_key}.parquet`; overwrites if exists
+  - [x] `load(key: str) -> pd.DataFrame` — reads and returns DataFrame; raises `KeyError` if not found
+  - [x] `exists(key: str) -> bool` — returns `True` if the parquet file exists (`is_file()`)
+  - [x] `list_keys() -> list[str]` — returns sorted list of all stored keys (recursive glob, POSIX-normalised)
+  - [x] `delete(key: str) -> None` — removes the file; raises `KeyError` if not found
+  - [x] `_validate_key()` — rejects empty, whitespace, backslash, and `..` traversal keys
+- [x] Unit test: round-trip `save → load` preserves `DatetimeIndex` with UTC timezone
+- [x] Unit test: round-trip preserves `float64` and `int64` column dtypes
+- [x] Unit test: `save` returns `None`
+- [x] Unit test: overwrite with same key succeeds; subsequent `load` returns updated data
+- [x] Unit test: `load` raises `KeyError` for missing key
+- [x] Unit test: `exists` returns `False` before save, `True` after save
+- [x] Unit test: `list_keys` returns sorted canonical keys (e.g. `["SET:ADVANC", "SET:AOT"]`)
+- [x] Unit test: `delete` removes file; subsequent `delete` raises `KeyError`
 
-| Input | Rule Applied | Output |
+**Implementation notes:**
+
+- Key encoding uses `urllib.parse.quote(key, safe="/")` — fully reversible percent-encoding; handles `%` and `:` in keys; safe on Windows and macOS
+- `ParquetStore` is synchronous — documented architectural exception in module docstring; callers that need non-blocking I/O should wrap with `asyncio.to_thread()`
+- `path.is_file()` used throughout instead of `path.exists()` to exclude directories named `*.parquet`
+- `list_keys()` uses `rglob("*.parquet")` with `.as_posix()` for Windows-safe key reconstruction
+- `tests/unit/data/__init__.py` created — package marker that aligns data test dir with `tests/unit/config/` convention
+
+---
+
+### Phase 1.3 — tvkit Loader
+
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.3-tvkit-loader.md`
+
+**Goal:** Thin, testable async wrapper around tvkit `OHLCV`. Enforces public mode guard, handles concurrency, retries transient failures, and returns DataFrames with a documented schema.
+
+**Deliverables:**
+
+- [x] `src/csm/data/loader.py`
+  - [x] `class DataAccessError(Exception)` — raised when `public_mode=True` (in `exceptions.py`)
+  - [x] `TransientDataFetchError` — omitted (plan marks as optional; see phase plan Design Decision §7)
+  - [x] `class OHLCVLoader`
+    - [x] `__init__(self, settings: Settings)` — stores settings, creates semaphore
+    - [x] `async def fetch(symbol: str, interval: str, bars: int) -> pd.DataFrame`
+      - [x] Raises `DataAccessError` immediately when `settings.public_mode=True`
+      - [x] Calls `tvkit.OHLCV.get_historical_ohlcv(symbol, interval, bars)`
+      - [x] Retries up to `settings.tvkit_retry_attempts` only on transient network / timeout / transport failures
+      - [x] Does not retry validation errors, schema mismatches, bad symbol inputs, or programming errors
+      - [x] Returns DataFrame with columns `open`, `high`, `low`, `close`, `volume` + `DatetimeIndex` (`Asia/Bangkok` — see phase plan Design Decision §1)
+    - [x] `async def fetch_batch(symbols: list[str], interval: str, bars: int) -> dict[str, pd.DataFrame]`
+      - [x] Raises `DataAccessError` immediately when `settings.public_mode=True`
+      - [x] Runs concurrent `fetch()` calls under `asyncio.Semaphore(settings.tvkit_concurrency)`
+      - [x] Logs per-symbol failures without crashing the batch
+      - [x] Returns `{symbol: DataFrame}` for all successfully fetched symbols; failed symbols are absent from the dict
+- [x] Unit test: mock tvkit; assert `fetch` returns DataFrame with correct columns and `DatetimeIndex`
+- [x] Unit test: `DataAccessError` is raised by `fetch` when `public_mode=True` — no tvkit call is made
+- [x] Unit test: `DataAccessError` is raised by `fetch_batch` when `public_mode=True`
+- [x] Unit test: `fetch_batch` continues after one symbol raises — failed symbol absent from result
+- [x] Unit test: retry logic — mock tvkit raising twice then succeeding; assert `fetch` returns DataFrame after third attempt
+- [ ] Integration smoke test (skipped in CI, manual only): `fetch("SET:SET", "1D", 100)` returns 100 rows
+
+**Output DataFrame schema:**
+
+| Column | dtype | Description |
 |---|---|---|
-| `"nasdaq:aapl"` | Uppercase | `"NASDAQ:AAPL"` |
-| `"NASDAQ-AAPL"` | Dash → colon, uppercase | `"NASDAQ:AAPL"` |
-| `"nasdaq-aapl"` | Dash → colon, uppercase | `"NASDAQ:AAPL"` |
-| `"BINANCE:btcusdt"` | Uppercase | `"BINANCE:BTCUSDT"` |
-| `"  NASDAQ:AAPL  "` | Strip whitespace | `"NASDAQ:AAPL"` |
-| `"AAPL"` | No exchange prefix | `SymbolNormalizationError` |
-| `""` | Empty | `SymbolNormalizationError` |
-| `"INVALID SYMBOL"` | Space in string | `SymbolNormalizationError` |
-| `"A:B:C"` | Multiple colons | `SymbolNormalizationError` |
+| `open` | `float64` | Opening price (THB) |
+| `high` | `float64` | Intraday high |
+| `low` | `float64` | Intraday low |
+| `close` | `float64` | Closing price |
+| `volume` | `float64` | Shares traded |
+
+Index: `DatetimeIndex`, name `"datetime"`, timezone `UTC`.
 
 ---
 
-### Phase 2: Default Exchange & Env Var Support
+### Phase 1.4 — Universe Builder
 
-**Status:** Complete — 2026-04-07
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.4-universe-builder.md`
 
-**Goal:** Allow bare tickers to be resolved via a configured `default_exchange`. Add `pydantic-settings` dependency for `TVKIT_DEFAULT_EXCHANGE` env var support.
+**Goal:** Define the investable universe deterministically. Produce both a full candidate list and dated per-rebalance snapshots that downstream backtesting can use without survivorship bias.
 
 **Deliverables:**
 
-- [x] Add `pydantic-settings>=2.0.0` to `pyproject.toml` dependencies
-- [x] Convert `NormalizationConfig` from `BaseModel` to `BaseSettings` with `env_prefix="TVKIT_"`
-- [x] Activate bare-ticker resolution logic in `_normalize_core` when `config.default_exchange` is set
-- [x] `examples/symbol_normalization_example.py` — shows env var usage
-- [x] `tests/test_symbols_config.py` — 20 tests covering config-based resolution and `TVKIT_DEFAULT_EXCHANGE`
-- [x] Updated `docs/reference/symbols/normalizer.md` — Phase 2 behaviour documented
-- [x] Phase plan: `docs/plans/symbol_normalization_layer/phase2-default-exchange-envvar.md`
+- [x] `data/universe/symbols.json` — full SET symbol list sourced from `settfex` (PyPI) via `get_stock_list()` + `filter_by_market("SET")`
+  - [x] Format: `{"symbols": ["SET:AAV", "SET:ADVANC", ...]}` — sorted, canonical tvkit format
+  - [x] Atomic write (tmp file + rename) in `scripts/build_universe.py`
+- [x] `src/csm/data/universe.py` — `UniverseBuilder`
+  - [x] `__init__(self, store: ParquetStore, settings: Settings)`
+  - [x] `def filter(self, symbol: str, asof: pd.Timestamp) -> bool`
+    - [x] Price filter: latest close ≥ `MIN_PRICE_THB`
+    - [x] Volume filter: 90-day trailing avg volume ≥ `MIN_AVG_DAILY_VOLUME`
+    - [x] Coverage filter: valid bars ≥ `MIN_DATA_COVERAGE` of trailing `min(len(history), LOOKBACK_YEARS * 252)` bars
+    - [x] Returns `False` immediately when symbol not in store
+  - [x] `def build_snapshot(self, asof: pd.Timestamp, symbols: list[str]) -> list[str]`
+    - [x] Applies all filters as of `asof` date (uses only data up to `asof`, no look-ahead)
+    - [x] Returns sorted list of symbols passing all filters
+  - [x] `def build_all_snapshots(self, symbols: list[str], rebalance_dates: pd.DatetimeIndex, snapshot_store: ParquetStore | None = None) -> None`
+    - [x] Iterates rebalance dates, calls `build_snapshot`, saves to `ParquetStore`
+    - [x] Key format: `universe/{YYYY-MM-DD}`; schema: `symbol` + `asof` columns
+    - [x] Optional `snapshot_store` separates OHLCV source from universe output
+- [x] Unit test: price filter rejects symbol with close < 1.0 THB
+- [x] Unit test: volume filter rejects symbol below liquidity threshold
+- [x] Unit test: coverage filter rejects symbol with > 20% missing bars
+- [x] Unit test: `filter` returns `False` for symbol not in store
+- [x] Unit test: `build_snapshot` uses only data `≤ asof` — no look-ahead leakage
+- [x] Unit test: `build_all_snapshots` produces one snapshot per rebalance date
 
-**API (Phase 2):**
+**Implementation notes:**
 
-```python
-# Via config object
-config = NormalizationConfig(default_exchange="NASDAQ")
-normalize_symbol("AAPL", config=config)
-# → "NASDAQ:AAPL"
+- Symbol source changed from `lumduan/thai-securities-data` to `settfex>=0.1.0` (PyPI) per user request; `settfex` added to `pyproject.toml`
+- `_align_tz()` normalises `asof` to match store index timezone using `index.tz` directly (not the `TIMEZONE` constant) to be correct regardless of stored timezone
+- Coverage denominator uses `history.tail(LOOKBACK_YEARS * 252)` as the window so numerator and denominator always match (prevents `coverage > 1.0` on long histories)
+- `Settings` stored in `__init__` for future extension; filter thresholds come from `constants.py` in this phase
+- Pre-existing `test_regime` failure unrelated to Phase 1.4 and out of scope
 
-# Via environment variable TVKIT_DEFAULT_EXCHANGE=NASDAQ
-config = NormalizationConfig()   # reads from env lazily at construction time
-normalize_symbol("AAPL", config=config)
-# → "NASDAQ:AAPL"
+**Phase 1.4 addendum — Symbol Type Filter (2026-04-23):**
+
+Running the pipeline against the full settfex SET registry revealed that `get_stock_list() + filter_by_market("SET")` returns 3057 symbols — far more than the ~700 common stocks expected. The extra symbols are non-equity instruments:
+
+| Type code | Instrument | Count |
+| --- | --- | --- |
+| `S` | Common stock | 704 |
+| `F` | Futures (e.g. `PTT-F`) | 640 |
+| `V` | Derivative Warrants on Thai stocks (e.g. `PTT01C2606T`) | 1276 |
+| `W` | Company warrants (e.g. `A5-W4`) | 56 |
+| `X` | Derivative Warrants on foreign stocks (e.g. `AAPL01`) | 352 |
+| `P` | Preferred shares | 7 |
+| `Q` | Convertible preferred shares | 7 |
+| `L` | ETF / Infrastructure funds (e.g. `1DIV`) | 13 |
+| `U` | Unit trusts | 2 |
+
+To fix this, a new module and CLI argument were added:
+
+- **`src/csm/data/symbol_filter.py`** — `SecurityType` (`StrEnum`), `SECURITY_TYPE_LABELS`, `DEFAULT_SECURITY_TYPES`, `filter_symbols()`, `parse_security_types()`
+- **`scripts/build_universe.py`** — `--security-types CODE [CODE ...]` argument (default: `S`); `--symbols-only` flag to save `symbols.json` and skip snapshot building
+- The default is `--security-types S` (common stocks only), producing a universe of ~704 symbols
+
+Usage:
+
+```bash
+# Stocks only (default)
+uv run python scripts/build_universe.py --symbols-only
+
+# Stocks + ETFs
+uv run python scripts/build_universe.py --security-types S L --symbols-only
+
+# All types (original unfiltered behaviour)
+uv run python scripts/build_universe.py --security-types S F V W X P Q L U --symbols-only
 ```
-
-**Implementation notes (2026-04-07):**
-
-1. **Lazy instantiation replaces import-time singleton** — The Phase 1 `_DEFAULT_CONFIG` module-level
-   singleton has been removed. All three public functions now call `NormalizationConfig()` at invocation
-   time when `config is None`. This ensures `TVKIT_DEFAULT_EXCHANGE` set before a call is always
-   picked up, with no import-time ordering constraint.
-
-2. **Bare-ticker detection condition** — The resolution branch fires when `":"` is absent AND `"-"` is
-   absent AND `config.default_exchange` is not None. The `"-"` exclusion is intentional: dash-notation
-   symbols (e.g. `NASDAQ-AAPL`) are exchange-aware and must not be treated as bare tickers.
-
-3. **`NormalizationType.DEFAULT_EXCHANGE` priority** — Placed below `WHITESPACE_STRIP` but above
-   `DASH_TO_COLON`. A bare ticker with leading whitespace (e.g. `"  AAPL  "`) records `WHITESPACE_STRIP`
-   as the primary normalization type.
-
-4. **`used_default_exchange` flag** — A local boolean alongside the existing `used_dash_conversion`
-   flag in `_normalize_core`, keeping consistent structure.
-
-5. **Bare ticker + lowercase** — `"aapl"` with `default_exchange="NASDAQ"` → prepend gives
-   `"NASDAQ:aapl"` → uppercase gives `"NASDAQ:AAPL"`. Normalization type: `DEFAULT_EXCHANGE`.
-
-6. **`SettingsConfigDict(frozen=True)`** — Confirmed valid: `pydantic-settings` `SettingsConfigDict`
-   inherits from Pydantic's `ConfigDict`, so `frozen=True` is supported alongside `env_prefix`.
 
 ---
 
-### Phase 3: Integration with Existing tvkit Modules
+### Phase 1.5 — Price Cleaner
 
-**Status:** Complete — 2026-04-08
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.5-price-cleaner.md`
 
-**Goal:** Replace the `validate → convert` call pattern in public API methods with `normalize → validate`.
+**Goal:** Standardise raw OHLCV DataFrames so that all downstream signal calculations operate on clean, consistent data.
 
-**Current pattern (all six call sites in `ohlcv.py` at lines 610, 828, 1053, 1287, 1379, 1418):**
+**Deliverables:**
 
-```python
-await validate_symbols(exchange_symbol)         # raw input, normalisation happens after
-symbol_result = convert_symbol_format(exchange_symbol)
-converted_symbol: str = symbol_result.converted_symbol
+- [x] `src/csm/data/cleaner.py` — `PriceCleaner`
+  - [x] `def forward_fill_gaps(df: pd.DataFrame, max_gap_days: int = 5) -> pd.DataFrame`
+    - [x] Forward-fills NaN close prices for gaps of ≤ `max_gap_days` consecutive trading days
+    - [x] Gaps larger than `max_gap_days` are left as NaN (not filled)
+  - [x] `def drop_low_coverage(df: pd.DataFrame, min_coverage: float = MIN_DATA_COVERAGE, window_years: int = 1) -> pd.DataFrame | None`
+    - [x] Returns `None` if the symbol has > `(1 - min_coverage)` missing bars in any rolling year
+    - [x] Returns cleaned DataFrame otherwise
+  - [x] `def winsorise_returns(df: pd.DataFrame, lower: float = 0.01, upper: float = 0.99) -> pd.DataFrame`
+    - [x] Computes daily returns from `close`
+    - [x] Clips returns at `lower` / `upper` percentile
+    - [x] Back-computes and replaces extreme `close` values
+  - [x] `def clean(df: pd.DataFrame) -> pd.DataFrame | None`
+    - [x] Applies: `forward_fill_gaps` → `drop_low_coverage` → `winsorise_returns` in that order
+    - [x] Returns `None` if the symbol is dropped by `drop_low_coverage`
+- [x] Unit test: `forward_fill_gaps` fills a 3-day gap; leaves last day of a 6-day gap unfilled
+- [x] Unit test: `drop_low_coverage` returns `None` for a symbol with 25% missing in one year
+- [x] Unit test: `drop_low_coverage` returns DataFrame for a symbol with 15% missing
+- [x] Unit test: `winsorise_returns` clips extreme return outliers to percentile bounds
+- [x] Unit test: `clean` returns `None` when symbol fails coverage check
+- [x] Unit test: `clean` applies all steps in correct order
+
+**Implementation notes:**
+
+- Existing wide-matrix API replaced with per-symbol OHLCV API (one DataFrame per symbol)
+- `compute_returns` removed — not in Phase 1.5 spec; log-return reconstruction replaced with
+  arithmetic pct_change for clarity and correctness of back-computed close values
+- `drop_low_coverage` short-history guard: if `len(df) < window_years * 252`, checks full-series
+  coverage instead of rolling window to avoid incorrectly dropping partially-populated stores
+- `forward_fill_gaps` applies `ffill(limit=max_gap_days)` to all OHLCV columns (not just close)
+  to keep rows internally consistent for suspended-trading gaps
+- Only `close` column is modified by `winsorise_returns`; open/high/low/volume are unchanged
+
+---
+
+### Phase 1.6 — Bulk Fetch Script
+
+**Status:** `[x]` Complete — 2026-04-22
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.6-bulk-fetch-script.md`
+
+**Goal:** Provide a single idempotent entry point that fetches 20 years of daily history for all universe symbols and writes them to `data/raw/`.
+
+**Deliverables:**
+
+- [x] `scripts/fetch_history.py`
+  - [x] Reads `data/universe/symbols.json` for the candidate symbol list; exits 1 if missing, malformed, or empty
+  - [x] Initialises `OHLCVLoader` and `ParquetStore(data/raw/)`
+  - [x] Skips symbols where `store.exists(symbol)` is already `True` (idempotent)
+  - [x] Fetches in batches using `OHLCVLoader.fetch_batch()` with concurrency from `Settings`
+  - [x] Saves each successfully fetched DataFrame via `ParquetStore.save()`; `StoreError` counted as failure
+  - [x] Logs progress: symbols attempted / succeeded / failed
+  - [x] Exits 1 if failure rate > `--failure-threshold` (default 0.1); configurable at CLI
+  - [x] Writes `data/raw/fetch_failures.json` on failure; deletes stale file on zero-failure success
+  - [x] Exits 1 immediately when `Settings.public_mode=True`
+- [x] Unit tests: `tests/unit/scripts/test_fetch_history.py` — 18 tests, all passing
+- [ ] Run script manually; verify `data/raw/` populated with ≥ 400 parquet files
+- [ ] Re-run script; verify no symbols are re-fetched (idempotent check)
+
+**Implementation notes:**
+
+- `_SymbolsFile(BaseModel)` with `symbols: list[StrictStr]` — Pydantic strict validation rejects non-list and non-string elements
+- Store key passed as raw symbol string (e.g. `"SET:AOT"`); `ParquetStore` applies `urllib.parse.quote` internally — no pre-encoding in this script
+- All file I/O wrapped with `asyncio.to_thread()` for async compliance; `store.exists()` kept synchronous (simple `path.is_file()`, matches `build_universe.py` pattern)
+- CLI validated at parse time: `_positive_int()` and `_unit_float()` type converters produce exit code 2 for out-of-range values
+- `raw_dir.mkdir(parents=True, exist_ok=True)` called explicitly at startup, before `ParquetStore` init, to guarantee the failures file path exists
+- `run_timestamp` captured at `main()` entry and embedded in `fetch_failures.json` for auditability
+- `importlib.util.spec_from_file_location` used in tests to bypass pytest package namespace collision with `tests/unit/scripts/` directory
+
+**Usage:**
+
+```bash
+# Activate environment and set credentials
+uv sync --all-groups
+cp .env.example .env
+# Edit .env: set CSM_PUBLIC_MODE=false, tvkit browser session credentials
+
+uv run python scripts/fetch_history.py
+# Expected output:
+# Found 412 symbols in universe
+# Skipping 0 already-fetched symbols
+# Fetching 412 symbols...
+# Completed: 410 succeeded, 2 failed
+# Failed symbols logged to data/raw/fetch_failures.json
 ```
 
-**Target pattern (Phase 3):**
+---
 
-```python
-canonical: str = normalize_symbol(exchange_symbol)   # pure-string, zero I/O
-await validate_symbols(canonical)                    # always receives canonical form
-```
+### Phase 1.7 — Data Quality Check
 
-**Call sites to migrate:**
+**Status:** `[x]` Complete — 2026-04-23
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.7-data-quality-check.md`
 
-| File | Lines | Change |
+**Goal:** Human sign-off that the raw data is fit for signal research. The notebook is the Phase 1 exit gate.
+
+**Deliverables:**
+
+- [x] `notebooks/01_data_exploration.ipynb`
+  - [x] **Missing data heatmap** — symbols × years, colour = fraction missing; identify systematic gaps
+  - [x] **Annual cross-sectional return distribution** — per-symbol annual return (year-end/year-start close − 1); box-plot distribution across symbols per year; flag extreme outliers
+  - [x] **Liquidity distribution** — histogram of avg daily turnover (THB); annotate `MIN_AVG_DAILY_VOLUME` threshold
+  - [x] **Survivorship bias / fetch completeness audit** — compare `symbols.json` vs raw store; top-10 symbols by calendar history length; limitation documented (not a full delisting audit)
+  - [x] **Universe size over time** — symbols passing all Phase 1.4 filters per rebalance date (loaded from dated snapshots); target ≥ 400 at recent dates
+  - [x] **Data coverage summary** — % of universe bucketed by literal calendar history length: ≥ 15Y, 10–15Y, < 10Y
+  - [x] Final sign-off cell: print PASS/FAIL for all 6 exit criteria using imported constants
+
+**Implementation notes:**
+
+- Annual returns are cross-sectional (one scalar per symbol per year), not daily return time-series grouped by year
+- Coverage denominator is `min(total_bars, LOOKBACK_YEARS × 252)` — consistent with `UniverseBuilder.filter()`
+- Coverage summary Section 6 buckets by literal calendar history length (`(last − first).days / 365.25`), not bar count, to avoid mislabeling
+- Universe snapshot keys: `universe_store = ParquetStore(data/universe/)`; keys are `"universe/{YYYY-MM-DD}"` (file path: `data/universe/universe/{YYYY-MM-DD}.parquet`)
+- All markdown cells written in Thai per project convention
+- Notebook gracefully handles empty `data/raw/` with `⚠ DATA NOT AVAILABLE` guards per section
+- Pre-existing format violations in `src/csm/data/__init__.py` and `src/csm/data/exceptions.py` (missing trailing newline) fixed as part of this commit
+- Pre-existing failures: 4 integration API tests and `test_regime_transitions_on_known_price_series` — unrelated to Phase 1.7; all 50 Phase 1 unit tests pass
+
+---
+
+### Phase 1.8 — Dividend Adjustment
+
+**Status:** `[x]` Complete — 2026-04-24
+**Plan:** `docs/plans/phase1_data_pipeline/phase1.8-dividend-adjustment.md`
+**Depends On:** Phase 1.3 (OHLCVLoader), Phase 1.6 (fetch_history.py), Phase 1.7 (data quality sign-off)
+
+**Goal:** Re-fetch all SET universe symbols using `Adjustment.DIVIDENDS` (tvkit ≥ 0.11.0) so that historical OHLCV price series reflect total-return (cash dividend-adjusted) prices. Correct dividend adjustment is a prerequisite for accurate momentum signal calculation and long-term backtesting of dividend-paying stocks.
+
+**Background:** tvkit v0.11.0 introduced the `Adjustment` enum with two members:
+
+| Member | Value | Description |
 |---|---|---|
-| `tvkit/api/chart/ohlcv.py` | 610, 828, 1053, 1287, 1379, 1418 | Replace validate+convert with normalize+validate |
+| `Adjustment.SPLITS` | `"splits"` | Split-adjusted only — default; identical to all pre-v0.11.0 behaviour |
+| `Adjustment.DIVIDENDS` | `"dividends"` | Total-return prices — every prior bar is backward-adjusted so that each cash dividend payment is deducted from all earlier closing prices |
 
-**Deprecation of public API surface:**
+All data fetched in Phases 1.3–1.6 used the implicit `Adjustment.SPLITS` default. For long-term momentum backtesting on SET stocks (many of which pay regular dividends), using unadjusted-for-dividends prices introduces look-ahead bias in the return series and understates historical performance.
 
-`convert_symbol_format` and `SymbolConversionResult` are both public exports today (`tvkit/api/utils/__init__.py` lines 33, 41, 52). Deprecation covers both:
+**Deliverables:**
 
-```python
-# tvkit/api/utils/symbol_validator.py
-def convert_symbol_format(...) -> ...:
-    import warnings
-    warnings.warn(
-        "convert_symbol_format is deprecated and will be removed in a future major version. "
-        "Use tvkit.symbols.normalize_symbol instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    ...
+- [ ] `pyproject.toml` — bump `tvkit` dependency to `>=0.11.0`
+- [ ] `src/csm/config/settings.py` — add `tvkit_adjustment: str = "dividends"` field
+- [ ] `src/csm/data/loader.py` — add `adjustment` parameter to `fetch()` and `fetch_batch()`; import and use `Adjustment` enum from tvkit
+- [ ] `scripts/fetch_history.py` — add `--adjustment {splits,dividends}` CLI flag; store data under adjustment-scoped subdirectory (`data/raw/splits/` or `data/raw/dividends/`); default `dividends`
+- [ ] `scripts/build_universe.py` — add `--adjustment` flag so universe filter reads from the correct raw store path
+- [ ] `src/csm/data/universe.py` — `UniverseBuilder.__init__` accepts explicit `raw_store: ParquetStore` (already the case); callers updated to pass adjustment-scoped store
+- [ ] Unit tests — update/add for all changed modules
+- [ ] Re-run `fetch_history.py --adjustment dividends` — populate `data/raw/dividends/` with ≥ 400 symbols
+- [ ] `notebooks/01_data_exploration.ipynb` — add Section 7: Price Adjustment Verification (split vs. dividend-adjusted close comparison for a sample high-dividend SET stock)
+
+**Storage Layout after Phase 1.8:**
+
+```
+data/raw/
+├── splits/        ← legacy Phase 1.6 data (split-adjusted, backward-compat)
+│   └── SET%3AAOT.parquet
+└── dividends/     ← Phase 1.8 re-fetch (total-return adjusted — default going forward)
+    └── SET%3AAOT.parquet
 ```
 
-```python
-# tvkit/api/utils/models.py  — SymbolConversionResult
-class SymbolConversionResult(BaseModel):
-    """
-    .. deprecated::
-        Use tvkit.symbols.NormalizedSymbol instead.
-        SymbolConversionResult will be removed in a future major version.
-    """
-    ...
-```
+The existing `data/raw/` files produced in Phase 1.6 are renamed to `data/raw/splits/` via a one-time migration step in the script.
 
-**Deliverables:**
+**Implementation notes:**
 
-- [x] Migrated all six call sites in `ohlcv.py`
-- [x] `warnings.warn(DeprecationWarning)` in `convert_symbol_format`
-- [x] Deprecation docstring on `SymbolConversionResult`
-- [x] `docs/development/migration-symbol-normalization.md` — migration guide for `convert_symbol_format` → `normalize_symbol` and `SymbolConversionResult` → `NormalizedSymbol`
-- [x] `tests/test_ohlcv_symbol_integration.py` — integration tests for normalization ordering and deprecation warnings
-- [x] Phase plan: `docs/plans/symbol_normalization_layer/phase3-integration-with-modules.md`
-
-**Implementation notes (2026-04-08):**
-
-1. **Six call sites migrated** — five single-symbol (`_fetch_range_bars`, `_fetch_count_bars`,
-   `get_ohlcv`, `get_quote_data`, `get_ohlcv_raw`) and one multi-symbol (`get_latest_trade_info`).
-   All `converted_symbol` local variables renamed to `canonical`; multi-symbol path uses
-   `normalize_symbols` + `validate_symbols(list)`.
-
-2. **Scanner service unchanged** — a codebase search confirmed no `convert_symbol_format` or
-   `validate_symbols` call sites in `tvkit/api/scanner/`. Scanner symbols are passed directly as
-   filter values to TradingView's API; client-side normalization was not applied there.
-
-3. **`# type: ignore` comments removed** — the old pattern required type narrowing via
-   `# type: ignore` on `.converted_symbol` access. `normalize_symbol` returns `str` directly,
-   eliminating all type ignores at the migrated call sites.
-
-4. **Error type clarification** — `SymbolNormalizationError` is now raised for format errors
-   before any I/O. `ValueError` from `validate_symbols` still applies for well-formed symbols
-   not found in TradingView. The migration guide covers this distinction.
-
-5. **`DeprecationWarning` stacklevel=2** — warning points to the caller's code, following the
-   standard Python convention.
-
----
-
-### Phase 4: Documentation & Examples
-
-**Status:** Complete — 2026-04-08
-
-**Deliverables:**
-
-- [x] `docs/reference/symbols/normalizer.md` — Phase scope table updated; Phase 3 items marked complete
-- [x] `docs/concepts/symbols.md` — "Dash-to-Colon" section replaced with "Symbol Normalization" section; Validation paragraph updated to show normalize → validate ordering; See Also updated
-- [x] `docs/guides/symbol-normalization.md` — New step-by-step workflow guide
-- [x] `examples/symbol_normalization_example.py` — Extended with `phase3_ohlcv_integration_pattern()` demonstrating the normalize → validate pattern via `unittest.mock`
-- [x] `CHANGELOG.md` — v0.8.0 entry: Added `tvkit.symbols`, Changed `OHLCV` call ordering, Deprecated `convert_symbol_format` and `SymbolConversionResult`
-- [x] Phase plan: `docs/plans/symbol_normalization_layer/phase4-documentation-examples.md`
-
-**Implementation notes (2026-04-08):**
-
-1. **Example extended, not replaced** — `examples/symbol_normalization_example.py` (Phase 2)
-   was extended with a `phase3_ohlcv_integration_pattern()` function rather than creating a
-   second normalization example. The new function uses `unittest.mock.AsyncMock` to patch
-   `validate_symbols`, keeping the example runnable without a live network connection.
-
-2. **`docs/development/migration-symbol-normalization.md` unchanged** — Reviewed and confirmed
-   that the migration guide (created in Phase 3) already reflects the final API, error type
-   changes, and deprecation timeline. No Phase 4 edits were required.
-
-3. **CHANGELOG version bump deferred** — `pyproject.toml` version remains `0.7.0`; the
-   CHANGELOG `[0.8.0]` entry is authored now so Phase 5 only confirms rather than drafts the
-   release notes.
-
-4. **`docs/concepts/symbols.md`** — The pre-Phase 4 "Dash-to-Colon Automatic Conversion"
-   section described `convert_symbol_format` behaviour implicitly. It has been replaced with
-   a "Symbol Normalization" section that names `tvkit.symbols.normalize_symbol` explicitly
-   and cross-links the reference doc and the new guide.
-
----
-
-### Phase 5: Release Preparation
-
-**Status:** Complete — 2026-04-08
-
-**Goal:** Verify the branch is clean, all gates pass, deprecated APIs remain backward-compatible, and the feature is ready to merge and publish.
-
-**Deliverables:**
-
-- [x] Finalize `CHANGELOG.md` — confirm entry is complete, version-bumped, and follows existing format
-- [x] Verify `docs/development/migration-symbol-normalization.md` is accurate and covers both `convert_symbol_format → normalize_symbol` and `SymbolConversionResult → NormalizedSymbol`
-- [x] Run full quality gate:
-
-  ```bash
-  uv run ruff check . && uv run ruff format . && uv run mypy tvkit/
-  ```
-
-- [x] Run full test suite:
-
-  ```bash
-  uv run python -m pytest tests/ -v
-  ```
-
-- [x] Confirm deprecated APIs still importable with `DeprecationWarning` (not removed):
-
-  ```python
-  import warnings
-  with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      from tvkit.api.utils import convert_symbol_format, SymbolConversionResult
-      assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
-  ```
-
-- [x] Prepare release notes — summarize user-facing changes, migration path, and new public API surface
-- [x] Push feature branch to GitHub:
-
-  ```bash
-  git push origin feature/symbol-normalization-layer
-  ```
-
-- [x] Open pull request targeting `main` using the PR template in [Commit & PR Templates](#commit--pr-templates)
-
-**Implementation notes (2026-04-08):**
-
-1. **Version bump** — `pyproject.toml` updated from `0.7.0` → `0.8.0`.
-
-2. **Quality gates — all clean on first run:**
-   - `ruff check .` — All checks passed
-   - `ruff format .` — 82 files left unchanged
-   - `mypy tvkit/` — Success: no issues found in 55 source files
-   - `pytest tests/ -v` — 763 passed, 2 skipped, 0 failed (34.33s)
-
-3. **Backward compatibility confirmed** — `convert_symbol_format("NASDAQ-AAPL")` emits exactly one
-   `DeprecationWarning` pointing callers to `tvkit.symbols.normalize_symbol`. `SymbolConversionResult`
-   remains importable without removal.
-
-4. **PyPI publication** — Package published to production PyPI as `tvkit==0.8.0` via `scripts/publish.sh`.
-
-5. **Phase plan** — `docs/plans/symbol_normalization_layer/phase5-release-preparation.md` created with
-   full prompt, scope, checklist, quality gate results, and completion notes.
+- `Adjustment(StrEnum)` defined locally in `loader.py` — mirrors the API planned for tvkit v0.11.0 (not yet released at time of implementation; tvkit was at 0.6.0). When tvkit 0.11.0 ships: swap the local enum for the tvkit import, bump `pyproject.toml` to `>=0.11.0`, and add `adjustment=adj_enum` to the `client.get_historical_ohlcv()` call.
+- `Settings.tvkit_adjustment: str` (not `Adjustment` enum) to avoid circular import from `settings.py` → `loader.py`; validated with a `field_validator` against `{"splits", "dividends"}`.
+- `fetch_history.py` `--adjustment` defaults to `None`; resolved at runtime via `args.adjustment or settings.tvkit_adjustment` so the env var `CSM_TVKIT_ADJUSTMENT` is always respected when the CLI flag is omitted.
+- `_migrate_legacy_raw()` uses `Path.glob("*.parquet")` (top-level only, not recursive) so files already inside `splits/` or `dividends/` subdirs are never double-migrated. The function is idempotent and safe to call on a non-existent directory.
+- `build_universe.py` uses `args.adjustment or settings.tvkit_adjustment` (same pattern) so universe snapshots always filter against the correct raw store.
+- Notebook setup cell (cell `b87d2106`) detects the adjusted layout automatically: prefers `data/raw/splits/` if populated, falls back to `data/raw/` for pre-migration repos.
+- 22 new unit tests added (8 settings, 7 loader, 7 fetch_history); 77 total pass, 1 pre-existing failure (`test_regime_transitions_on_known_price_series` — unrelated to Phase 1.8).
+- Actual dividend-adjusted prices deferred: `data/raw/dividends/` will contain total-return data only after tvkit 0.11.0 ships and `fetch_history.py --adjustment dividends` is re-run. Until then, both stores reflect split-adjusted prices.
 
 ---
 
 ## Data Models
 
-### `NormalizationType` Enum
+### `Settings`
 
 ```python
-from enum import Enum
-
-class NormalizationType(str, Enum):
-    ALREADY_CANONICAL = "already_canonical"   # NASDAQ:AAPL → NASDAQ:AAPL (only uppercased)
-    DASH_TO_COLON     = "dash_to_colon"       # NASDAQ-AAPL → NASDAQ:AAPL
-    UPPERCASE_ONLY    = "uppercase_only"      # nasdaq:aapl → NASDAQ:AAPL
-    WHITESPACE_STRIP  = "whitespace_strip"    # "  NASDAQ:AAPL  " → NASDAQ:AAPL (+ uppercase)
-    DEFAULT_EXCHANGE  = "default_exchange"    # AAPL + config → NASDAQ:AAPL (Phase 2)
-```
-
-### `NormalizedSymbol` Model
-
-```python
-class NormalizedSymbol(BaseModel):
-    """Result model returned by normalize_symbol_detailed()."""
-
-    model_config = ConfigDict(frozen=True)
-
-    canonical: str = Field(
-        description="Canonical TradingView symbol in EXCHANGE:SYMBOL format (uppercase)."
-    )
-    exchange: str = Field(
-        description="Exchange component of the canonical symbol (e.g. 'NASDAQ')."
-    )
-    ticker: str = Field(
-        description="Ticker component of the canonical symbol (e.g. 'AAPL')."
-    )
-    original: str = Field(
-        description="Original input string before normalization."
-    )
-    normalization_type: NormalizationType = Field(
-        description="Classification of transformation applied."
-    )
-```
-
-### `NormalizationConfig` Model
-
-**Phase 1** — plain `BaseModel`, no env var support:
-
-```python
-from pydantic import BaseModel, ConfigDict, Field
-
-class NormalizationConfig(BaseModel):
-    """Configuration for symbol normalization behavior."""
-
-    model_config = ConfigDict(frozen=True)
-
-    default_exchange: str | None = Field(
-        default=None,
-        description=(
-            "Exchange to use when no prefix is present in the symbol (e.g. 'NASDAQ'). "
-            "Phase 2: also readable from TVKIT_DEFAULT_EXCHANGE environment variable."
-        ),
-    )
-    strip_whitespace: bool = Field(
-        default=True,
-        description="Whether to strip leading/trailing whitespace before normalization.",
-    )
-```
-
-**Phase 2** — upgraded to `BaseSettings` with `pydantic-settings`:
-
-```python
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class NormalizationConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TVKIT_")
-    default_exchange: str | None = Field(default=None, ...)
-    strip_whitespace: bool = Field(default=True, ...)
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="CSM_",
+        env_file=".env",
+        frozen=True,
+    )
+
+    public_mode: bool = False
+    results_dir: Path = Path("./results")
+    data_dir: Path = Path("./data")
+    tvkit_concurrency: int = 5
+    tvkit_retry_attempts: int = 3
+    log_level: str = "INFO"
+```
+
+### OHLCV DataFrame Contract
+
+All DataFrames passed between pipeline stages must conform to this schema. This is the approved internal exception to the general Pydantic-first rule: OHLCV history remains a DataFrame because the pipeline's storage, cleaning, and analytical operations are fundamentally columnar and vectorised. Validation still happens at the boundary by enforcing the schema below before data is persisted or handed to the next stage.
+
+| Field | Type | Constraint |
+|---|---|---|
+| Index | `DatetimeIndex` | UTC, name = `"datetime"`, freq inferred |
+| `open` | `float64` | > 0 |
+| `high` | `float64` | ≥ `open`, ≥ `close` |
+| `low` | `float64` | ≤ `open`, ≤ `close` |
+| `close` | `float64` | > 0 |
+| `volume` | `float64` | ≥ 0 |
+
+### `DataAccessError`
+
+```python
+class DataAccessError(Exception):
+    """
+    Raised by OHLCVLoader when Settings.public_mode is True.
+
+    In public mode the system has no tvkit credentials and must not
+    attempt any live data fetch. Consumers should read from results/.
+    """
 ```
 
 ---
 
 ## Error Handling Strategy
 
-### `SymbolNormalizationError`
-
-```python
-class SymbolNormalizationError(ValueError):
-    """
-    Raised when a symbol string cannot be normalized to canonical EXCHANGE:SYMBOL form.
-
-    Attributes:
-        original: The original symbol string that failed normalization.
-        reason: Human-readable explanation of why normalization failed.
-    """
-
-    def __init__(self, original: str, reason: str) -> None:
-        self.original = original
-        self.reason = reason
-        super().__init__(f"Cannot normalize '{original}': {reason}")
-```
-
-### Error Conditions
-
-| Condition | `reason` message |
+| Scenario | Behaviour |
 |---|---|
-| Empty string | `"symbol must not be empty"` |
-| Whitespace-only string | `"symbol must not be empty after stripping whitespace"` |
-| No exchange prefix and `default_exchange` is None | `"no exchange prefix"` |
-| Multiple `:` separators | `"symbol contains multiple ':' separators"` |
-| Symbol contains whitespace after stripping | `"symbol must not contain internal whitespace"` |
-| Ticker component empty after normalization | `"ticker component must not be empty after normalization"` |
-| Exchange component empty after normalization | `"exchange component must not be empty after normalization"` |
-| Characters outside `[A-Z0-9]` in either component | `"symbol components must contain only uppercase letters and digits"` |
+| `public_mode=True` and fetch attempted | `DataAccessError` raised immediately; no network call |
+| Single symbol fetch hits timeout, connection drop, or upstream transport failure | Retry up to `tvkit_retry_attempts`; log warning on each attempt |
+| Single symbol fetch fails validation, receives malformed payload, or is called with bad input | Fail immediately; log error; no retry |
+| Single symbol fetch fails after all retries | Log error; symbol absent from `fetch_batch` result; batch continues |
+| Batch failure rate > 10% | `fetch_history.py` exits with non-zero status; partial results preserved |
+| `ParquetStore.load` called for missing key | `KeyError` raised with descriptive message |
+| `PriceCleaner.clean` drops symbol | Returns `None`; caller must check and skip |
+| `UniverseBuilder.filter` called with no raw data for symbol | Returns `False` (symbol excluded from universe) |
+
+Retryable failures must be limited to explicitly transient cases exposed by the async HTTP / WebSocket stack used by `tvkit` such as timeouts, connection resets, or temporary upstream unavailability. Non-retryable failures include schema validation failures, symbol-format errors, impossible OHLCV invariants, and other defects that require code or input correction.
+
+### Logging Convention
+
+All pipeline components use Python's standard `logging` module with logger names matching the module path (e.g. `csm.data.loader`). Log level is driven by `Settings.log_level`. Scripts configure `basicConfig` at startup; library code never calls `basicConfig`.
 
 ---
 
@@ -659,79 +633,29 @@ class SymbolNormalizationError(ValueError):
 
 ### Coverage Target
 
-100% line and branch coverage for `tvkit/symbols/`.
+Minimum 90% line coverage across `src/csm/` for Phase 1 changes, with 100% coverage expected for new public APIs introduced in this phase. Phase 1 unit tests should cover all branches in the storage layer and cleaner; the loader's async paths require mocking tvkit.
 
-### Test File
+### Mocking Strategy
 
-`tests/test_symbols_normalizer.py`
+- `OHLCVLoader` tests: mock `tvkit.OHLCV.get_historical_ohlcv` with `unittest.mock.AsyncMock`
+- `ParquetStore` tests: use `tmp_path` pytest fixture for isolated temp directories
+- `UniverseBuilder` tests: use synthetic DataFrames with known properties
+- `PriceCleaner` tests: construct DataFrames with deliberate gaps/outliers
 
-### Test Categories
+### Test File Map
 
-**Happy path — all Phase 1 normalization variants:**
+| Module | Test file |
+|---|---|
+| `src/csm/config/settings.py` | `tests/config/test_settings.py` |
+| `src/csm/data/store.py` | `tests/data/test_store.py` |
+| `src/csm/data/loader.py` | `tests/data/test_loader.py` |
+| `src/csm/data/universe.py` | `tests/data/test_universe.py` |
+| `src/csm/data/cleaner.py` | `tests/data/test_cleaner.py` |
 
-```python
-@pytest.mark.parametrize("input_sym,expected", [
-    ("NASDAQ:AAPL",     "NASDAQ:AAPL"),    # already canonical
-    ("nasdaq:aapl",     "NASDAQ:AAPL"),    # lowercase
-    ("NASDAQ-AAPL",     "NASDAQ:AAPL"),    # dash notation
-    ("nasdaq-aapl",     "NASDAQ:AAPL"),    # dash + lowercase
-    ("BINANCE:BTCUSDT", "BINANCE:BTCUSDT"),
-    ("binance:btcusdt", "BINANCE:BTCUSDT"),
-    ("  NASDAQ:AAPL  ", "NASDAQ:AAPL"),    # whitespace padding
-    ("INDEX:NDFI",      "INDEX:NDFI"),     # index symbol
-    ("USI:PCC",         "USI:PCC"),        # macro indicator
-    ("FOREXCOM:EURUSD", "FOREXCOM:EURUSD"),
-])
-def test_normalize_symbol_happy_path(input_sym, expected): ...
-```
+### Integration Tests
 
-**Edge cases:**
-
-```python
-def test_normalize_symbol_single_character_ticker(): ...     # e.g., "NYSE:A"
-def test_normalize_symbol_numeric_ticker(): ...              # e.g., "HKEX:700"
-def test_normalize_symbol_long_exchange_name(): ...          # e.g., "FOREXCOM:EURUSD"
-def test_normalize_symbols_empty_list_returns_empty(): ...
-def test_normalize_symbols_preserves_input_order(): ...
-def test_normalize_symbols_one_to_one_no_dedup(): ...        # duplicate inputs → duplicate outputs
-```
-
-**Error conditions:**
-
-```python
-def test_normalize_symbol_empty_string_raises(): ...
-def test_normalize_symbol_whitespace_only_raises(): ...
-def test_normalize_symbol_bare_ticker_no_config_raises(): ...
-def test_normalize_symbol_multiple_colons_raises(): ...
-def test_normalize_symbol_internal_whitespace_raises(): ...
-def test_normalize_symbol_empty_exchange_component_raises(): ...
-def test_normalize_symbol_empty_ticker_component_raises(): ...
-def test_normalize_symbol_special_characters_raises(): ...
-```
-
-**`normalize_symbols` raises on first error:**
-
-```python
-def test_normalize_symbols_raises_on_first_invalid(): ...
-# ["NASDAQ:AAPL", "INVALID"] → raises on second symbol
-```
-
-**Detailed model:**
-
-```python
-def test_normalize_symbol_detailed_dash_notation(): ...
-def test_normalize_symbol_detailed_normalization_type(): ...
-def test_normalize_symbol_detailed_exchange_ticker_split(): ...
-def test_normalize_symbol_detailed_already_canonical(): ...
-```
-
-**Config model (Phase 2 tests, separate file `test_symbols_config.py`):**
-
-```python
-def test_normalize_symbol_bare_ticker_with_default_exchange(): ...
-def test_normalization_config_env_var(monkeypatch): ...  # TVKIT_DEFAULT_EXCHANGE
-def test_normalization_config_default_exchange_none_raises(): ...
-```
+- Mark with `@pytest.mark.integration` and skip in CI via `pytest -m "not integration"`
+- `tests/data/test_loader_integration.py` — live fetch of `SET:SET` 1D 100 bars (requires credentials)
 
 ---
 
@@ -739,191 +663,97 @@ def test_normalization_config_default_exchange_none_raises(): ...
 
 | Criterion | Measure |
 |---|---|
-| All Phase 1 inputs normalize deterministically | 100% parametrized test pass rate |
-| No I/O in Phase 1 | Zero network calls (no mocking required) |
-| `SymbolNormalizationError` raised on all ambiguous inputs | All error-condition tests pass |
-| `normalize_symbols` is 1:1 (no deduplication) | Verified by `test_normalize_symbols_one_to_one_no_dedup` |
-| Test coverage | 100% line + branch for `tvkit/symbols/` |
-| Type checking | `uv run mypy tvkit/symbols/` exits 0 |
-| Linting | `uv run ruff check tvkit/symbols/` exits 0 |
-| Phase 3 normalization ordering | `normalize_symbol` runs before `validate_symbols` in all six `ohlcv.py` call sites |
-| Backward compatibility | `convert_symbol_format` and `SymbolConversionResult` remain importable with `DeprecationWarning` |
-| API documented | `docs/reference/symbols/normalizer.md` complete |
-| Migration guide published | `docs/development/migration-symbol-normalization.md` covers both deprecated symbols |
+| Clean parquet for ≥ 400 SET symbols | `len(store.list_keys())` in `data/raw/` |
+| ≥ 15 years daily history for index | `SET:SET` parquet spans 2009-01-01 to present |
+| Pipeline is idempotent | Re-running `fetch_history.py` fetches 0 new symbols |
+| Public mode guard works | `DataAccessError` raised; no network call when `public_mode=True` |
+| All unit tests pass | `uv run pytest tests/ -v -m "not integration"` exits 0 |
+| Type checking clean | `uv run mypy src/` exits 0 |
+| Linting clean | `uv run ruff check src/ scripts/` exits 0 |
+| Data quality notebook signed off | All exit-criteria cells in `01_data_exploration.ipynb` print `PASS` |
+| Universe ≥ 400 symbols at recent dates | `build_universe.py` log shows ≥ 400 symbols passing filters |
+| No raw prices in `results/` | `.gitignore` excludes `data/`; only derived metrics in `results/` |
 
 ---
 
 ## Future Enhancements
 
-- **Bare-ticker resolution via exchange registry** (Phase 2) — resolve `AAPL` to `NASDAQ:AAPL` via a bundled JSON registry; no network required
-- **Crypto slash-pair normalization** (Phase 2) — `BTC/USDT` → `BINANCE:BTCUSDT` via configurable crypto exchange preference
-- **Async batch normalization with validation** — combine `normalize_symbols` + `validate_symbols` into a single async pipeline for batch downloads
-- **Symbol aliasing** — allow users to define custom aliases (`"apple"` → `"NASDAQ:AAPL"`) via config
-
----
-
-## Issue Description
-
-> The following is the GitHub issue description for this feature, prepared using the project's Feature Request template.
-
----
-
-**Title:** `[Feature] Add tvkit.symbols — canonical symbol normalization layer`
-
-**Labels:** `enhancement`
-
----
-
-### Feature category
-
-- [x] Chart / OHLCV API
-- [ ] Scanner API
-- [ ] WebSocket / streaming
-- [ ] Data export / processing
-- [ ] Documentation
-- [x] Other — new `tvkit.symbols` module (Core Data Infrastructure)
-
----
-
-### Problem statement
-
-TradingView instruments can appear in multiple string representations: colon-separated canonical form (`NASDAQ:AAPL`), lowercase variants (`nasdaq:aapl`), dash-separated (`NASDAQ-AAPL`), and whitespace-padded inputs (`  NASDAQ:AAPL  `).
-
-There is currently no single, authoritative function in tvkit that maps these representations to one canonical form. As a result:
-
-- Cache keys diverge: `NASDAQ:AAPL` and `nasdaq:aapl` refer to the same instrument but hash differently, producing duplicate cache entries
-- Batch download deduplication fails silently when the same symbol appears in mixed formats
-- Storage paths created by `DataExporter` are inconsistent
-- `validate_symbols` called with raw lowercase input (e.g. `nasdaq:aapl`) runs an HTTP round-trip on an un-normalized string; format correction currently happens only after network validation
-
-The existing `convert_symbol_format` helper handles only dash → colon conversion, does not uppercase, is not a public API, and is called after validation rather than before it.
-
----
-
-### Use case
-
-I am building a multi-symbol historical data pipeline that:
-
-1. Reads a watchlist containing symbols in mixed formats (`NASDAQ:AAPL`, `nasdaq-aapl`, `BINANCE:BTCUSDT`)
-2. Fetches historical bars using `OHLCV.get_historical_ohlcv()`
-3. Caches results on disk keyed by symbol
-4. Exports to Parquet, partitioned by symbol
-
-Without a normalization layer, step 3 produces duplicate cache entries for the same instrument when the same symbol appears in different formats. I currently work around this by applying my own uppercase + colon-replacement before every API call — but this is fragile and not reusable across projects.
-
----
-
-### Proposed solution
-
-Add a new public module `tvkit.symbols` with a `normalize_symbol()` function that accepts any exchange-aware symbol variant and returns the canonical `EXCHANGE:SYMBOL` string (uppercase, colon-separated).
-
-```python
-from tvkit.symbols import normalize_symbol, normalize_symbols, SymbolNormalizationError
-
-# All of these return "NASDAQ:AAPL"
-normalize_symbol("NASDAQ:AAPL")
-normalize_symbol("nasdaq:aapl")
-normalize_symbol("NASDAQ-AAPL")
-normalize_symbol("  NASDAQ:AAPL  ")
-
-# Batch normalization — 1:1, preserves order
-normalize_symbols(["NASDAQ:AAPL", "BINANCE:btcusdt"])
-# → ["NASDAQ:AAPL", "BINANCE:BTCUSDT"]
-
-# Detailed result with metadata
-from tvkit.symbols import normalize_symbol_detailed
-result = normalize_symbol_detailed("NASDAQ-AAPL")
-print(result.canonical)          # "NASDAQ:AAPL"
-print(result.normalization_type) # NormalizationType.DASH_TO_COLON
-
-# Ambiguous input raises a clear error
-try:
-    normalize_symbol("AAPL")   # no exchange prefix
-except SymbolNormalizationError as exc:
-    print(exc)  # "Cannot normalize 'AAPL': no exchange prefix"
-```
-
-The function is **synchronous** (pure string transformation, no I/O), so it can be used in both sync and async contexts — including DataFrame column normalization, logging formatters, and dict key construction.
-
-Internally, all public OHLCV methods will be updated so that `normalize_symbol` runs **before** `validate_symbols`, ensuring the HTTP round-trip always receives a canonical string.
-
----
-
-### Alternatives considered
-
-**1. Continue with `convert_symbol_format`**
-Only handles dash → colon. Does not uppercase. Does not handle whitespace. Not a public API. Called after validation, not before. Insufficient.
-
-**2. Ad-hoc normalization per call site**
-Already the status quo — produces inconsistent behavior and is the root cause of the problem this feature solves.
-
-**3. Async normalization function**
-Unnecessary for pure-string operations and would block use in synchronous contexts. Network-backed validation (`validate_symbols`) remains separate and async.
-
----
-
-### TradingView reference (if applicable)
-
-TradingView's canonical symbol format is used throughout their WebSocket protocol — all instrument references use `EXCHANGE:SYMBOL` (uppercase, colon-separated). Examples: `NASDAQ:AAPL`, `BINANCE:BTCUSDT`, `INDEX:NDFI`, `FOREXCOM:EURUSD`.
-
----
-
-### Additional context
-
-- This is the first item in the **Core Data Infrastructure** track on the tvkit roadmap (`docs/roadmap.md`)
-- It is a prerequisite for the Data Caching Layer and the Async Batch Downloader (both planned)
-- Phase 1 adds no new runtime dependencies — uses only `pydantic` (already declared)
-- Phase 2 will add `pydantic-settings` to `pyproject.toml` for env var support (`TVKIT_DEFAULT_EXCHANGE`)
-- The existing `convert_symbol_format` function and `SymbolConversionResult` model will be deprecated (not removed) once Phase 3 ships, preserving backward compatibility until the next major version
-- Proposed module path: `tvkit/symbols/` with `__init__.py`, `normalizer.py`, `models.py`, `exceptions.py`
-
----
-
-### Willingness to contribute
-
-- [x] I am willing to submit a pull request for this feature
-- [ ] I can help with testing and feedback, but not implementation
-- [ ] I am requesting this feature only — I am not able to contribute code
+- **Incremental daily refresh** — `OHLCVLoader.fetch_incremental(symbol)` fetches only bars since the last stored date; wired into the Phase 5 APScheduler daily job
+- **Intraday data support** — Phase 9 adds `fetch(interval="1H")` for intraday entry timing signals
+- **Symbol metadata store** — extend `data/universe/symbols.json` with sector, listing date, market cap band for richer universe filtering
+- **Data validation schema** — `pandera` schema enforcement on every `ParquetStore.load` to catch schema drift
 
 ---
 
 ## Commit & PR Templates
 
-### Commit Message (Phase 0 — Plan)
+### Commit Message (Plan — this commit)
 
 ```
-plan(symbols): add master plan for symbol normalization layer
+plan(data-pipeline): add master plan for Phase 1 — Data Pipeline
 
-- Creates docs/plans/symbol_normalization_layer/PLAN.md
-- Covers four implementation phases: core normalization, config + env vars,
-  module integration (normalize-before-validate ordering), and documentation
-- Documents normalization-before-validation ordering at all six ohlcv.py
-  call sites (lines 610, 828, 1053, 1287, 1379, 1418)
-- Specifies deprecation path for convert_symbol_format and SymbolConversionResult
-- Includes full API design, data models, error strategy, test matrix,
-  and GitHub issue description
+- Creates docs/plans/Phase 1 — Data Pipeline/PLAN.md
+- Covers seven sub-phases: Config, Storage, tvkit Loader, Universe Builder,
+  Price Cleaner, Bulk Fetch Script, Data Quality Check
+- Documents public_mode guard: DataAccessError raised on any fetch when
+  CSM_PUBLIC_MODE=true
+- Specifies OHLCV DataFrame schema contract shared across all pipeline stages
+- Includes full architecture, data models, error handling, test matrix,
+  and success criteria
 
-Part of Core Data Infrastructure roadmap track.
+Part of Phase 1 — Data Pipeline roadmap track.
 ```
 
-### Commit Message (Phase 1 — Implementation)
+### Commit Message (Implementation — Phase 1.1)
 
 ```
-feat(symbols): add tvkit.symbols normalization layer (Phase 1)
+feat(config): add Settings and constants for data pipeline (Phase 1.1)
 
-- New module tvkit/symbols/ with normalizer.py, models.py, exceptions.py
-- normalize_symbol() converts any exchange-aware variant to EXCHANGE:SYMBOL
-- normalize_symbols() is a 1:1 batch variant preserving input order
-- normalize_symbol_detailed() returns NormalizedSymbol with metadata
-- SymbolNormalizationError with original + reason attributes
-- NormalizationConfig as plain BaseModel (no pydantic-settings dependency)
-- 100% test coverage in tests/test_symbols_normalizer.py
-- API reference at docs/reference/symbols/normalizer.md
+- Settings(BaseSettings) with CSM_ env prefix and .env binding
+- public_mode flag: blocks data access when CSM_PUBLIC_MODE=true
+- constants.py: INDEX_SYMBOL, SET_SECTOR_CODES, filter thresholds
+- Unit tests: settings load from env, public_mode defaults to False
+```
 
-Phase 1 scope: handles colon, dash, lowercase, whitespace variants only.
-Bare-ticker and crypto-pair resolution are Phase 2.
+### Commit Message (Implementation — Phase 1.2)
 
-Closes #<issue-number>
+```
+feat(data): add ParquetStore storage layer (Phase 1.2)
+
+- ParquetStore: save / load / exists / list_keys / delete
+- Round-trip preserves DatetimeIndex (UTC) and all column dtypes
+- Unit tests: 6 cases covering all public methods
+```
+
+### Commit Message (Implementation — Phase 1.3)
+
+```
+feat(data): add OHLCVLoader async tvkit wrapper (Phase 1.3)
+
+- fetch() and fetch_batch() with concurrency semaphore and retry
+- DataAccessError raised immediately when public_mode=True
+- fetch_batch() continues after per-symbol failures
+- Unit tests: mock tvkit, public_mode guard, retry, batch error isolation
+```
+
+### Commit Message (Implementation — Phase 1.4–1.5)
+
+```
+feat(data): add UniverseBuilder and PriceCleaner (Phases 1.4–1.5)
+
+- UniverseBuilder: price / volume / coverage filters, dated snapshots
+- PriceCleaner: forward-fill gaps, drop low-coverage, winsorise returns
+- Unit tests: filter logic, no look-ahead leakage, cleaning order
+```
+
+### Commit Message (Implementation — Phase 1.6–1.7)
+
+```
+feat(scripts): add fetch_history.py and data quality notebook (Phases 1.6–1.7)
+
+- fetch_history.py: idempotent 20-year bulk fetch for all universe symbols
+- 01_data_exploration.ipynb: missing data heatmap, return distributions,
+  liquidity distribution, survivorship audit, universe size over time
 ```
 
 ### PR Description Template
@@ -931,19 +761,23 @@ Closes #<issue-number>
 ```markdown
 ## Summary
 
-- Adds `tvkit.symbols` as a new public module for canonical symbol normalization
-- `normalize_symbol()` accepts exchange-aware symbol variants → returns `EXCHANGE:SYMBOL`
-- `normalize_symbols()` is 1:1 (no deduplication), preserves input order
-- Zero I/O — pure string transformation, usable in both sync and async contexts
-- `SymbolNormalizationError` with clear messages for ambiguous or invalid input
-- No new runtime dependencies in Phase 1
+- Implements the complete data pipeline for csm-set (Phase 1 of 9)
+- `Settings` (pydantic-settings) with `public_mode` guard — no live fetch when `CSM_PUBLIC_MODE=true`
+- `ParquetStore` — typed save/load/exists/list for all pipeline artefacts
+- `OHLCVLoader` — async tvkit wrapper with concurrency control, retry, and public mode enforcement
+- `UniverseBuilder` — dated universe snapshots, survivorship-bias-safe
+- `PriceCleaner` — gap-fill, coverage drop, returns winsorise
+- `scripts/fetch_history.py` — idempotent 20-year bulk fetch
+- `notebooks/01_data_exploration.ipynb` — data quality audit and phase sign-off
 
 ## Test plan
 
-- [ ] `uv run python -m pytest tests/test_symbols_normalizer.py -v` — all tests pass
-- [ ] `uv run mypy tvkit/symbols/` — exits 0
-- [ ] `uv run ruff check tvkit/symbols/` — exits 0
-- [ ] `uv run ruff format tvkit/symbols/` — no changes
-- [ ] Verify `from tvkit.symbols import normalize_symbol` works in a fresh session
-- [ ] Verify `convert_symbol_format` still importable (backward compat, no DeprecationWarning yet — Phase 3)
+- [ ] `uv run pytest tests/ -v -m "not integration"` — all unit tests pass
+- [ ] `uv run mypy src/` — exits 0
+- [ ] `uv run ruff check src/ scripts/` — exits 0
+- [ ] `uv run ruff format --check src/ scripts/` — no changes
+- [ ] Manual: run `fetch_history.py` with valid credentials — verify ≥ 400 symbols fetched
+- [ ] Manual: re-run `fetch_history.py` — verify 0 symbols re-fetched (idempotent)
+- [ ] Manual: `CSM_PUBLIC_MODE=true uv run python scripts/fetch_history.py` — verify `DataAccessError` raised immediately
+- [ ] Manual: open `01_data_exploration.ipynb`, run all cells, confirm all exit-criteria cells print `PASS`
 ```

@@ -75,9 +75,10 @@ class PerformanceMetrics:
             aligned: pd.DataFrame = pd.concat(
                 [monthly_returns.rename("portfolio"), benchmark.pct_change().rename("benchmark")],
                 axis=1,
+                sort=False,
             ).dropna()
             if not aligned.empty:
-                covariance: float = float(aligned.cov().loc["portfolio", "benchmark"])
+                covariance: float = float(aligned.cov(ddof=0).loc["portfolio", "benchmark"])
                 benchmark_variance: float = float(aligned["benchmark"].var(ddof=0))
                 beta: float = covariance / benchmark_variance if benchmark_variance != 0.0 else 0.0
                 alpha: float = (
@@ -97,6 +98,22 @@ class PerformanceMetrics:
 
         logger.info("Computed performance metrics", extra={"periods": periods})
         return metrics
+
+    @staticmethod
+    def rolling_cagr(equity_curve: pd.Series, window_months: int) -> pd.Series:
+        """Compute rolling annualised CAGR over a sliding window of months.
+
+        Args:
+            equity_curve: NAV series indexed by date.
+            window_months: Number of months in the rolling window.
+
+        Returns:
+            Series of annualised CAGR values; NaN for the first `window_months` entries.
+        """
+        if window_months < 1:
+            raise ValueError("window_months must be >= 1")
+        years: float = window_months / 12.0
+        return (equity_curve / equity_curve.shift(window_months)) ** (1.0 / years) - 1.0
 
 
 __all__: list[str] = ["PerformanceMetrics"]
