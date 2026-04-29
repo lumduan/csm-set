@@ -424,9 +424,14 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
   - [ ] **Section 6**: Sector exposure over time, turnover decomposition (selection turnover vs reweighting turnover)
   - [ ] **Section 7**: Walk-forward OOS — full overlay stack across 5 folds; report IS vs OOS Sharpe per fold; PASS/FAIL gate
   - [ ] **Section 8**: Final config decision cell — locks `BacktestConfig` defaults for Phase 5; prints PASS/FAIL for all 7 exit criteria
+  - [ ] **Section 9**: Monte Carlo Portfolio Robustness — luck-vs-skill validation
+    - [ ] **9a — Random Weight Allocation Test**: at each rebalance, replace `WeightOptimizer.compute()` output with N=10,000 random long-only weight vectors over the top-quintile selection (Dirichlet sampling, reusing `WeightOptimizer._monte_carlo_optimize()` infrastructure from Phase 4.2). Run a full backtest per sample. Report the distribution of CAGR / Sharpe / Max DD across samples; visualise as a histogram with the Phase 3.9 equal-weight result and the Phase 4.2 max-Sharpe result marked. **PASS** if median CAGR > SET-TRI median CAGR over the same window AND ≥ 90% of random-weight paths produce positive CAGR. The test isolates *selection edge* from *weighting choice* and answers whether the Phase 3.9 12.52% CAGR is structural or an artefact of the equal-weight choice.
+    - [ ] **9b — Path Dependency / Sequence-of-Returns Test**: hold the per-symbol *return distribution* constant but permute its time-ordering. Use circular block-bootstrap (block size = 21 trading days, N=1,000 paths) on each symbol's daily returns, recompute the equity curve under the full Phase 4 overlay stack, and verify the Phase 4.5 Drawdown Circuit Breaker `NORMAL → TRIPPED → RECOVERING → NORMAL` transitions still occur correctly across the resampled paths. Report: % of paths the breaker tripped at least once; mean recovery time; distribution of terminal CAGR. **PASS** if the breaker trips on ≥ 95% of synthetically adverse paths (DD > −20% in the path) and recovers on ≥ 90% of those trips.
+    - [ ] Section 9 markdown cells in Thai per project convention; reuses `monte_carlo_frontier()` and `WeightOptimizer._monte_carlo_optimize()` from `src/csm/portfolio/optimizer.py` (Phase 4.2)
+    - [ ] Performance budget: random-weight backtest sweep ≤ 10 minutes on a 60-name × 12-year history at N=10,000; bootstrap path sweep ≤ 5 minutes at N=1,000
 - [ ] `docs/plans/phase4_portfolio_construction/walk_forward_ci_gate.md` — spec for Phase 5 CI integration: `pytest -m walk_forward` runs full OOS validation, fails if any fold OOS Sharpe ≤ 0 or IS/OOS Sharpe ratio > 1.5
 
-**Notebook is the Phase 4 exit gate.**
+**Notebook is the Phase 4 exit gate.** Section 8 prints PASS/FAIL across all 13 success criteria (rows #1–#13 in Success Criteria), including the Section 9 luck-vs-skill checks.
 
 ---
 
@@ -580,6 +585,7 @@ These tests are the gate for the refactor sub-phases (4.1, 4.2, 4.6). They must 
 | 10 | Notebook sign-off | `04_portfolio_optimization.ipynb` Section 8 prints PASS for all 7 exit criteria |
 | 11 | Trade list determinism | Two runs with same seed produce identical `TradeList`s |
 | 12 | Circuit breaker recovery | Stress test confirms breaker trips on synthetic −25% DD and recovers per spec |
+| 13 | Monte Carlo robustness | Section 9a: median random-weight CAGR > SET-TRI median over the same window AND ≥ 90% of random-weight paths produce positive CAGR. Section 9b: circuit breaker trips on ≥ 95% of bootstrap paths whose DD breaches −20% and recovers on ≥ 90% of trips. |
 
 ---
 
