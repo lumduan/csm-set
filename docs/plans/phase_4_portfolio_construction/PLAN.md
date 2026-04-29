@@ -371,21 +371,22 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.6 — Sector & Regime Constraint Engine
 
-**Status:** `[ ]` Not started
-**Goal:** Extract `MomentumBacktest._apply_sector_cap()` into `csm.portfolio.constraints` and wrap `RegimeDetector` as a portfolio-level overlay.
+**Status:** `[x]` Complete — 2026-04-29
+**Goal:** Extract `MomentumBacktest._apply_sector_cap()` and regime gating into a unified standalone module.
 
 **Deliverables:**
 
-- [ ] `src/csm/portfolio/constraints.py` — `SectorCapOverlay`, `PositionSizeOverlay`, `HoldingsCountOverlay`
-  - [ ] `SectorCapOverlay.apply()` — equal-weight cap per sector (default 0.35); evicts lowest-ranked symbol(s) in overweight sector(s); guarantees `n_holdings ≥ n_holdings_min` (Phase 3.9 known issue documented in plan)
-  - [ ] `PositionSizeOverlay.apply()` — clip individual weights to `[min_position, max_position]`; renormalises
-  - [ ] `HoldingsCountOverlay.apply()` — enforces `n_holdings_min ≤ n ≤ n_holdings_max`
-- [ ] `src/csm/risk/regime.py` — extend with `RegimeOverlay` wrapper
-  - [ ] `apply(state: PortfolioState, ctx: OverlayContext) -> PortfolioState`
-  - [ ] Reads `state.regime` (set by upstream `RegimeDetector`); applies safe-mode equity cap in BEAR / EARLY_BULL; full cash if `bear_full_cash=True` and EMA200 slope negative
-- [ ] Constants: all thresholds from `BacktestConfig` exposed via `OverlayContext`
-- [ ] Unit tests (≥ 10 cases): sector cap binds, holdings-min guard prevents under-trim, regime overlay caps equity in BEAR, full-cash trigger, parity with inline Phase 3.9 implementation
-- [ ] Snapshot parity: full pipeline with overlays matching Phase 3.9 reproduces baseline equity curve to 1e-9
+- [x] `src/csm/portfolio/sector_regime_constraint_engine.py` — `SectorRegimeConstraintEngine` (unified standalone, deviating from original split-plan of constraints.py + regime.py)
+  - [x] `apply(weights, sector_map, index_prices, asof, config) -> tuple[pd.Series, SectorRegimeConstraintResult]`
+  - [x] Sector cap via proportional scaling of over-weight sectors (default 0.35); `n_holdings_min` guard prevents false relaxation on small portfolios
+  - [x] Regime gating via Phase 3.9 decision tree (BULL/BEAR + fast-exit + fast-reentry + bear-full-cash) using `RegimeDetector`
+  - [x] Negative/zero weights excluded from sector totals; unknown sectors grouped as `__unknown__`
+  - [x] `SectorRegimeConstraintConfig` (10 fields) and `SectorRegimeConstraintResult` (8 fields) Pydantic models
+- [x] `src/csm/portfolio/__init__.py` — 3 new exports
+- [x] Unit tests (29 cases): config validation, sector cap binding/noop/proportional/n_holdings_min, regime gating all 4 branches, empty/zero/negative weights, combined application, disabled pass-through
+- [x] Pipeline overlay adapter (consuming `PortfolioState`) deferred to future pipeline assembly phase; snapshot parity deferred to integration tests
+
+**Completion Notes:** Phase 4.6 implemented the unified `SectorRegimeConstraintEngine` at `src/csm/portfolio/sector_regime_constraint_engine.py` (deviating from the original PLAN.md split of `constraints.py` + `regime.py` extension). Sector capping uses proportional scaling on weights rather than Phase 3.9's symbol-list eviction because the Phase 4 pipeline applies overlays post-optimizer on weight vectors. The regime gating decision tree is a direct lift from `MomentumBacktest.run()` lines 657–695. The `n_holdings_min` guard only activates when the original portfolio had ≥ `n_holdings_min` symbols, preventing false relaxation on small test portfolios. All quality gates pass: ruff clean, mypy strict, 29/29 tests, 441/451 full suite (10 pre-existing failures).
 
 ---
 

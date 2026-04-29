@@ -21,6 +21,11 @@ from csm.portfolio.liquidity_overlay import (
 )
 from csm.portfolio.optimizer import MonteCarloResult, OptimizerConfig, WeightOptimizer, WeightScheme
 from csm.portfolio.rebalance import RebalanceScheduler
+from csm.portfolio.sector_regime_constraint_engine import (
+    SectorRegimeConstraintConfig,
+    SectorRegimeConstraintEngine,
+    SectorRegimeConstraintResult,
+)
 from csm.portfolio.state import (
     CircuitBreakerState,
     OverlayContext,
@@ -49,6 +54,9 @@ __all__: list[str] = [
     "PositionLiquidityInfo",
     "RebalanceScheduler",
     "SelectionConfig",
+    "SectorRegimeConstraintConfig",
+    "SectorRegimeConstraintEngine",
+    "SectorRegimeConstraintResult",
     "SelectionError",
     "SelectionResult",
     "VolScalingConfig",
