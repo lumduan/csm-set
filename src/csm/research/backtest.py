@@ -12,6 +12,7 @@ from csm.config.constants import (
     BULL_MODE_N_HOLDINGS_MIN,
     EMA_SLOPE_LOOKBACK_DAYS,
     EMA_TREND_WINDOW,
+    EXIT_EMA_WINDOW,
     FAST_REENTRY_EMA_WINDOW,
     MIN_ADTV_63D_THB,
     SAFE_MODE_MAX_EQUITY,
@@ -148,6 +149,8 @@ class BacktestConfig(BaseModel):
     rs_filter_mode: str = Field(default="entry_only")  # "off" | "entry_only" | "all"
     rs_lookback_months: int = Field(default=12)
     fast_reentry_ema_window: int = Field(default=FAST_REENTRY_EMA_WINDOW)
+    # Phase 3.8 improvements — fast-exit overlay (engages safe-mode equity in BULL when SET<EMA100)
+    exit_ema_window: int = Field(default=EXIT_EMA_WINDOW)
 
 
 class BacktestResult(BaseModel):
@@ -392,6 +395,23 @@ class MomentumBacktest:
         """
         return self._regime.is_bull_market(index_prices, asof, window=ema_window)
 
+    # ━ Phase 3.8: fast-exit overlay (SET < EMA100 inside BULL → safe-mode equity) ━━━━
+
+    def _is_fast_exit(
+        self,
+        index_prices: pd.Series,
+        asof: pd.Timestamp,
+        ema_window: int,
+    ) -> bool:
+        """Return True when SET is below EMA-*ema_window* at *asof*.
+
+        Used as an overlay inside the BULL regime: when the index drops below
+        a faster EMA (default 100) while still above EMA-200, equity is
+        scaled down to ``safe_mode_max_equity`` to trim drawdown ahead of a
+        full bear-regime flip.
+        """
+        return not self._regime.is_bull_market(index_prices, asof, window=ema_window)
+
     def run(
         self,
         feature_panel: pd.DataFrame,
@@ -508,15 +528,28 @@ class MomentumBacktest:
             else:
                 target_weights = self._optimizer.equal_weight(selected)
 
-            # Phase 3.7 equity fraction with EMA50 fast re-entry.
-            # Priority: 1) SET > EMA50 → 100%  2) Bull (SET > EMA200) → 100%
-            #           3) Strong Bear → 0%  4) Weak Bear → 20%
+            # Phase 3.8 equity fraction. In BULL the EMA100 fast-exit overlay
+            # scales equity down ahead of a full regime flip; in BEAR the EMA50
+            # fast re-entry can override back to full equity.
+            # Priority — BULL: 1) SET<EMA100 → safe_mode (0.20)  2) BULL → 100%
+            #            BEAR: 1) SET>EMA50 → 100%  2) Strong Bear → 0%  3) Weak Bear → 20%
             if index_prices is not None:
-                if self._is_fast_reentry(
+                equity_fraction: float
+                if mode is RegimeState.BULL:
+                    if self._is_fast_exit(
+                        index_prices, current_date, config.exit_ema_window
+                    ):
+                        equity_fraction = config.safe_mode_max_equity
+                        logger.debug(
+                            "fast-exit overlay engaged at %s (SET<EMA%d)",
+                            current_date,
+                            config.exit_ema_window,
+                        )
+                    else:
+                        equity_fraction = 1.0
+                elif self._is_fast_reentry(
                     index_prices, current_date, config.fast_reentry_ema_window
                 ):
-                    equity_fraction: float = 1.0
-                elif mode is RegimeState.BULL:
                     equity_fraction = 1.0
                 elif (
                     config.bear_full_cash

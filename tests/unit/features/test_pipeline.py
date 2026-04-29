@@ -432,3 +432,34 @@ def test_validate_rebalance_dates_unsorted_raises(
         FeaturePipeline(store=_store(tmp_path)).build(
             prices=sample_ohlcv_map, rebalance_dates=[_DATES[1], _DATES[0]]
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.8 — build_volume_matrix() pipes volumes from build() to the backtest
+# ---------------------------------------------------------------------------
+
+
+def test_build_volume_matrix_returns_wide_frame(
+    sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path
+) -> None:
+    """After build(), volume cache is populated and build_volume_matrix() returns a wide DataFrame."""
+    dates = [pd.Timestamp("2023-06-30", tz=_TZ), pd.Timestamp("2023-12-29", tz=_TZ)]
+    pipeline = FeaturePipeline(store=_store(tmp_path))
+    pipeline.build(prices=sample_ohlcv_map, rebalance_dates=dates)
+
+    matrix = pipeline.build_volume_matrix()
+    assert not matrix.empty
+    # Index symbol excluded by default — only stock symbols in columns.
+    assert "SET:SET" not in matrix.columns
+    # Every stock symbol from the fixture appears as a column.
+    expected_stock_syms = {s for s in sample_ohlcv_map if s != "SET:SET"}
+    assert expected_stock_syms.issubset(set(matrix.columns))
+    # Values are non-negative floats (synthetic fixture uses 2_000_000.0).
+    assert (matrix.fillna(0) >= 0).all().all()
+
+
+def test_build_volume_matrix_empty_before_build(tmp_path: Path) -> None:
+    """Calling build_volume_matrix() before build() emits warning and returns empty frame."""
+    pipeline = FeaturePipeline(store=_store(tmp_path))
+    matrix = pipeline.build_volume_matrix()
+    assert matrix.empty

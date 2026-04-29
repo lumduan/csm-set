@@ -45,13 +45,16 @@ BULL_MODE_N_HOLDINGS_MIN: int = 40  # reduced from 80 in Phase 3.7 — portfolio
 BULL_MODE_N_HOLDINGS_MAX: int = 60  # reduced from 100 in Phase 3.7 — portfolio slimming
 
 # Buffer logic — only evict a holding when new candidate ranks this many percentile points better
-BUFFER_RANK_THRESHOLD: float = 0.20  # raised from 0.15 in Phase 3.7 to reduce turnover
+BUFFER_RANK_THRESHOLD: float = 0.25  # Phase 3.8: raised from 0.20 to bring turnover within ≤180% target
 
 # EMA slope detection for dynamic Safe Mode (Phase 3.6)
 EMA_SLOPE_LOOKBACK_DAYS: int = 21  # ~1 trading month; negative slope → 100% cash in Bear
 
 # Fast re-entry trigger (Phase 3.7)
 FAST_REENTRY_EMA_WINDOW: int = 50  # EMA window for fast re-entry: SET > EMA50 → full equity
+
+# Fast-exit overlay (Phase 3.8) — engages safe-mode equity in BULL when SET drops below this EMA
+EXIT_EMA_WINDOW: int = 100  # SET < EMA100 while regime is BULL → equity scaled to safe_mode_max_equity
 
 # Transaction cost (one-way, basis points)
 TRANSACTION_COST_BPS: float = 15.0
@@ -71,6 +74,7 @@ __all__: list[str] = [
     "DEFAULT_TOP_QUANTILE",
     "EMA_SLOPE_LOOKBACK_DAYS",
     "EMA_TREND_WINDOW",
+    "EXIT_EMA_WINDOW",
     "FAST_REENTRY_EMA_WINDOW",
     "INDEX_SYMBOL",
     "LOOKBACK_YEARS",

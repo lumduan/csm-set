@@ -599,3 +599,125 @@ class TestEma50FastReentry:
         nav_values = list(result.equity_curve.values())
         assert nav_values
         assert pytest.approx(nav_values[0], rel=1e-4) == 110.0
+
+
+class TestFastExitOverlay:
+    """Phase 3.8 — SET below EMA100 while still above EMA200 → safe-mode equity."""
+
+    def test_fast_exit_engages_when_set_below_ema100_in_bull(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """SET above EMA200 (BULL) but below EMA100 → equity scaled to safe_mode_max_equity."""
+        # Long flat warm-up keeps EMA200 anchored low; sharp peak then partial pullback
+        # produces price > EMA200 (BULL) but price < EMA100 (overlay engaged).
+        n_flat, n_rise, n_dip = 300, 60, 40
+        n_total = n_flat + n_rise + n_dip
+        all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
+        prices_arr = np.concatenate([
+            np.full(n_flat, 100.0),
+            np.linspace(100.0, 250.0, n_rise),
+            np.linspace(250.0, 175.0, n_dip),
+        ])
+        index_prices = pd.Series(prices_arr, index=all_dates)
+        asof = all_dates[-1]
+        assert backtest._compute_mode(index_prices, asof, 200) is RegimeState.BULL
+        assert backtest._is_fast_exit(index_prices, asof, 100) is True
+
+        rebal_dates = list(all_dates[-3:])
+        # Stock gains 10% over the first rebalance period (rebal[0]→rebal[1]).
+        stock_arr = np.concatenate([np.full(n_total - 3, 100.0), [100.0, 110.0, 110.0]])
+        prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
+        feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
+        config = BacktestConfig(
+            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
+            safe_mode_max_equity=0.2, rs_filter_mode="off",
+            exit_ema_window=100, fast_reentry_ema_window=50,
+        )
+        result = backtest.run(
+            feature_panel=feature_panel, prices=prices, config=config,
+            index_prices=index_prices,
+        )
+        nav_values = list(result.equity_curve.values())
+        assert nav_values
+        # Stock gained 10% but equity scaled to 0.2 → NAV = 100 * (1 + 0.2 * 0.10) = 102.0.
+        assert pytest.approx(nav_values[0], rel=1e-4) == 102.0
+
+    def test_fast_exit_dormant_when_set_above_both_emas(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """Pure trending-up SET → fast-exit never fires; equity stays at 1.0 (regression guard)."""
+        n_total = 300
+        all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
+        # Pure rising series — SET stays well above both EMA100 and EMA200.
+        prices_arr = np.linspace(100.0, 220.0, n_total)
+        index_prices = pd.Series(prices_arr, index=all_dates)
+        asof = all_dates[-1]
+        assert backtest._compute_mode(index_prices, asof, 200) is RegimeState.BULL
+        assert backtest._is_fast_exit(index_prices, asof, 100) is False
+
+        rebal_dates = list(all_dates[-3:])
+        stock_arr = np.concatenate([np.full(n_total - 3, 100.0), [100.0, 110.0, 110.0]])
+        prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
+        feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
+        config = BacktestConfig(
+            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
+            rs_filter_mode="off", exit_ema_window=100,
+        )
+        result = backtest.run(
+            feature_panel=feature_panel, prices=prices, config=config,
+            index_prices=index_prices,
+        )
+        nav_values = list(result.equity_curve.values())
+        assert nav_values
+        # Full equity → 10% gain → NAV ≈ 110.
+        assert pytest.approx(nav_values[0], rel=1e-4) == 110.0
+
+    def test_fast_exit_disabled_via_huge_window_matches_phase37(
+        self, backtest: MomentumBacktest
+    ) -> None:
+        """exit_ema_window > history length disables the overlay (A/B sanity harness).
+
+        ``RegimeDetector.compute_ema`` returns an empty Series when history is shorter
+        than the span; ``is_bull_market`` then defaults to True; ``_is_fast_exit``
+        therefore returns False — the overlay is dormant.
+        """
+        n_flat, n_rise, n_dip = 300, 60, 40
+        n_total = n_flat + n_rise + n_dip
+        all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
+        prices_arr = np.concatenate([
+            np.full(n_flat, 100.0),
+            np.linspace(100.0, 250.0, n_rise),
+            np.linspace(250.0, 175.0, n_dip),
+        ])
+        index_prices = pd.Series(prices_arr, index=all_dates)
+        rebal_dates = list(all_dates[-3:])
+        stock_arr = np.concatenate([np.full(n_total - 3, 100.0), [100.0, 110.0, 110.0]])
+        prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
+        feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
+        # Span > history → EMA is empty → fast-exit returns False → equity = 1.0.
+        config = BacktestConfig(
+            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
+            rs_filter_mode="off", exit_ema_window=10_000,
+        )
+        result = backtest.run(
+            feature_panel=feature_panel, prices=prices, config=config,
+            index_prices=index_prices,
+        )
+        nav_values = list(result.equity_curve.values())
+        assert nav_values
+        # Overlay disabled → full equity → 10% gain → NAV ≈ 110.
+        assert pytest.approx(nav_values[0], rel=1e-4) == 110.0
+
+
+class TestPhase38Defaults:
+    """Phase 3.8 — verify BacktestConfig defaults pull the new constants."""
+
+    def test_buffer_threshold_default_is_025(self) -> None:
+        """BUFFER_RANK_THRESHOLD bumped from 0.20 → 0.25 in Phase 3.8."""
+        config = BacktestConfig()
+        assert config.buffer_rank_threshold == 0.25
+
+    def test_exit_ema_window_default_is_100(self) -> None:
+        """EXIT_EMA_WINDOW = 100 introduced in Phase 3.8."""
+        config = BacktestConfig()
+        assert config.exit_ema_window == 100

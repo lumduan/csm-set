@@ -52,10 +52,11 @@ Phase 3 covers four sub-phases in dependency order:
 - Dashboard backtest page (Phase 6)
 - `results/backtest/` export for public Docker image (Phase 7)
 
-### Current State (as of 2026-04-28) — Phase 3.7 Complete
+### Current State (as of 2026-04-28) — Phase 3.8 Complete
 
 Phases 3.1–3.5 complete. Phase 3.6 (Recovery & Turnover Fix) completed 2026-04-28.
 Phase 3.7 (Risk Management & Re-entry) completed 2026-04-28.
+Phase 3.8 (Volume-Aware ADTV, Buffer 0.25, Fast EMA Exit Overlay) completed 2026-04-28.
 
 **Phase 3.6 outcome (2026-04-28):** Bug fixed; dynamic bear and RS filter implemented and tested. Research finding: dynamic 0% equity in Bear delayed market re-entry (44M vs 37M); RS filter increased turnover (220%) by bypassing buffer logic. These findings directly motivated Phase 3.7.
 
@@ -65,19 +66,26 @@ Phase 3.7 (Risk Management & Re-entry) completed 2026-04-28.
 3. Market Breadth Re-entry (EARLY_BULL) — earlier re-equity after crashes
 4. Volatility-Based Exit — per-stock ATR trailing stop + EMA50 warning
 
+**Phase 3.8 result (2026-04-28):** Three targeted improvements implemented, tested, and clean:
+1. Volume-Aware ADTV — `build_volume_matrix()` centralises volume threading; ADTV filter fires in all callers
+2. Buffer 0.25 — `BUFFER_RANK_THRESHOLD` raised from 0.20 → 0.25; targets ≤180% annualised turnover
+3. EMA100 Fast-Exit Overlay — SET < EMA100 inside BULL scales equity to 20% ahead of full bear flip
+
 | Module | Lines | Status |
 |---|---|---|
-| `src/csm/config/constants.py` | ~105 | `[x]` 3.7: portfolio slimming (40–60); +8 new constants |
+| `src/csm/config/constants.py` | ~110 | `[x]` 3.8: `BUFFER_RANK_THRESHOLD` → 0.25; +`EXIT_EMA_WINDOW` = 100 |
 | `src/csm/risk/regime.py` | ~125 | `[x]` 3.7: +`EARLY_BULL` state, `compute_market_breadth()` |
-| `src/csm/research/backtest.py` | ~715 | `[x]` 3.7: removed binary RS filter; added soft penalty, ATR exit, EMA50 warning, breadth re-entry |
+| `src/csm/research/backtest.py` | ~740 | `[x]` 3.8: +`_is_fast_exit()`, +`exit_ema_window` field, EMA100 overlay in equity branch |
+| `src/csm/features/pipeline.py` | ~500 | `[x]` 3.8: +`_last_volume_cache`, +`build_volume_matrix()` |
 | `src/csm/risk/metrics.py` | 120 | `[x]` Complete (unchanged) |
 | `src/csm/risk/drawdown.py` | 57 | `[x]` Complete (unchanged) |
-| `notebooks/03_backtest_analysis.ipynb` | 55 cells | `[ ]` Notebook pending Phase 3.7 updates |
-| `tests/unit/research/test_backtest.py` | ~630 | `[x]` 3.7: 48 total tests (+12 new: soft penalty, ATR exit, EMA50 warning) |
+| `notebooks/03_backtest_analysis.ipynb` | 55 cells | `[x]` 3.8: updated Section 2 to use `build_volume_matrix()` |
+| `tests/unit/research/test_backtest.py` | ~750 | `[x]` 3.8: 54 total tests (+7 new: TestFastExitOverlay, TestPhase38Defaults) |
+| `tests/unit/features/test_pipeline.py` | ~495 | `[x]` 3.8: +2 volume matrix tests |
 | `tests/unit/risk/test_regime.py` | ~135 | `[x]` 3.7: 12 total tests (+3 market breadth) |
 | `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged) |
 | `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged) |
-| `tests/integration/test_backtest_pipeline.py` | 26 | `[x]` 1 integration smoke test — unchanged |
+| `tests/integration/test_backtest_pipeline.py` | ~56 | `[x]` 3.8: passes volumes; asserts ADTV filter fires |
 
 ---
 

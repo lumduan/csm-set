@@ -43,11 +43,15 @@ async def main() -> None:
             }
         )
     store: ParquetStore = ParquetStore(Path("./data/processed_examples"))
-    feature_panel: pd.DataFrame = FeaturePipeline(store=store).build(
+    pipeline: FeaturePipeline = FeaturePipeline(store=store)
+    feature_panel: pd.DataFrame = pipeline.build(
         prices=price_map,
         rebalance_dates=list(pd.date_range("2023-01-31", periods=8, freq="ME", tz="Asia/Bangkok")),
     )
-    result = MomentumBacktest(store=store).run(feature_panel, close_matrix, BacktestConfig())
+    volume_matrix: pd.DataFrame = pipeline.build_volume_matrix()
+    result = MomentumBacktest(store=store).run(
+        feature_panel, close_matrix, BacktestConfig(), volumes=volume_matrix
+    )
     logger.info("Backtest example metrics", extra=result.metrics)
 
 
