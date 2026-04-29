@@ -33,6 +33,12 @@ from csm.portfolio.state import (
     PortfolioState,
 )
 from csm.portfolio.vol_scaler import VolatilityScaler, VolScalingConfig, VolScalingResult
+from csm.portfolio.walkforward_gate import (
+    FoldGateResult,
+    WalkForwardGate,
+    WalkForwardGateConfig,
+    WalkForwardGateResult,
+)
 
 __all__: list[str] = [
     "CircuitBreakerResult",
@@ -40,6 +46,7 @@ __all__: list[str] = [
     "CircuitBreakerTripped",
     "DrawdownCircuitBreaker",
     "DrawdownCircuitBreakerConfig",
+    "FoldGateResult",
     "LiquidityConfig",
     "LiquidityOverlay",
     "LiquidityResult",
@@ -62,6 +69,9 @@ __all__: list[str] = [
     "VolScalingConfig",
     "VolScalingResult",
     "VolatilityScaler",
+    "WalkForwardGate",
+    "WalkForwardGateConfig",
+    "WalkForwardGateResult",
     "WeightOptimizer",
     "WeightScheme",
     "compute_capacity_curve",
