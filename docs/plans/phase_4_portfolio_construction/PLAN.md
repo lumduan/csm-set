@@ -257,19 +257,23 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.1 — Portfolio Construction Layer
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-29
 **Goal:** Promote Phase 3.9's inline `MomentumBacktest._select_holdings()` into a first-class `PortfolioConstructor` API. No semantic change.
 
 **Deliverables:**
 
-- [ ] `src/csm/portfolio/construction.py` — `PortfolioConstructor`
-  - [ ] `select(feature_panel: pd.DataFrame, asof: pd.Timestamp, current_holdings: list[str], config: SelectionConfig) -> SelectionResult`
-  - [ ] Implements top-quintile + replacement buffer + exit-rank floor (Phase 3.7–3.9 logic verbatim)
-  - [ ] Returns `SelectionResult` Pydantic model: selected symbols, evicted symbols, retained symbols, ranks
-- [ ] `src/csm/portfolio/state.py` — `PortfolioState`, `OverlayContext`, `OverlayJournalEntry` Pydantic models
-- [ ] `src/csm/portfolio/exceptions.py` — extend with `SelectionError`
-- [ ] Unit tests (≥ 8 cases): top-quintile selection, buffer band retains current holdings within band, exit floor evicts unconditionally, holdings count band enforced (40 ≤ n ≤ 60), no look-ahead, deterministic for fixed input
-- [ ] Snapshot parity test in `tests/unit/research/test_backtest_phase4_parity.py`: replace inline `_select_holdings()` with `PortfolioConstructor` and assert equity curve byte-identical to Phase 3.9 baseline (1e-9 tolerance)
+- [x] `src/csm/portfolio/construction.py` — `PortfolioConstructor`
+  - [x] `select(cross_section: pd.DataFrame, current_holdings: list[str], config: SelectionConfig, *, entry_mask: set[str] | None = None) -> SelectionResult`
+  - [x] Implements top-quintile + replacement buffer + exit-rank floor (Phase 3.7–3.9 logic verbatim)
+  - [x] Returns `SelectionResult` Pydantic model: selected symbols, evicted symbols, retained symbols, ranks
+- [x] `src/csm/portfolio/state.py` — `PortfolioState`, `OverlayContext`, `OverlayJournalEntry`, `CircuitBreakerState` Pydantic models
+- [x] `src/csm/portfolio/exceptions.py` — extend with `SelectionError`
+- [x] Unit tests (17 cases): top-quintile selection, buffer band retains current holdings within band, exit floor evicts unconditionally, holdings count band enforced (40 ≤ n ≤ 60), entry mask restriction, small universe fallback, deterministic for fixed input
+- [x] Snapshot parity test in `tests/unit/research/test_backtest_phase4_parity.py`: PortfolioConstructor parity with inline Phase 3.9, ranks match (1e-9 tolerance), injected constructor used by MomentumBacktest
+- [x] `MomentumBacktest._select_holdings()` delegates to `PortfolioConstructor`; `_apply_buffer_logic()` extracted
+- [x] All quality gates pass: ruff clean, mypy clean, 86/86 tests pass (zero regressions)
+
+**Completion Notes:** Phase 4.1 implemented in a single session. `PortfolioConstructor.select()` promoted the full Phase 3.9 inline logic with no semantic change. `_apply_buffer_logic()` moved as a private static method returning `tuple[list, list, list]` for richer eviction/retention tracking. Snapshot parity confirmed via 4 dedicated tests. MomentumBacktest accepts an optional `portfolio_constructor` parameter for testability. All 51 existing backtest tests continue to pass unchanged.
 
 ---
 

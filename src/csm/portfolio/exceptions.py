@@ -9,4 +9,8 @@ class OptimizationError(PortfolioError):
     """Raised when weight optimization fails to converge."""
 
 
-__all__: list[str] = ["OptimizationError", "PortfolioError"]
+class SelectionError(PortfolioError):
+    """Raised when portfolio selection fails (e.g., empty cross-section after filtering)."""
+
+
+__all__: list[str] = ["OptimizationError", "PortfolioError", "SelectionError"]
