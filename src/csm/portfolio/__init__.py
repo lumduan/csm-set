@@ -10,6 +10,7 @@ from csm.portfolio.state import (
     OverlayJournalEntry,
     PortfolioState,
 )
+from csm.portfolio.vol_scaler import VolatilityScaler, VolScalingConfig, VolScalingResult
 
 __all__: list[str] = [
     "CircuitBreakerState",
@@ -25,6 +26,9 @@ __all__: list[str] = [
     "SelectionConfig",
     "SelectionError",
     "SelectionResult",
+    "VolScalingConfig",
+    "VolScalingResult",
+    "VolatilityScaler",
     "WeightOptimizer",
     "WeightScheme",
 ]

@@ -925,10 +925,10 @@ class TestVolScaling:
             price *= 1.0 + daily_ret
         return pd.DataFrame({sym: prices for sym in symbols}, index=dates)
 
-    def test_vol_scaling_disabled_by_default(self, backtest: MomentumBacktest) -> None:
-        """vol_scaling_enabled=False (default) — equity_fraction unchanged."""
+    def test_vol_scaling_enabled_by_default(self, backtest: MomentumBacktest) -> None:
+        """vol_scaling_enabled=True (Phase 4 default)."""
         config = BacktestConfig()
-        assert config.vol_scaling_enabled is False
+        assert config.vol_scaling_enabled is True
 
     def test_high_realized_vol_reduces_equity_fraction(self, backtest: MomentumBacktest) -> None:
         """Realized vol 2× target → equity fraction is approximately halved."""
@@ -991,8 +991,8 @@ class TestPhase39Defaults:
     def test_exit_rank_floor_default(self) -> None:
         assert BacktestConfig().exit_rank_floor == 0.35
 
-    def test_vol_scaling_disabled_by_default(self) -> None:
-        assert BacktestConfig().vol_scaling_enabled is False
+    def test_vol_scaling_enabled_by_default(self) -> None:
+        assert BacktestConfig().vol_scaling_enabled is True
 
     def test_vol_lookback_days_default(self) -> None:
         assert BacktestConfig().vol_lookback_days == 63

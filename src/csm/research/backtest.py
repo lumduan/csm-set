@@ -28,6 +28,7 @@ from csm.data.store import ParquetStore
 from csm.portfolio.construction import PortfolioConstructor, SelectionConfig
 from csm.portfolio.optimizer import WeightOptimizer
 from csm.portfolio.rebalance import RebalanceScheduler
+from csm.portfolio.vol_scaler import VolScalingConfig
 from csm.research.exceptions import BacktestError
 from csm.risk.metrics import PerformanceMetrics
 from csm.risk.regime import RegimeDetector, RegimeState
@@ -162,10 +163,11 @@ class BacktestConfig(BaseModel):
     # 1=monthly, 2=bimonthly, 3=quarterly
     rebalance_every_n: int = Field(default=REBALANCE_EVERY_N)
     exit_rank_floor: float = Field(default=EXIT_RANK_FLOOR)  # evict holdings ranked below this pct
-    vol_scaling_enabled: bool = Field(default=False)  # off by default; preserves Phase 3.8 baseline
+    vol_scaling_enabled: bool = Field(default=True)  # FLIPPED: on by default
     vol_lookback_days: int = Field(default=VOL_LOOKBACK_DAYS)
     vol_target_annual: float = Field(default=VOL_TARGET_ANNUAL)
     vol_scale_cap: float = Field(default=VOL_SCALE_CAP)
+    vol_scaling_config: VolScalingConfig | None = Field(default=None)
     sector_max_weight: float = Field(default=SECTOR_MAX_WEIGHT)
 
 

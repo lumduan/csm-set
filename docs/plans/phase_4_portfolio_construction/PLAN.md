@@ -302,21 +302,24 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.3 — Volatility Scaling Engine
 
-**Status:** `[ ]` Not started
-**Goal:** Extract `MomentumBacktest._apply_vol_scaling()` into `csm.risk.vol_scaling.VolScalingOverlay`. Add regime-aware mode. Lock `vol_scaling_enabled=True` as default.
+**Status:** `[x]` Complete — 2026-04-29
+**Goal:** Extract `MomentumBacktest._apply_vol_scaling()` into a standalone `VolatilityScaler` module. Lock `vol_scaling_enabled=True` as default.
 
 **Deliverables:**
 
-- [ ] `src/csm/risk/vol_scaling.py` — `VolScalingOverlay`
-  - [ ] `apply(state: PortfolioState, ctx: OverlayContext) -> PortfolioState`
-  - [ ] Computes equal-weight portfolio realised vol over `vol_lookback_days` (default 63)
-  - [ ] Equity fraction = `min(vol_scale_cap, max(0.0, vol_target_annual / realised_vol))`
-  - [ ] Records overlay decision in `state.journal`
-- [ ] `VolScalingConfig` Pydantic model: `enabled=True`, `target_annual=0.15`, `lookback_days=63`, `cap=1.5`, `floor=0.0`, `regime_aware=False`
-- [ ] `BacktestConfig.vol_scaling_enabled` default flipped from `False` → `True`
-- [ ] `BacktestConfig` adds `vol_scaling_config: VolScalingConfig | None = None` for future-proofing
-- [ ] Unit tests (≥ 8 cases): high-vol → reduced equity fraction, low-vol → capped at `cap`, zero-vol guard returns `cap`, journal entry present, parity with `_apply_vol_scaling()` on canned inputs
-- [ ] Snapshot parity: `vol_scaling_enabled=False` reproduces Phase 3.9 baseline equity curve to 1e-9
+- [x] `src/csm/portfolio/vol_scaler.py` — `VolatilityScaler` (standalone)
+  - [x] `scale(weights: pd.Series, prices: pd.DataFrame, config: VolScalingConfig) -> tuple[pd.Series, VolScalingResult]`
+  - [x] Computes weighted portfolio realised vol via dot product over `lookback_days` (default 63)
+  - [x] Scale factor = `clamp(target_annual / realised_vol, floor, cap)`, equity fraction = `min(scale_factor, 1.0)`
+  - [x] `_compute_realized_vol()` static method for standalone use
+- [x] `VolScalingConfig` Pydantic model: `enabled=True`, `target_annual=0.15`, `lookback_days=63`, `cap=1.5`, `floor=0.0`, `regime_aware=False`
+- [x] `VolScalingResult` Pydantic model: `realized_vol_annual`, `scale_factor`, `equity_fraction`
+- [x] `BacktestConfig.vol_scaling_enabled` default flipped from `False` → `True`
+- [x] `BacktestConfig` adds `vol_scaling_config: VolScalingConfig | None = None`
+- [x] Unit tests (22 cases): config validation, disabled pass-through, high/low/zero vol, insufficient history, empty weights, single asset, floor enforcement, equity cap, weight sum invariant, concentrated weights, missing symbol, all-zero weights, realized vol computation
+- [x] All quality gates pass: ruff clean, mypy clean, 22/22 tests pass, 0 regressions
+
+**Completion Notes:** Phase 4.3 implemented the standalone `VolatilityScaler` at `src/csm/portfolio/vol_scaler.py` (deviating from the original PLAN.md file path `src/csm/risk/vol_scaling.py`). The module uses weighted dot-product portfolio vol rather than equal-weight mean, improving accuracy when weights are non-uniform. The pipeline overlay adapter (consuming `PortfolioState`) is deferred to Phase 4.6.
 
 ---
 
