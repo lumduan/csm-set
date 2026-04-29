@@ -279,19 +279,24 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.2 — Weight Optimizer Expansion
 
-**Status:** `[ ]` Not started
-**Goal:** Expand the existing `WeightOptimizer` stub into a production weighting engine with `equal_weight`, `vol_target`, `inverse_vol`, `min_variance`. Lock `vol_target` as default.
+**Status:** `[x]` Complete — 2026-04-29
+**Goal:** Expand the existing `WeightOptimizer` stub into a production weighting engine with `equal_weight`, `vol_target`, `inverse_vol`, `min_variance`, `max_sharpe` (Monte Carlo). Lock `vol_target` as default.
 
 **Deliverables:**
 
-- [ ] `src/csm/portfolio/optimizer.py` — extended `WeightOptimizer`
-  - [ ] `compute(symbols: list[str], prices: pd.DataFrame, scheme: WeightScheme, config: OptimizerConfig) -> pd.Series`
-  - [ ] Schemes: `EQUAL`, `INVERSE_VOL`, `VOL_TARGET`, `MIN_VARIANCE` (StrEnum)
-  - [ ] All weights sum to 1.0; long-only; min position floor (1%); max position cap (10%)
-  - [ ] Min-variance uses `scipy.optimize.minimize` with SLSQP; falls back to inverse-vol on solver failure
-- [ ] `OptimizerConfig` Pydantic model with `min_position`, `max_position`, `vol_lookback_days`, `target_position_vol`, `solver_max_iter`
-- [ ] Unit tests (≥ 12 cases): weight sum invariant, position-cap enforcement, vol-target inverse-relationship, min-variance solver convergence on synthetic 3-asset case, fallback path
-- [ ] Snapshot parity: `WeightScheme.EQUAL` reproduces Phase 3.9 equity curve to 1e-9
+- [x] `src/csm/portfolio/optimizer.py` — extended `WeightOptimizer`
+  - [x] `compute(symbols: list[str], prices: pd.DataFrame, scheme: WeightScheme, config: OptimizerConfig) -> pd.Series`
+  - [x] Schemes: `EQUAL`, `INVERSE_VOL`, `VOL_TARGET`, `MIN_VARIANCE`, `MAX_SHARPE` (StrEnum)
+  - [x] All weights sum to 1.0; long-only; min position floor (1%); max position cap (10%)
+  - [x] Min-variance uses `scipy.optimize.minimize` with SLSQP; falls back to inverse-vol on solver failure
+  - [x] Max-Sharpe via vectorised Monte Carlo (Dirichlet, 100k samples); falls back to inverse-vol on failure
+- [x] `OptimizerConfig` Pydantic model with `min_position`, `max_position`, `vol_lookback_days`, `target_position_vol`, `solver_max_iter`, `mc_samples`, `mc_risk_free_rate`
+- [x] `MonteCarloResult` Pydantic model with efficient frontier data, max-Sharpe weights, and equal-weight benchmark
+- [x] `monte_carlo_frontier()` standalone utility for analysis/visualisation
+- [x] Unit tests (34 cases): weight sum invariant, position-cap enforcement, vol-target inverse-relationship, min-variance solver convergence, fallback paths, Monte Carlo frontier, determinism
+- [x] Snapshot parity: `WeightScheme.EQUAL` reproduces Phase 3.9 equity curve to 1e-9
+
+**Completion Notes:** All five weighting schemes implemented. Monte Carlo engine uses batch Dirichlet sampling + vectorised `np.einsum` for O(100k) performance in <1s. Position constraints enforced via iterative cap-then-floor redistribution with unsatisfiability detection. Existing methods preserved for backward compatibility with `backtest.py`. All gates pass: ruff clean, mypy strict, 34/34 tests.
 
 ---
 
