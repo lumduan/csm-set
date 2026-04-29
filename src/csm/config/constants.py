@@ -45,7 +45,7 @@ BULL_MODE_N_HOLDINGS_MIN: int = 40  # reduced from 80 in Phase 3.7 — portfolio
 BULL_MODE_N_HOLDINGS_MAX: int = 60  # reduced from 100 in Phase 3.7 — portfolio slimming
 
 # Buffer logic — only evict a holding when new candidate ranks this many percentile points better
-BUFFER_RANK_THRESHOLD: float = 0.25  # Phase 3.8: raised from 0.20 to bring turnover within ≤180% target
+BUFFER_RANK_THRESHOLD: float = 0.25  # Phase 3.8: raised from 0.20; targets ≤180% turnover
 
 # EMA slope detection for dynamic Safe Mode (Phase 3.6)
 EMA_SLOPE_LOOKBACK_DAYS: int = 21  # ~1 trading month; negative slope → 100% cash in Bear
@@ -54,7 +54,15 @@ EMA_SLOPE_LOOKBACK_DAYS: int = 21  # ~1 trading month; negative slope → 100% c
 FAST_REENTRY_EMA_WINDOW: int = 50  # EMA window for fast re-entry: SET > EMA50 → full equity
 
 # Fast-exit overlay (Phase 3.8) — engages safe-mode equity in BULL when SET drops below this EMA
-EXIT_EMA_WINDOW: int = 100  # SET < EMA100 while regime is BULL → equity scaled to safe_mode_max_equity
+EXIT_EMA_WINDOW: int = 100  # SET < EMA100 in BULL regime → equity scaled to safe_mode_max_equity
+
+# Phase 3.9 — turnover control, vol scaling, sector neutralisation
+REBALANCE_EVERY_N: int = 1  # 1=monthly (default), 2=bimonthly, 3=quarterly
+EXIT_RANK_FLOOR: float = 0.35  # evict any holding ranked below this percentile unconditionally
+VOL_LOOKBACK_DAYS: int = 63  # trailing window for portfolio realised-vol estimation
+VOL_TARGET_ANNUAL: float = 0.15  # target annual portfolio volatility for vol-scaling overlay
+VOL_SCALE_CAP: float = 1.5  # maximum vol-scaling multiplier (equity fraction still capped at 1.0)
+SECTOR_MAX_WEIGHT: float = 0.35  # maximum equal-weight fraction allowed for any single sector
 
 # Transaction cost (one-way, basis points)
 TRANSACTION_COST_BPS: float = 15.0
@@ -75,6 +83,7 @@ __all__: list[str] = [
     "EMA_SLOPE_LOOKBACK_DAYS",
     "EMA_TREND_WINDOW",
     "EXIT_EMA_WINDOW",
+    "EXIT_RANK_FLOOR",
     "FAST_REENTRY_EMA_WINDOW",
     "INDEX_SYMBOL",
     "LOOKBACK_YEARS",
@@ -82,10 +91,15 @@ __all__: list[str] = [
     "MIN_AVG_DAILY_VOLUME",
     "MIN_DATA_COVERAGE",
     "MIN_PRICE_THB",
+    "REBALANCE_EVERY_N",
     "REBALANCE_FREQ",
     "RISK_FREE_RATE_ANNUAL",
     "SAFE_MODE_MAX_EQUITY",
+    "SECTOR_MAX_WEIGHT",
     "SET_SECTOR_CODES",
     "TIMEZONE",
     "TRANSACTION_COST_BPS",
+    "VOL_LOOKBACK_DAYS",
+    "VOL_SCALE_CAP",
+    "VOL_TARGET_ANNUAL",
 ]

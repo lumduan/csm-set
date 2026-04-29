@@ -13,10 +13,16 @@ from csm.config.constants import (
     EMA_SLOPE_LOOKBACK_DAYS,
     EMA_TREND_WINDOW,
     EXIT_EMA_WINDOW,
+    EXIT_RANK_FLOOR,
     FAST_REENTRY_EMA_WINDOW,
     MIN_ADTV_63D_THB,
+    REBALANCE_EVERY_N,
     SAFE_MODE_MAX_EQUITY,
+    SECTOR_MAX_WEIGHT,
     TIMEZONE,
+    VOL_LOOKBACK_DAYS,
+    VOL_SCALE_CAP,
+    VOL_TARGET_ANNUAL,
 )
 from csm.data.store import ParquetStore
 from csm.portfolio.optimizer import WeightOptimizer
@@ -151,6 +157,15 @@ class BacktestConfig(BaseModel):
     fast_reentry_ema_window: int = Field(default=FAST_REENTRY_EMA_WINDOW)
     # Phase 3.8 improvements — fast-exit overlay (engages safe-mode equity in BULL when SET<EMA100)
     exit_ema_window: int = Field(default=EXIT_EMA_WINDOW)
+    # Phase 3.9 improvements — turnover control, vol scaling, sector neutralisation
+    # 1=monthly, 2=bimonthly, 3=quarterly
+    rebalance_every_n: int = Field(default=REBALANCE_EVERY_N)
+    exit_rank_floor: float = Field(default=EXIT_RANK_FLOOR)  # evict holdings ranked below this pct
+    vol_scaling_enabled: bool = Field(default=False)  # off by default; preserves Phase 3.8 baseline
+    vol_lookback_days: int = Field(default=VOL_LOOKBACK_DAYS)
+    vol_target_annual: float = Field(default=VOL_TARGET_ANNUAL)
+    vol_scale_cap: float = Field(default=VOL_SCALE_CAP)
+    sector_max_weight: float = Field(default=SECTOR_MAX_WEIGHT)
 
 
 class BacktestResult(BaseModel):
@@ -239,11 +254,16 @@ class MomentumBacktest:
         candidates: list[str],
         cross_section: pd.DataFrame,
         buffer_threshold: float,
+        exit_rank_floor: float = 0.0,
     ) -> list[str]:
         """Retain existing holdings unless a replacement ranks buffer_threshold better.
 
         Uses cross-sectional percentile rank (0–1) of the composite z-score so
         comparisons are scale-invariant across rebalance dates.
+
+        Phase 3.9: holdings ranked below *exit_rank_floor* are evicted unconditionally
+        regardless of whether any replacement qualifies — they have fallen to the
+        bottom of the universe and buffer protection no longer applies.
         """
         if not current_holdings:
             return candidates
@@ -260,6 +280,8 @@ class MomentumBacktest:
                 candidate_set.discard(sym)
             else:
                 current_rank: float = float(pct_rank.get(sym, 0.0))
+                if exit_rank_floor > 0.0 and current_rank < exit_rank_floor:
+                    continue  # unconditional eviction — below the exit floor
                 best_replacement_rank: float = max(
                     (float(pct_rank.get(c, 0.0)) for c in candidate_set), default=0.0
                 )
@@ -304,9 +326,13 @@ class MomentumBacktest:
         # Take top n_holdings_max candidates by raw composite score.
         n_max: int = min(config.n_holdings_max, len(eligible_composite))
         candidates: list[str] = [str(s) for s in eligible_composite.nlargest(n_max).index]
-        # Apply buffer to reduce unnecessary churn.
+        # Apply buffer to reduce unnecessary churn (Phase 3.9: also applies exit-rank floor).
         buffered: list[str] = self._apply_buffer_logic(
-            current_holdings, candidates, cross_section, config.buffer_rank_threshold
+            current_holdings,
+            candidates,
+            cross_section,
+            config.buffer_rank_threshold,
+            config.exit_rank_floor,
         )
         # Enforce bounds: cap at n_holdings_max, ensure at least n_holdings_min.
         buffered = buffered[: config.n_holdings_max]
@@ -412,6 +438,101 @@ class MomentumBacktest:
         """
         return not self._regime.is_bull_market(index_prices, asof, window=ema_window)
 
+    # ━ Phase 3.9: sector cap, vol scaling ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _apply_sector_cap(
+        self,
+        selected: list[str],
+        cross_section: pd.DataFrame,
+        sector_map: dict[str, str],
+        max_weight: float,
+    ) -> list[str]:
+        """Trim *selected* so no single sector exceeds *max_weight* equal-weight fraction.
+
+        Drops the lowest-ranked (by composite z-score) stocks within any over-weight
+        sector until the sector's fraction ≤ max_weight. Returns the pruned list in
+        the original selection order.
+        """
+        if not selected or max_weight >= 1.0:
+            return selected
+
+        composite: pd.Series = cross_section.mean(axis=1)
+        sector_groups: dict[str, list[str]] = {}
+        for sym in selected:
+            sector: str = sector_map.get(sym, "__unknown__")
+            sector_groups.setdefault(sector, []).append(sym)
+
+        evict: set[str] = set()
+        total: int = len(selected)
+        max_count: int = max(1, int(total * max_weight))  # max stocks allowed per sector
+        for _sector, members in sector_groups.items():
+            while sum(1 for m in members if m not in evict) > max_count:
+                ranked: list[str] = sorted(
+                    [m for m in members if m not in evict],
+                    key=lambda s: float(composite.get(s, float("-inf"))),
+                )
+                if not ranked:
+                    break
+                evict.add(ranked[0])  # drop lowest composite in the overweight sector
+
+        pruned: list[str] = [s for s in selected if s not in evict]
+        if len(evict) > 0:
+            logger.debug("Sector cap evicted %d symbols", len(evict))
+        return pruned
+
+    def _compute_portfolio_vol(
+        self,
+        prices: pd.DataFrame,
+        holdings: list[str],
+        asof: pd.Timestamp,
+        lookback_days: int,
+    ) -> float:
+        """Return annualised equal-weight portfolio daily return std.
+
+        Computes over the last *lookback_days* bars ending at *asof*.
+        Returns NaN when fewer than 21 bars are available.
+        """
+        cols: list[str] = [h for h in holdings if h in prices.columns]
+        if not cols:
+            return float("nan")
+        hist: pd.DataFrame = prices[cols].loc[prices.index <= asof].tail(lookback_days)
+        if len(hist) < 21:
+            return float("nan")
+        daily_ret: pd.Series = hist.pct_change().dropna(how="all").mean(axis=1)
+        return float(daily_ret.std() * (252**0.5))
+
+    def _apply_vol_scaling(
+        self,
+        prices: pd.DataFrame,
+        holdings: list[str],
+        asof: pd.Timestamp,
+        equity_fraction: float,
+        lookback_days: int,
+        vol_target: float,
+        vol_scale_cap: float,
+    ) -> float:
+        """Scale *equity_fraction* by (vol_target / realized_vol), clamped to vol_scale_cap.
+
+        Returns *equity_fraction* unchanged when realized vol is NaN (insufficient history).
+        Result is capped at 1.0 — no leverage is applied.
+        """
+        realized_vol: float = self._compute_portfolio_vol(prices, holdings, asof, lookback_days)
+        if realized_vol != realized_vol or realized_vol <= 0.0:  # NaN guard
+            return equity_fraction
+        raw_scale: float = vol_target / realized_vol
+        vol_scale: float = min(max(raw_scale, 0.0), vol_scale_cap)
+        scaled: float = min(equity_fraction * vol_scale, 1.0)
+        logger.debug(
+            "Vol scaling at %s: rv=%.3f tgt=%.3f scale=%.3f → eq %.3f→%.3f",
+            asof,
+            realized_vol,
+            vol_target,
+            vol_scale,
+            equity_fraction,
+            scaled,
+        )
+        return scaled
+
     def run(
         self,
         feature_panel: pd.DataFrame,
@@ -419,6 +540,7 @@ class MomentumBacktest:
         config: BacktestConfig,
         volumes: pd.DataFrame | None = None,
         index_prices: pd.Series | None = None,
+        sector_map: dict[str, str] | None = None,
     ) -> BacktestResult:
         """Run the monthly momentum backtest.
 
@@ -430,6 +552,8 @@ class MomentumBacktest:
                      Required for the ADTV hard filter; skipped with a warning if None.
             index_prices: Optional SET:SET daily close series for EMA-200 trend filter.
                           Stays in Bull Mode for all periods when None.
+            sector_map: Optional mapping from symbol to sector code (e.g. "BANK").
+                        When provided, enables the sector weight cap in Phase 3.9.
 
         Returns:
             Public-safe backtest result.
@@ -454,6 +578,7 @@ class MomentumBacktest:
 
         current_weights: pd.Series = pd.Series(dtype=float)
         current_holdings: list[str] = []
+        current_mode: RegimeState = RegimeState.BULL
         nav: float = 100.0
         equity_curve: dict[str, float] = {}
         annual_returns: dict[str, float] = {}
@@ -461,7 +586,54 @@ class MomentumBacktest:
         turnover_map: dict[str, float] = {}
         period_reports: list[MonthlyPeriodReport] = []
 
-        for current_date, next_date in zip(rebalance_dates[:-1], rebalance_dates[1:], strict=False):
+        for rebalance_idx, (current_date, next_date) in enumerate(
+            zip(rebalance_dates[:-1], rebalance_dates[1:], strict=False)
+        ):
+            date_key: str = next_date.strftime("%Y-%m-%d")
+
+            # Phase 3.9: skip rebalancing on non-rebalance periods; accrue at current weights.
+            if config.rebalance_every_n > 1 and rebalance_idx % config.rebalance_every_n != 0:
+                if not current_holdings:
+                    continue
+                hold_cols: list[str] = [h for h in current_holdings if h in prices.columns]
+                if not hold_cols:
+                    continue
+                prices_window_hold: pd.DataFrame = prices[hold_cols].loc[current_date:next_date]
+                if len(prices_window_hold) < 2:
+                    continue
+                hold_returns: pd.Series = (
+                    prices_window_hold.iloc[-1] / prices_window_hold.iloc[0] - 1.0
+                )
+                hold_aligned: pd.Series = hold_returns.reindex(current_weights.index).fillna(0.0)
+                gross_return_hold: float = float(hold_aligned.dot(current_weights))
+                nav *= 1.0 + gross_return_hold
+                equity_curve[date_key] = nav
+                positions[date_key] = current_holdings
+                turnover_map[date_key] = 0.0
+                annual_returns.setdefault(next_date.strftime("%Y"), 0.0)
+                annual_returns[next_date.strftime("%Y")] += gross_return_hold
+                hold_records: list[MonthlyHoldingRecord] = [
+                    MonthlyHoldingRecord(
+                        symbol=sym,
+                        weight=float(current_weights[sym]),
+                        return_pct=float(hold_aligned.get(sym, 0.0)),
+                    )
+                    for sym in current_weights.index
+                ]
+                period_reports.append(
+                    MonthlyPeriodReport(
+                        period_end=date_key,
+                        holdings=hold_records,
+                        gross_return=gross_return_hold,
+                        cost=0.0,
+                        net_return=gross_return_hold,
+                        turnover=0.0,
+                        nav=nav,
+                        mode=str(current_mode),
+                    )
+                )
+                continue
+
             # Slice cross-section at current rebalance date.
             try:
                 cross_section: pd.DataFrame = feature_panel.xs(current_date, level="date")
@@ -482,7 +654,10 @@ class MomentumBacktest:
             rs_pass: set[str] | None = None
             if config.rs_filter_mode != "off" and index_prices is not None:
                 rs_pass = self._apply_relative_strength_filter(
-                    cross_section, prices, index_prices, current_date,
+                    cross_section,
+                    prices,
+                    index_prices,
+                    current_date,
                     lookback_months=config.rs_lookback_months,
                 )
                 if config.rs_filter_mode == "all":
@@ -493,7 +668,7 @@ class MomentumBacktest:
                         continue
 
             # Determine market regime (Bull / Bear).
-            mode: RegimeState = (
+            current_mode = (
                 self._compute_mode(index_prices, current_date, config.ema_trend_window)
                 if index_prices is not None
                 else RegimeState.BULL
@@ -502,8 +677,17 @@ class MomentumBacktest:
             # Select 40-60 holdings with buffer logic and entry-only RS gate.
             entry_gate: set[str] | None = rs_pass if config.rs_filter_mode == "entry_only" else None
             selected: list[str] = self._select_holdings(
-                cross_section, config, current_holdings, entry_mask=entry_gate,
+                cross_section,
+                config,
+                current_holdings,
+                entry_mask=entry_gate,
             )
+
+            # Phase 3.9: apply sector weight cap when sector_map is provided.
+            if sector_map is not None:
+                selected = self._apply_sector_cap(
+                    selected, cross_section, sector_map, config.sector_max_weight
+                )
 
             # Filter to symbols present in the price matrix; warn on missing.
             missing: list[str] = [s for s in selected if s not in prices.columns]
@@ -535,10 +719,8 @@ class MomentumBacktest:
             #            BEAR: 1) SET>EMA50 → 100%  2) Strong Bear → 0%  3) Weak Bear → 20%
             if index_prices is not None:
                 equity_fraction: float
-                if mode is RegimeState.BULL:
-                    if self._is_fast_exit(
-                        index_prices, current_date, config.exit_ema_window
-                    ):
+                if current_mode is RegimeState.BULL:
+                    if self._is_fast_exit(index_prices, current_date, config.exit_ema_window):
                         equity_fraction = config.safe_mode_max_equity
                         logger.debug(
                             "fast-exit overlay engaged at %s (SET<EMA%d)",
@@ -551,18 +733,28 @@ class MomentumBacktest:
                     index_prices, current_date, config.fast_reentry_ema_window
                 ):
                     equity_fraction = 1.0
-                elif (
-                    config.bear_full_cash
-                    and self._has_negative_ema_slope(
-                        index_prices,
-                        current_date,
-                        config.ema_trend_window,
-                        config.ema_slope_lookback_days,
-                    )
+                elif config.bear_full_cash and self._has_negative_ema_slope(
+                    index_prices,
+                    current_date,
+                    config.ema_trend_window,
+                    config.ema_slope_lookback_days,
                 ):
                     equity_fraction = 0.0
                 else:
                     equity_fraction = config.safe_mode_max_equity
+
+                # Phase 3.9: continuous vol scaling overlay (only when enabled).
+                if config.vol_scaling_enabled and equity_fraction > 0.0 and current_holdings:
+                    equity_fraction = self._apply_vol_scaling(
+                        prices,
+                        current_holdings,
+                        current_date,
+                        equity_fraction,
+                        config.vol_lookback_days,
+                        config.vol_target_annual,
+                        config.vol_scale_cap,
+                    )
+
                 target_weights = target_weights * equity_fraction
 
             turnover: float = self._scheduler.compute_turnover(current_weights, target_weights)
@@ -579,7 +771,6 @@ class MomentumBacktest:
             cost: float = turnover * (config.transaction_cost_bps / 10_000.0)
             nav *= 1.0 + gross_return - cost
 
-            date_key: str = next_date.strftime("%Y-%m-%d")
             equity_curve[date_key] = nav
             positions[date_key] = selected
             turnover_map[date_key] = turnover
@@ -605,7 +796,7 @@ class MomentumBacktest:
                     net_return=gross_return - cost,
                     turnover=turnover,
                     nav=nav,
-                    mode=str(mode),
+                    mode=str(current_mode),
                 )
             )
 

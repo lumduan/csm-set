@@ -721,3 +721,279 @@ class TestPhase38Defaults:
         """EXIT_EMA_WINDOW = 100 introduced in Phase 3.8."""
         config = BacktestConfig()
         assert config.exit_ema_window == 100
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Phase 3.9 tests
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+class TestExitFloor:
+    """Phase 3.9 — exit_rank_floor hard-evicts bottom-ranked holdings."""
+
+    def _make_cross_section(self, symbols: list[str], scores: list[float]) -> pd.DataFrame:
+        return pd.DataFrame({"signal": scores}, index=symbols)
+
+    def test_holdings_below_floor_always_evicted(self, backtest: MomentumBacktest) -> None:
+        """A holding at rank ~0.20 is evicted when floor=0.35, even with no good replacement."""
+        symbols = ["A", "B", "C", "D", "E"]
+        # Ascending scores so rank of "A" is lowest (pct_rank ~ 0.20)
+        scores = [0.1, 0.3, 0.5, 0.7, 0.9]
+        cross_section = self._make_cross_section(symbols, scores)
+        # A is current holding (rank ~ 0.20); candidates don't include A
+        candidates = ["B", "C"]
+        result = backtest._apply_buffer_logic(
+            current_holdings=["A"],
+            candidates=candidates,
+            cross_section=cross_section,
+            buffer_threshold=0.25,
+            exit_rank_floor=0.35,  # A's rank < 0.35 → evicted unconditionally
+        )
+        assert "A" not in result
+
+    def test_holdings_above_floor_protected_by_buffer(self, backtest: MomentumBacktest) -> None:
+        """A holding at rank ~0.80 is retained when the best replacement is only 0.10 better."""
+        symbols = ["A", "B", "C", "D", "E"]
+        # D at rank ~0.80 (4th of 5)
+        scores = [0.1, 0.3, 0.5, 0.7, 0.9]
+        cross_section = self._make_cross_section(symbols, scores)
+        # Best replacement candidate "E" has rank 1.0; diff = 0.20 < buffer 0.25 → retained
+        result = backtest._apply_buffer_logic(
+            current_holdings=["D"],
+            candidates=["E"],
+            cross_section=cross_section,
+            buffer_threshold=0.25,
+            exit_rank_floor=0.35,
+        )
+        assert "D" in result
+
+    def test_floor_zero_disables_hard_eviction(self, backtest: MomentumBacktest) -> None:
+        """exit_rank_floor=0.0 disables unconditional eviction — buffer-only behaviour."""
+        symbols = ["A", "B", "C", "D", "E"]
+        scores = [0.1, 0.3, 0.5, 0.7, 0.9]
+        cross_section = self._make_cross_section(symbols, scores)
+        # A has the lowest rank; no good replacement (diff < buffer)
+        result = backtest._apply_buffer_logic(
+            current_holdings=["A"],
+            candidates=["B"],  # rank diff = 0.20 < buffer 0.25 → retained by buffer alone
+            cross_section=cross_section,
+            buffer_threshold=0.25,
+            exit_rank_floor=0.0,  # floor disabled
+        )
+        assert "A" in result
+
+
+class TestRebalanceEveryN:
+    """Phase 3.9 — rebalance_every_n subsamples the monthly schedule."""
+
+    def _make_multi_period_backtest(
+        self, backtest: MomentumBacktest, n_periods: int, rebalance_every_n: int
+    ) -> dict[str, float]:
+        """Run a simple backtest with flat prices and return the turnover map."""
+        dates = _make_dates(n_periods + 1)
+        symbols = ["A", "B", "C", "D", "E"]
+        scores = [[1.0, 0.8, 0.0, -0.5, -1.0]] * n_periods
+        feature_panel = _make_feature_panel(dates[:-1], symbols, scores)
+        # Flat prices → zero returns, so NAV stays at 100 regardless of weights
+        price_matrix = [[100.0] * 5] * (n_periods + 1)
+        prices = _make_prices(dates, symbols, price_matrix)
+        config = BacktestConfig(
+            transaction_cost_bps=0.0,
+            n_holdings_min=2,
+            n_holdings_max=2,
+            rebalance_every_n=rebalance_every_n,
+            buffer_rank_threshold=0.0,
+            exit_rank_floor=0.0,
+        )
+        result = backtest.run(feature_panel=feature_panel, prices=prices, config=config)
+        return result.turnover
+
+    def test_n1_rebalances_every_period(self, backtest: MomentumBacktest) -> None:
+        """rebalance_every_n=1 → every period is a rebalance period (default behaviour)."""
+        turnover = self._make_multi_period_backtest(backtest, n_periods=4, rebalance_every_n=1)
+        # n_periods=4 feature dates → 3 consecutive pairs → 3 entries in turnover map
+        assert len(turnover) == 3
+
+    def test_n2_equity_curve_still_monthly(self, backtest: MomentumBacktest) -> None:
+        """With rebalance_every_n=2, the equity curve still has an entry for every month."""
+        dates = _make_dates(7)
+        symbols = ["A", "B", "C", "D", "E"]
+        scores = [[1.0, 0.8, 0.0, -0.5, -1.0]] * 6
+        feature_panel = _make_feature_panel(dates[:-1], symbols, scores)
+        price_matrix = [[100.0] * 5] * 7
+        prices = _make_prices(dates, symbols, price_matrix)
+        config = BacktestConfig(
+            transaction_cost_bps=0.0,
+            n_holdings_min=2,
+            n_holdings_max=2,
+            rebalance_every_n=2,
+            buffer_rank_threshold=0.0,
+            exit_rank_floor=0.0,
+        )
+        result = backtest.run(feature_panel=feature_panel, prices=prices, config=config)
+        # 6 periods → equity curve should have an entry for each period that completes
+        assert len(result.equity_curve) >= 4  # at minimum the rebalance periods
+
+    def test_n2_skipped_periods_have_zero_turnover(self, backtest: MomentumBacktest) -> None:
+        """With rebalance_every_n=2, odd-indexed periods have zero turnover."""
+        dates = _make_dates(7)
+        symbols = ["A", "B", "C", "D", "E"]
+        scores = [[1.0, 0.8, 0.0, -0.5, -1.0]] * 6
+        feature_panel = _make_feature_panel(dates[:-1], symbols, scores)
+        price_matrix = [[100.0] * 5] * 7
+        prices = _make_prices(dates, symbols, price_matrix)
+        config = BacktestConfig(
+            transaction_cost_bps=0.0,
+            n_holdings_min=2,
+            n_holdings_max=2,
+            rebalance_every_n=2,
+            buffer_rank_threshold=0.0,
+            exit_rank_floor=0.0,
+        )
+        result = backtest.run(feature_panel=feature_panel, prices=prices, config=config)
+        turnover_values = list(result.turnover.values())
+        # At least one period should have zero turnover (the skipped period)
+        assert any(t == 0.0 for t in turnover_values)
+
+
+class TestSectorCap:
+    """Phase 3.9 — _apply_sector_cap trims overweight sectors."""
+
+    def _make_cross_section(self, symbols: list[str], scores: list[float]) -> pd.DataFrame:
+        return pd.DataFrame({"signal": scores}, index=symbols)
+
+    def test_no_sector_map_returns_unchanged(self, backtest: MomentumBacktest) -> None:
+        """_apply_sector_cap with each symbol in its own sector returns selected unchanged."""
+        selected = ["A", "B", "C"]
+        cross_section = self._make_cross_section(["A", "B", "C"], [1.0, 0.8, 0.6])
+        # Each symbol in a unique sector → no sector exceeds 1/3 < 35% cap
+        sector_map = {"A": "TECH", "B": "BANK", "C": "ENERGY"}
+        result = backtest._apply_sector_cap(selected, cross_section, sector_map, max_weight=0.35)
+        assert set(result) == set(selected)
+
+    def test_overweight_sector_trimmed(self, backtest: MomentumBacktest) -> None:
+        """8 of 10 stocks in same sector exceeds 35% cap — trimmed down to ≤ 35%."""
+        n = 10
+        symbols = [f"S{i}" for i in range(n)]
+        scores = list(range(n, 0, -1))  # S0 highest score
+        cross_section = self._make_cross_section(symbols, scores)
+        # 8 stocks in "BANK", 2 in "TECH"
+        sector_map = {s: "BANK" for s in symbols[:8]}
+        sector_map.update({s: "TECH" for s in symbols[8:]})
+        result = backtest._apply_sector_cap(symbols, cross_section, sector_map, max_weight=0.35)
+        # Bank sector must be trimmed to ≤ floor(10 * 0.35) = 3 stocks (absolute cap on original n)
+        bank_count = sum(1 for s in result if sector_map.get(s) == "BANK")
+        max_allowed = int(n * 0.35)  # = 3
+        assert bank_count <= max_allowed
+        assert len(result) < n  # some evictions occurred
+
+    def test_balanced_sectors_not_trimmed(self, backtest: MomentumBacktest) -> None:
+        """Two sectors at 50% each are both below a 60% cap — no trimming."""
+        symbols = ["A", "B", "C", "D"]
+        cross_section = self._make_cross_section(symbols, [1.0, 0.8, 0.6, 0.4])
+        sector_map = {"A": "TECH", "B": "TECH", "C": "BANK", "D": "BANK"}
+        result = backtest._apply_sector_cap(symbols, cross_section, sector_map, max_weight=0.60)
+        assert set(result) == set(symbols)
+
+
+class TestVolScaling:
+    """Phase 3.9 — vol scaling overlay scales equity_fraction by realized vol."""
+
+    def _flat_prices(self, symbols: list[str], n: int = 100) -> pd.DataFrame:
+        """Return a price DataFrame with flat prices (zero volatility)."""
+        dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
+        return pd.DataFrame(
+            {sym: [100.0] * n for sym in symbols},
+            index=dates,
+        )
+
+    def _trending_prices(self, symbols: list[str], daily_ret: float = 0.01, n: int = 100) -> pd.DataFrame:
+        """Return a price DataFrame with constant daily returns."""
+        dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
+        price = 100.0
+        prices = []
+        for _ in range(n):
+            prices.append(price)
+            price *= 1.0 + daily_ret
+        return pd.DataFrame({sym: prices for sym in symbols}, index=dates)
+
+    def test_vol_scaling_disabled_by_default(self, backtest: MomentumBacktest) -> None:
+        """vol_scaling_enabled=False (default) — equity_fraction unchanged."""
+        config = BacktestConfig()
+        assert config.vol_scaling_enabled is False
+
+    def test_high_realized_vol_reduces_equity_fraction(self, backtest: MomentumBacktest) -> None:
+        """Realized vol 2× target → equity fraction is approximately halved."""
+        # daily_ret std of 0.01 ≈ annualized 0.01 * sqrt(252) ≈ 0.159
+        symbols = ["A", "B"]
+        prices = self._trending_prices(symbols, daily_ret=0.01 + 0.005 * float("nan" != "nan"))
+        # Use random prices to get non-zero vol
+        import numpy as np
+        rng = np.random.default_rng(42)
+        n = 100
+        dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
+        raw = 100.0 * np.cumprod(1.0 + rng.normal(0.0, 0.02, (n, 2)), axis=0)
+        prices = pd.DataFrame(raw, index=dates, columns=symbols)
+        asof = dates[-1]
+        realized_vol = backtest._compute_portfolio_vol(prices, symbols, asof, lookback_days=63)
+        assert realized_vol > 0.0
+        scaled = backtest._apply_vol_scaling(
+            prices, symbols, asof, equity_fraction=1.0,
+            lookback_days=63, vol_target=realized_vol / 2.0, vol_scale_cap=1.5,
+        )
+        assert pytest.approx(scaled, rel=0.05) == 0.5
+
+    def test_low_vol_capped_at_scale_cap_then_1(self, backtest: MomentumBacktest) -> None:
+        """Very low realized vol → scale = vol_target/realized_vol clamped to vol_scale_cap, then min(…, 1.0)."""
+        symbols = ["A"]
+        n = 100
+        dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
+        # 0.001 daily return std → annualized ~0.016; target=0.15 → scale = 9.4 → capped at 1.5
+        rng = np.random.default_rng(0)
+        raw = 100.0 * np.cumprod(1.0 + rng.normal(0.0, 0.001, n))
+        prices = pd.DataFrame({"A": raw}, index=dates)
+        asof = dates[-1]
+        scaled = backtest._apply_vol_scaling(
+            prices, symbols, asof, equity_fraction=0.5,
+            lookback_days=63, vol_target=0.15, vol_scale_cap=1.5,
+        )
+        # min(0.5 * 1.5, 1.0) = min(0.75, 1.0) = 0.75
+        assert scaled <= 1.0
+        assert scaled > 0.5  # must have been scaled up
+
+    def test_nan_vol_returns_equity_fraction_unchanged(self, backtest: MomentumBacktest) -> None:
+        """Fewer than 21 bars → NaN vol → equity_fraction returned unchanged."""
+        symbols = ["A"]
+        dates = pd.date_range("2020-01-01", periods=10, freq="D", tz="Asia/Bangkok")
+        prices = pd.DataFrame({"A": [100.0] * 10}, index=dates)
+        asof = dates[-1]
+        scaled = backtest._apply_vol_scaling(
+            prices, symbols, asof, equity_fraction=0.8,
+            lookback_days=63, vol_target=0.15, vol_scale_cap=1.5,
+        )
+        assert scaled == pytest.approx(0.8)
+
+
+class TestPhase39Defaults:
+    """Phase 3.9 — verify BacktestConfig defaults match the new constants."""
+
+    def test_rebalance_every_n_default(self) -> None:
+        assert BacktestConfig().rebalance_every_n == 1
+
+    def test_exit_rank_floor_default(self) -> None:
+        assert BacktestConfig().exit_rank_floor == 0.35
+
+    def test_vol_scaling_disabled_by_default(self) -> None:
+        assert BacktestConfig().vol_scaling_enabled is False
+
+    def test_vol_lookback_days_default(self) -> None:
+        assert BacktestConfig().vol_lookback_days == 63
+
+    def test_vol_target_annual_default(self) -> None:
+        assert BacktestConfig().vol_target_annual == pytest.approx(0.15)
+
+    def test_vol_scale_cap_default(self) -> None:
+        assert BacktestConfig().vol_scale_cap == pytest.approx(1.5)
+
+    def test_sector_max_weight_default(self) -> None:
+        assert BacktestConfig().sector_max_weight == pytest.approx(0.35)

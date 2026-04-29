@@ -52,11 +52,12 @@ Phase 3 covers four sub-phases in dependency order:
 - Dashboard backtest page (Phase 6)
 - `results/backtest/` export for public Docker image (Phase 7)
 
-### Current State (as of 2026-04-28) — Phase 3.8 Complete
+### Current State (as of 2026-04-29) — Phase 3.9 Complete
 
 Phases 3.1–3.5 complete. Phase 3.6 (Recovery & Turnover Fix) completed 2026-04-28.
 Phase 3.7 (Risk Management & Re-entry) completed 2026-04-28.
 Phase 3.8 (Volume-Aware ADTV, Buffer 0.25, Fast EMA Exit Overlay) completed 2026-04-28.
+Phase 3.9 (Turnover Control, Vol Scaling, Sector Cap, Walk-Forward) completed 2026-04-29.
 
 **Phase 3.6 outcome (2026-04-28):** Bug fixed; dynamic bear and RS filter implemented and tested. Research finding: dynamic 0% equity in Bear delayed market re-entry (44M vs 37M); RS filter increased turnover (220%) by bypassing buffer logic. These findings directly motivated Phase 3.7.
 
@@ -86,6 +87,22 @@ Phase 3.8 (Volume-Aware ADTV, Buffer 0.25, Fast EMA Exit Overlay) completed 2026
 | `tests/unit/risk/test_metrics.py` | 110 | `[x]` Complete (unchanged) |
 | `tests/unit/risk/test_drawdown.py` | 80 | `[x]` Complete (unchanged) |
 | `tests/integration/test_backtest_pipeline.py` | ~56 | `[x]` 3.8: passes volumes; asserts ADTV filter fires |
+
+**Phase 3.9 result (2026-04-29):** Four improvements implemented, tested, and clean:
+1. Rebalance Frequency Control (`rebalance_every_n`) — monthly/bimonthly/quarterly subsampling without losing return accrual
+2. Exit-Floor Buffer Logic (`exit_rank_floor = 0.35`) — unconditional eviction of bottom-35th-percentile holdings
+3. Portfolio Volatility Scaling Overlay (`vol_scaling_enabled`) — continuous `realized_vol → equity_fraction` scaling; targets 15% annual vol; cap 1.5×
+4. Sector Weight Cap (`sector_max_weight = 0.35`) — absolute count guard per sector; works with or without `sector_map`
+5. Walk-Forward OOS Validation (`WalkForwardAnalyzer`) — expanding-window 5-fold cross-validation; IS vs OOS Sharpe ratio; new `walk_forward.py` module
+
+| Module | Lines | Status |
+|---|---|---|
+| `src/csm/config/constants.py` | ~110 | `[x]` 3.9: +6 constants (`REBALANCE_EVERY_N`, `EXIT_RANK_FLOOR`, `VOL_LOOKBACK_DAYS`, `VOL_TARGET_ANNUAL`, `VOL_SCALE_CAP`, `SECTOR_MAX_WEIGHT`) |
+| `src/csm/research/backtest.py` | ~820 | `[x]` 3.9: +7 `BacktestConfig` fields; +`_apply_sector_cap()`; +`_compute_portfolio_vol()`; +`_apply_vol_scaling()`; enumerate loop for `rebalance_every_n`; sector cap wire-in |
+| `src/csm/research/walk_forward.py` | ~245 | `[x]` 3.9: NEW — `WalkForwardConfig`, `WalkForwardFoldResult`, `WalkForwardResult`, `WalkForwardAnalyzer` |
+| `notebooks/03_backtest_analysis.ipynb` | 67 cells | `[x]` 3.9: +Section 32 (sensitivity sweep); +Section 33 (walk-forward OOS chart) |
+| `tests/unit/research/test_backtest.py` | ~950 | `[x]` 3.9: +5 test classes: `TestExitFloor`, `TestRebalanceEveryN`, `TestSectorCap`, `TestVolScaling`, `TestPhase39Defaults` |
+| `tests/unit/research/test_walk_forward.py` | ~220 | `[x]` 3.9: NEW — 9 tests covering fold splitting, OOS aggregation, IS vs OOS ratio, error paths |
 
 ---
 
