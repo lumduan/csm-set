@@ -15,6 +15,8 @@ class CircuitBreakerState(StrEnum):
     """
 
     NORMAL = "NORMAL"
+    TRIPPED = "TRIPPED"
+    RECOVERING = "RECOVERING"
 
 
 class OverlayJournalEntry(BaseModel):

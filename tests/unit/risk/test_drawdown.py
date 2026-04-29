@@ -1,5 +1,6 @@
 """Unit tests for DrawdownAnalyzer."""
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -127,3 +128,61 @@ class TestDrawdownAnalyzer:
         equity = _series([100.0, 80.0, 70.0, 100.0, 90.0, 100.0])
         episodes = analyzer.recovery_periods(equity)
         assert (episodes["recovery_months"] > 0).all()
+
+
+# ---------------------------------------------------------------------------
+# TestRollingDrawdown
+# ---------------------------------------------------------------------------
+
+
+class TestRollingDrawdown:
+    """Tests for DrawdownAnalyzer.rolling_drawdown()."""
+
+    def test_monotonic_equity_zero_dd(self, analyzer: DrawdownAnalyzer) -> None:
+        """Monotonically increasing equity produces flat 0.0 rolling DD."""
+        equity = _series([100.0, 110.0, 120.0, 130.0, 140.0])
+        result = analyzer.rolling_drawdown(equity, window=3)
+        assert (result == 0.0).all()
+
+    def test_known_drop_and_recovery(self, analyzer: DrawdownAnalyzer) -> None:
+        """Equity 100 → 80 → 100 with window=3 produces expected DD values."""
+        equity = _series([100.0, 80.0, 100.0])
+        result = analyzer.rolling_drawdown(equity, window=3)
+        assert len(result) == 3
+        assert result.iloc[0] == pytest.approx(0.0)
+        assert result.iloc[1] == pytest.approx(80.0 / 100.0 - 1.0)
+        assert result.iloc[2] == pytest.approx(100.0 / 100.0 - 1.0)
+
+    def test_recovers_as_window_rolls(self, analyzer: DrawdownAnalyzer) -> None:
+        """DD recovers to 0 once the trough rolls out of the window."""
+        # 100 bars: rise from 100 to 200 over first 50, crash to 100 on day 51,
+        # then flat at 100 for days 52-100
+        values = np.empty(100)
+        values[0] = 100.0
+        for i in range(1, 51):
+            values[i] = values[i - 1] * 1.01  # rising
+        values[51] = 100.0  # crash
+        values[52:] = 100.0  # flat
+        equity = _series(values.tolist())
+
+        result = analyzer.rolling_drawdown(equity, window=20)
+        # After the crash, DD should be strongly negative
+        assert result.iloc[51] < -0.30
+        # 20 bars after crash, trough rolls out → DD = 0
+        assert result.iloc[71] == pytest.approx(0.0)
+
+    def test_empty_returns_empty(self, analyzer: DrawdownAnalyzer) -> None:
+        """Empty input returns empty Series."""
+        equity = pd.Series(dtype=float)
+        result = analyzer.rolling_drawdown(equity, window=60)
+        assert result.empty
+
+    def test_short_history_vs_window(self, analyzer: DrawdownAnalyzer) -> None:
+        """With min_periods=1, short history still produces valid results."""
+        equity = _series([100.0, 95.0, 90.0])
+        result = analyzer.rolling_drawdown(equity, window=60)
+        assert len(result) == 3
+        # Each value is relative to running peak with whatever history is available
+        assert result.iloc[0] == 0.0  # first point is its own peak
+        assert result.iloc[1] == pytest.approx(95.0 / 100.0 - 1.0)
+        assert result.iloc[2] == pytest.approx(90.0 / 100.0 - 1.0)

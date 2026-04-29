@@ -1,7 +1,17 @@
 """Portfolio-layer exports for csm-set."""
 
 from csm.portfolio.construction import PortfolioConstructor, SelectionConfig, SelectionResult
-from csm.portfolio.exceptions import OptimizationError, PortfolioError, SelectionError
+from csm.portfolio.drawdown_circuit_breaker import (
+    CircuitBreakerResult,
+    DrawdownCircuitBreaker,
+    DrawdownCircuitBreakerConfig,
+)
+from csm.portfolio.exceptions import (
+    CircuitBreakerTripped,
+    OptimizationError,
+    PortfolioError,
+    SelectionError,
+)
 from csm.portfolio.liquidity_overlay import (
     LiquidityConfig,
     LiquidityOverlay,
@@ -20,7 +30,11 @@ from csm.portfolio.state import (
 from csm.portfolio.vol_scaler import VolatilityScaler, VolScalingConfig, VolScalingResult
 
 __all__: list[str] = [
+    "CircuitBreakerResult",
     "CircuitBreakerState",
+    "CircuitBreakerTripped",
+    "DrawdownCircuitBreaker",
+    "DrawdownCircuitBreakerConfig",
     "LiquidityConfig",
     "LiquidityOverlay",
     "LiquidityResult",

@@ -21,6 +21,27 @@ class DrawdownAnalyzer:
 
         return equity_curve / equity_curve.cummax() - 1.0
 
+    def rolling_drawdown(self, equity: pd.Series, window: int) -> pd.Series:
+        """Compute rolling N-period drawdown relative to the trailing peak.
+
+        For each point, the rolling max is taken over the *window* most recent
+        observations.  The drawdown is ``equity / rolling_max - 1``.  This is
+        *not* the peak-to-trough max DD — once a trough rolls out of the
+        window, the rolling drawdown recovers naturally.
+
+        Args:
+            equity: Equity curve as a monotonically-indexed Series.
+            window: Lookback window in periods (e.g., 60 for 60-day rolling).
+
+        Returns:
+            Series of the same length as *equity* with values in (−1, 0].
+        """
+        if equity.empty:
+            return pd.Series(dtype=float)
+
+        rolling_max: pd.Series = equity.rolling(window=window, min_periods=1).max()
+        return equity / rolling_max - 1.0
+
     def recovery_periods(self, equity_curve: pd.Series) -> pd.DataFrame:
         """Identify drawdown and recovery episodes."""
 
