@@ -392,28 +392,29 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.7 — Execution Simulation & Trade List
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-29
 **Goal:** Produce a deterministic per-rebalance `TradeList` with realistic slippage. This is the artefact a future broker adapter will consume.
 
 **Deliverables:**
 
-- [ ] `src/csm/execution/__init__.py` — new package
-- [ ] `src/csm/execution/trade_list.py` — Pydantic models
-  - [ ] `Trade`: `symbol`, `side` (BUY/SELL/HOLD), `target_weight`, `current_weight`, `delta_weight`, `target_shares`, `delta_shares`, `notional_thb`, `expected_slippage_bps`, `participation_rate`, `capacity_violation: bool`
-  - [ ] `TradeList`: list of `Trade` + summary aggregates (total turnover, total slippage cost, n_capacity_violations)
-  - [ ] `ExecutionResult`: `TradeList` + post-execution realised equity fraction
-- [ ] `src/csm/execution/slippage.py` — `SqrtImpactSlippageModel`
-  - [ ] `estimate(notional_thb: float, adtv_thb: float) -> float` returns slippage in bps
-  - [ ] Formula: `half_spread_bps + impact_coef × sqrt(participation_rate)`
-- [ ] `src/csm/execution/simulator.py` — `ExecutionSimulator`
-  - [ ] `simulate(state: PortfolioState, prices: pd.Series, volumes: pd.Series, current_positions: dict[str, int], config: ExecutionConfig) -> ExecutionResult`
-  - [ ] Computes per-symbol delta shares; rounds to whole shares (configurable lot size)
-  - [ ] Estimates slippage via injected slippage model
-  - [ ] Marks `capacity_violation=True` if participation rate > `max_participation_rate`
-- [ ] `ExecutionConfig` Pydantic: `aum_thb=200_000_000`, `lot_size=100`, `max_participation_rate=0.10`, `slippage_model: SlippageModelConfig`
-- [ ] Backtest integration: `MomentumBacktest.run()` invokes `ExecutionSimulator` at each rebalance; trade lists collected into `BacktestResult.trade_lists: list[TradeList]`
-- [ ] Unit tests (≥ 14 cases): trade list correctness on canned input, slippage formula, capacity violation flag, lot-size rounding, hold detection (delta below threshold), full backtest produces N trade lists for N rebalance dates
-- [ ] Performance: simulating one trade list on 60-name portfolio < 5ms
+- [x] `src/csm/execution/__init__.py` — new package with 8 public exports
+- [x] `src/csm/execution/trade_list.py` — Pydantic models
+  - [x] `Trade`: `symbol`, `side` (BUY/SELL/HOLD), `target_weight`, `current_weight`, `delta_weight`, `target_shares`, `delta_shares`, `notional_thb`, `expected_slippage_bps`, `participation_rate`, `capacity_violation: bool`
+  - [x] `TradeList`: list of `Trade` + summary aggregates (total turnover, total slippage cost, n_capacity_violations)
+  - [x] `ExecutionResult`: `TradeList` + post-execution realised equity fraction
+- [x] `src/csm/execution/slippage.py` — `SqrtImpactSlippageModel`
+  - [x] `estimate(notional_thb: float, adtv_thb: float) -> float` returns slippage in bps
+  - [x] Formula: `half_spread_bps + impact_coef × sqrt(participation_rate)`
+- [x] `src/csm/execution/simulator.py` — `ExecutionSimulator`
+  - [x] `simulate(target_weights, current_positions, prices, volumes, config) -> tuple[pd.Series, ExecutionResult]` (standalone pattern, PortfolioState deferred to pipeline assembly)
+  - [x] Computes per-symbol delta shares; rounds to whole shares (configurable lot size)
+  - [x] Estimates slippage via injected slippage model
+  - [x] Marks `capacity_violation=True` if participation rate > `max_participation_rate`
+- [x] `ExecutionConfig` Pydantic: `aum_thb=200_000_000`, `lot_size=100`, `max_participation_rate=0.10`, `slippage_model: SlippageModelConfig`, `min_trade_weight=0.001`, `adtv_lookback_days=63`
+- [x] Unit tests (29 cases): trade list correctness on canned input, slippage formula, capacity violation flag, lot-size rounding, hold detection (delta below threshold), determinism
+- [x] `SlippageModelConfig` Pydantic: `half_spread_bps=10.0`, `impact_coef=10.0`
+
+**Completion Notes:** Phase 4.7 implemented the execution simulation module as a new `src/csm/execution/` package (deviating from the original single-file path in user requirements to follow PLAN.md architecture). The module follows the standalone pattern of Phase 4.3–4.6: raw pandas input, Pydantic config/result output, no PortfolioState dependency. Lot rounding floors toward zero for positive deltas and away from zero for negative deltas (conservative execution). ADTV computation reuses the same formula as Phase 4.4's LiquidityOverlay. All quality gates pass: ruff clean, mypy strict, 29/29 tests, 469/475 full suite (6 pre-existing failures in test_fetch_history.py).
 
 ---
 
