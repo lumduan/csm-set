@@ -2,6 +2,13 @@
 
 from csm.portfolio.construction import PortfolioConstructor, SelectionConfig, SelectionResult
 from csm.portfolio.exceptions import OptimizationError, PortfolioError, SelectionError
+from csm.portfolio.liquidity_overlay import (
+    LiquidityConfig,
+    LiquidityOverlay,
+    LiquidityResult,
+    PositionLiquidityInfo,
+    compute_capacity_curve,
+)
 from csm.portfolio.optimizer import MonteCarloResult, OptimizerConfig, WeightOptimizer, WeightScheme
 from csm.portfolio.rebalance import RebalanceScheduler
 from csm.portfolio.state import (
@@ -14,6 +21,9 @@ from csm.portfolio.vol_scaler import VolatilityScaler, VolScalingConfig, VolScal
 
 __all__: list[str] = [
     "CircuitBreakerState",
+    "LiquidityConfig",
+    "LiquidityOverlay",
+    "LiquidityResult",
     "MonteCarloResult",
     "OptimizationError",
     "OptimizerConfig",
@@ -22,6 +32,7 @@ __all__: list[str] = [
     "PortfolioConstructor",
     "PortfolioError",
     "PortfolioState",
+    "PositionLiquidityInfo",
     "RebalanceScheduler",
     "SelectionConfig",
     "SelectionError",
@@ -31,4 +42,5 @@ __all__: list[str] = [
     "VolatilityScaler",
     "WeightOptimizer",
     "WeightScheme",
+    "compute_capacity_curve",
 ]

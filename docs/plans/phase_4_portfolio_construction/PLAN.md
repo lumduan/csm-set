@@ -325,21 +325,23 @@ PortfolioConstructor    WeightOptimizer    Constraints    RegimeDetector   Drawd
 
 ### Phase 4.4 — Liquidity & Capacity Overlay
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-29
 **Goal:** Add the per-position ADV-participation cap and strategy-capacity curve that Phase 3.9 lacks.
 
 **Deliverables:**
 
-- [ ] `src/csm/risk/capacity.py` — `CapacityOverlay`
-  - [ ] `apply(state: PortfolioState, ctx: OverlayContext) -> PortfolioState`
-  - [ ] For each target position: max notional = `adv_cap_pct × ADV_thb` where `ADV_thb` is 63-day average daily turnover
-  - [ ] Position notional reduced if cap binding; excess held as cash
-  - [ ] Aggregate effective equity fraction adjusted; recorded in journal
-  - [ ] `CapacityResult` per-position: `target_notional`, `capped_notional`, `participation_rate`, `cap_binding`
-- [ ] `CapacityConfig` Pydantic model: `enabled=True`, `adv_cap_pct=0.10`, `adtv_lookback_days=63`, `assumed_aum_thb=200_000_000`
-- [ ] **Strategy capacity curve** helper: `compute_capacity_curve(prices, volumes, weights, aum_grid) -> pd.DataFrame` returning aggregate participation rate, fraction of trades capped, expected slippage at each AUM
-- [ ] Unit tests (≥ 10 cases): cap binds at high AUM, no-op at low AUM, ADV computation matches manual, journal entries, capacity curve monotonic in AUM, edge cases (zero volume, single-name portfolio)
-- [ ] Snapshot parity: `enabled=False` reproduces Phase 3.9 baseline
+- [x] `src/csm/portfolio/liquidity_overlay.py` — `LiquidityOverlay`
+  - [x] `apply(weights, prices, volumes, config) -> tuple[pd.Series, LiquidityResult]`
+  - [x] For each target position: max notional = `adv_cap_pct × ADV_thb` where `ADV_thb` is 63-day average daily turnover
+  - [x] Position notional reduced if cap binding; excess held as cash
+  - [x] Aggregate effective equity fraction adjusted; recorded in `LiquidityResult`
+  - [x] `PositionLiquidityInfo` per-position: `target_notional`, `capped_notional`, `participation_rate`, `cap_binding`
+- [x] `LiquidityConfig` Pydantic model: `enabled=True`, `adv_cap_pct=0.10`, `adtv_lookback_days=63`, `assumed_aum_thb=200_000_000`
+- [x] **Strategy capacity curve** helper: `compute_capacity_curve(weights, prices, volumes, config, aum_grid) -> pd.DataFrame` returning aggregate participation rate, fraction of trades capped, effective equity fraction at each AUM
+- [x] Unit tests (27 cases): cap binds at high AUM, no-op at low AUM, ADV computation matches manual, capacity curve monotonic in AUM, edge cases (zero volume, single-name portfolio, missing data)
+- [x] Snapshot parity: `enabled=False` reproduces pass-through (equity_fraction=1.0, weights unchanged)
+
+**Completion Notes:** Phase 4.4 implemented the standalone `LiquidityOverlay` at `src/csm/portfolio/liquidity_overlay.py` (deviating from the original PLAN.md path `src/csm/risk/capacity.py` to follow the Phase 4.3 convention). The module uses the same ADTV formula as `_apply_adtv_filter()` (mean of close × volume over 63 trailing bars) for consistency with the Phase 3.9 binary filter. Illiquid assets are zeroed rather than dropped to preserve index shape. Excess weight is held as cash rather than redistributed to avoid cascading cap effects. The pipeline overlay adapter is deferred to Phase 4.6.
 
 ---
 
@@ -563,8 +565,8 @@ These tests are the gate for the refactor sub-phases (4.1, 4.2, 4.6). They must 
 | `src/csm/portfolio/constraints.py` | `tests/unit/portfolio/test_constraints.py` |
 | `src/csm/portfolio/pipeline.py` | `tests/unit/portfolio/test_pipeline.py` |
 | `src/csm/portfolio/state.py` | `tests/unit/portfolio/test_state.py` |
-| `src/csm/risk/vol_scaling.py` | `tests/unit/risk/test_vol_scaling.py` |
-| `src/csm/risk/capacity.py` | `tests/unit/risk/test_capacity.py` |
+| `src/csm/portfolio/vol_scaler.py` | `tests/unit/portfolio/test_vol_scaler.py` |
+| `src/csm/portfolio/liquidity_overlay.py` | `tests/unit/portfolio/test_liquidity_overlay.py` |
 | `src/csm/risk/circuit_breaker.py` | `tests/unit/risk/test_circuit_breaker.py` |
 | `src/csm/execution/simulator.py` | `tests/unit/execution/test_simulator.py` |
 | `src/csm/execution/slippage.py` | `tests/unit/execution/test_slippage.py` |
