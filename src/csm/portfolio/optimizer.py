@@ -26,8 +26,13 @@ class WeightScheme(StrEnum):
 class OptimizerConfig(BaseModel):
     """Configuration for the WeightOptimizer.compute() method."""
 
-    min_position: float = Field(default=0.01, ge=0.0, le=1.0)
-    max_position: float = Field(default=0.10, ge=0.0, le=1.0)
+    min_position: float = Field(default=0.05, ge=0.0, le=1.0)
+    max_position: float = Field(default=0.15, ge=0.0, le=1.0)
+    max_holdings: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum number of holdings (None = no limit)",
+    )
     vol_lookback_days: int = Field(default=63, ge=21, le=504)
     target_position_vol: float = Field(default=0.15, ge=0.0, le=1.0)
     solver_max_iter: int = Field(default=1000, ge=100, le=10000)
@@ -344,36 +349,47 @@ class WeightOptimizer:
         if not symbols:
             return pd.Series(dtype=float)
 
+        # Enforce max_holdings: select top N by trailing total return
+        selected: list[str] = list(symbols)
+        if config.max_holdings is not None and len(selected) > config.max_holdings:
+            trailing_prices: pd.DataFrame = prices[selected]
+            if len(trailing_prices) >= 63:
+                total_ret = trailing_prices.iloc[-1] / trailing_prices.iloc[0] - 1.0
+                ranked = total_ret.sort_values(ascending=False)
+                selected = list(ranked.iloc[: config.max_holdings].index)
+            else:
+                selected = selected[: config.max_holdings]
+
         trailing_returns: pd.DataFrame = (
-            prices[symbols].pct_change().dropna(how="all").tail(config.vol_lookback_days)
+            prices[selected].pct_change().dropna(how="all").tail(config.vol_lookback_days)
         )
 
         if scheme is WeightScheme.EQUAL:
-            raw: pd.Series = self.equal_weight(symbols)
+            raw: pd.Series = self.equal_weight(selected)
         elif scheme is WeightScheme.INVERSE_VOL:
-            raw = self._inverse_vol_weights(symbols, trailing_returns)
+            raw = self._inverse_vol_weights(selected, trailing_returns)
         elif scheme is WeightScheme.VOL_TARGET:
             raw = self.vol_target_weight(
-                symbols, trailing_returns, target_vol=config.target_position_vol,
+                selected, trailing_returns, target_vol=config.target_position_vol,
             )
         elif scheme is WeightScheme.MIN_VARIANCE:
             try:
-                raw = self.min_variance_weight(symbols, trailing_returns)
+                raw = self.min_variance_weight(selected, trailing_returns)
             except Exception:
                 logger.warning(
                     "Min-variance solver failed; falling back to inverse-vol",
                     exc_info=True,
                 )
-                raw = self._inverse_vol_weights(symbols, trailing_returns)
+                raw = self._inverse_vol_weights(selected, trailing_returns)
         elif scheme is WeightScheme.MAX_SHARPE:
             try:
-                raw = self._monte_carlo_optimize(symbols, trailing_returns, config)
+                raw = self._monte_carlo_optimize(selected, trailing_returns, config)
             except Exception:
                 logger.warning(
                     "Monte Carlo max-Sharpe failed; falling back to inverse-vol",
                     exc_info=True,
                 )
-                raw = self._inverse_vol_weights(symbols, trailing_returns)
+                raw = self._inverse_vol_weights(selected, trailing_returns)
         else:
             raise ValueError(f"Unknown weight scheme: {scheme}")
 

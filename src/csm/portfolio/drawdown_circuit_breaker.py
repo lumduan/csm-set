@@ -22,12 +22,21 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DrawdownCircuitBreakerConfig(BaseModel):
-    """Configuration for the drawdown circuit breaker overlay."""
+    """Configuration for the drawdown circuit breaker overlay.
+
+    Uses a dual-threshold hysteresis design:
+
+    - **trigger_threshold** (-0.10): DD must breach this to trip the breaker.
+    - **recovery_threshold** (-0.05): DD must improve past this to begin recovery.
+    - **recovery_buffer**: the intentional gap between trip and recovery
+      thresholds, preventing oscillation (whipsaw) during volatile markets.
+    """
 
     enabled: bool = Field(default=True)
     window_days: int = Field(default=60, ge=1, le=504)
-    trigger_threshold: float = Field(default=-0.20, ge=-1.0, le=0.0)
-    recovery_threshold: float = Field(default=-0.10, ge=-1.0, le=0.0)
+    trigger_threshold: float = Field(default=-0.10, ge=-1.0, le=0.0)
+    recovery_threshold: float = Field(default=-0.05, ge=-1.0, le=0.0)
+    recovery_buffer: float = Field(default=0.05, ge=0.0, le=1.0)
     recovery_confirm_days: int = Field(default=21, ge=1, le=252)
     safe_mode_max_equity: float = Field(default=0.20, gt=0.0, le=1.0)
 
@@ -38,6 +47,12 @@ class DrawdownCircuitBreakerConfig(BaseModel):
             raise ValueError(
                 f"recovery_threshold ({self.recovery_threshold}) must be "
                 f"greater than trigger_threshold ({self.trigger_threshold})"
+            )
+        expected_gap = self.recovery_threshold - self.trigger_threshold
+        if abs(expected_gap - self.recovery_buffer) > 1e-9:
+            raise ValueError(
+                f"recovery_buffer ({self.recovery_buffer}) must equal "
+                f"recovery_threshold - trigger_threshold ({expected_gap:.4f})"
             )
         return self
 

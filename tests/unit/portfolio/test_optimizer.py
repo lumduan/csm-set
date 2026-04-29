@@ -72,8 +72,8 @@ class TestWeightScheme:
 class TestOptimizerConfig:
     def test_defaults(self) -> None:
         config = OptimizerConfig()
-        assert config.min_position == pytest.approx(0.01)
-        assert config.max_position == pytest.approx(0.10)
+        assert config.min_position == pytest.approx(0.05)
+        assert config.max_position == pytest.approx(0.15)
         assert config.vol_lookback_days == 63
         assert config.target_position_vol == pytest.approx(0.15)
         assert config.solver_max_iter == 1000

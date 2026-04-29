@@ -26,6 +26,13 @@ class VolScalingConfig(BaseModel):
     cap: float = Field(default=1.5, ge=1.0, le=3.0)
     floor: float = Field(default=0.0, ge=0.0, le=1.0)
     regime_aware: bool = Field(default=False)
+    fast_lookback_days: int = Field(default=21, ge=10, le=126)
+    fast_blend_weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Weight on fast-window vol; 0 = slow only, 0.5 = equal blend",
+    )
 
 
 class VolScalingResult(BaseModel):
@@ -34,6 +41,9 @@ class VolScalingResult(BaseModel):
     realized_vol_annual: float
     scale_factor: float
     equity_fraction: float
+    slow_realized_vol: float = 0.0
+    fast_realized_vol: float = 0.0
+    blended: bool = False
 
 
 class VolatilityScaler:
@@ -74,9 +84,19 @@ class VolatilityScaler:
                 equity_fraction=config.cap,
             )
 
-        realized: float = self._compute_realized_vol(
-            weights, prices, config.lookback_days,
-        )
+        if config.fast_blend_weight > 0.0:
+            realized, slow_vol, fast_vol = self._compute_blended_vol(
+                weights, prices, config.lookback_days,
+                config.fast_lookback_days, config.fast_blend_weight,
+            )
+            blended = True
+        else:
+            realized = self._compute_realized_vol(
+                weights, prices, config.lookback_days,
+            )
+            slow_vol = realized
+            fast_vol = 0.0
+            blended = False
 
         if math.isnan(realized) or realized <= 0.0:
             scale_factor: float = config.cap
@@ -99,6 +119,9 @@ class VolatilityScaler:
             realized_vol_annual=realized if not math.isnan(realized) else 0.0,
             scale_factor=scale_factor,
             equity_fraction=equity_fraction,
+            slow_realized_vol=slow_vol if not math.isnan(slow_vol) else 0.0,
+            fast_realized_vol=fast_vol if not math.isnan(fast_vol) else 0.0,
+            blended=blended,
         )
 
     @staticmethod
@@ -138,6 +161,37 @@ class VolatilityScaler:
 
         port_daily: np.ndarray = returns.to_numpy().dot(w.to_numpy())
         return float(np.std(port_daily) * math.sqrt(252))
+
+    @staticmethod
+    def _compute_blended_vol(
+        weights: pd.Series,
+        prices: pd.DataFrame,
+        slow_lookback: int,
+        fast_lookback: int,
+        fast_weight: float,
+    ) -> tuple[float, float, float]:
+        """Compute blended realized vol from slow and fast windows.
+
+        Returns:
+            ``(blended, slow, fast)`` where *blended* is the weighted
+            blend of the two estimates.  Falls back to slow-only when
+            the fast window has insufficient data.
+        """
+        slow: float = VolatilityScaler._compute_realized_vol(
+            weights, prices, slow_lookback,
+        )
+        fast: float = VolatilityScaler._compute_realized_vol(
+            weights, prices, fast_lookback,
+        )
+
+        if math.isnan(fast) or fast <= 0.0:
+            return slow, slow, 0.0
+
+        if math.isnan(slow) or slow <= 0.0:
+            return fast, 0.0, fast
+
+        blended: float = (1.0 - fast_weight) * slow + fast_weight * fast
+        return blended, slow, fast
 
 
 __all__: list[str] = [

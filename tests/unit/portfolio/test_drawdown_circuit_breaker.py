@@ -150,8 +150,9 @@ class TestDrawdownCircuitBreakerConfig:
         cfg = DrawdownCircuitBreakerConfig()
         assert cfg.enabled is True
         assert cfg.window_days == 60
-        assert cfg.trigger_threshold == -0.20
-        assert cfg.recovery_threshold == -0.10
+        assert cfg.trigger_threshold == -0.10
+        assert cfg.recovery_threshold == -0.05
+        assert cfg.recovery_buffer == 0.05
         assert cfg.recovery_confirm_days == 21
         assert cfg.safe_mode_max_equity == 0.20
 
@@ -161,6 +162,7 @@ class TestDrawdownCircuitBreakerConfig:
             window_days=120,
             trigger_threshold=-0.15,
             recovery_threshold=-0.05,
+            recovery_buffer=0.10,
             recovery_confirm_days=10,
             safe_mode_max_equity=0.30,
         )
@@ -291,8 +293,8 @@ class TestDrawdownCircuitBreaker:
         breaker: DrawdownCircuitBreaker,
         uniform_weights: pd.Series,
     ) -> None:
-        """DD at -15% (above -20% trigger) does not trip."""
-        equity = _make_equity_with_dd(-0.15)
+        """DD at -5% (above -10% trigger) does not trip."""
+        equity = _make_equity_with_dd(-0.05)
         adj, result = breaker.apply(
             uniform_weights, equity, DrawdownCircuitBreakerConfig(window_days=60),
         )
@@ -323,7 +325,7 @@ class TestDrawdownCircuitBreaker:
         uniform_weights: pd.Series,
     ) -> None:
         """TRIPPED → RECOVERING when DD rises above recovery threshold."""
-        equity = _make_equity_with_dd(-0.05)  # DD = -5%, above -10% recovery
+        equity = _make_equity_with_dd(-0.03)  # DD = -3%, above -5% recovery
         adj, result = breaker.apply(
             uniform_weights,
             equity,
@@ -342,7 +344,7 @@ class TestDrawdownCircuitBreaker:
         uniform_weights: pd.Series,
     ) -> None:
         """RECOVERING + DD above threshold → progress increments."""
-        equity = _make_equity_with_dd(-0.05)
+        equity = _make_equity_with_dd(-0.03)
         adj, result = breaker.apply(
             uniform_weights,
             equity,
@@ -361,7 +363,7 @@ class TestDrawdownCircuitBreaker:
         uniform_weights: pd.Series,
     ) -> None:
         """RECOVERING → NORMAL when progress reaches confirm threshold."""
-        equity = _make_equity_with_dd(-0.05)
+        equity = _make_equity_with_dd(-0.03)
         cfg = DrawdownCircuitBreakerConfig(recovery_confirm_days=21)
         adj, result = breaker.apply(
             uniform_weights,

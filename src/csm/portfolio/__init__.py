@@ -20,6 +20,7 @@ from csm.portfolio.liquidity_overlay import (
     compute_capacity_curve,
 )
 from csm.portfolio.optimizer import MonteCarloResult, OptimizerConfig, WeightOptimizer, WeightScheme
+from csm.portfolio.quality_filter import QualityFilter, QualityFilterConfig, QualityFilterResult
 from csm.portfolio.rebalance import RebalanceScheduler
 from csm.portfolio.sector_regime_constraint_engine import (
     SectorRegimeConstraintConfig,
@@ -59,6 +60,9 @@ __all__: list[str] = [
     "PortfolioError",
     "PortfolioState",
     "PositionLiquidityInfo",
+    "QualityFilter",
+    "QualityFilterConfig",
+    "QualityFilterResult",
     "RebalanceScheduler",
     "SelectionConfig",
     "SectorRegimeConstraintConfig",
