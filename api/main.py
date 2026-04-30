@@ -23,6 +23,7 @@ from api.routers import (
     universe_router,
 )
 from api.scheduler.jobs import create_scheduler
+from api.schemas.health import HealthStatus
 from csm import __version__
 from csm.config.settings import settings
 from csm.data.store import ParquetStore
@@ -90,11 +91,33 @@ app.include_router(backtest_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
 
 
-@app.get("/health")
-async def health() -> dict[str, object]:
+@app.get(
+    "/health",
+    response_model=HealthStatus,
+    summary="Service health check",
+    description=(
+        "Return service status, application version, and public-mode flag. "
+        "Extended with scheduler status and last-refresh information in a future phase."
+    ),
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "ok",
+                        "version": "0.1.0",
+                        "public_mode": False,
+                    },
+                },
+            },
+        },
+    },
+)
+async def health() -> HealthStatus:
     """Return a simple service health payload."""
 
-    return {"status": "ok", "version": __version__, "public_mode": settings.public_mode}
+    return HealthStatus(status="ok", version=__version__, public_mode=settings.public_mode)
 
 
 __all__: list[str] = ["app"]

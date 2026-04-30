@@ -7,6 +7,8 @@ import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from api.deps import get_store
+from api.schemas.backtest import BacktestRunResponse
+from api.schemas.errors import ProblemDetail
 from csm.data.store import ParquetStore
 from csm.research.backtest import BacktestConfig, MomentumBacktest
 
@@ -30,16 +32,42 @@ def _run_backtest_job(store: ParquetStore, config: BacktestConfig) -> None:
     store.save("backtest_summary", pd.DataFrame([result.metrics_dict()]))
 
 
-@router.post("/run")
+@router.post(
+    "/run",
+    response_model=BacktestRunResponse,
+    summary="Run a backtest",
+    description=(
+        "Enqueue a private-mode backtest run with the given configuration. "
+        "Returns a job ID for status polling. Blocked in public mode."
+    ),
+    responses={
+        200: {
+            "description": "Backtest job accepted",
+            "content": {
+                "application/json": {
+                    "example": {"job_id": "abc123def456", "status": "accepted"},
+                },
+            },
+        },
+        404: {
+            "description": "Feature panel not available for backtest",
+            "model": ProblemDetail,
+        },
+        403: {
+            "description": "Disabled in public mode",
+            "model": ProblemDetail,
+        },
+    },
+)
 async def run_backtest(
     config: BacktestConfig,
     background_tasks: BackgroundTasks,
     store: ParquetStore = Depends(get_store),
-) -> dict[str, str]:
+) -> BacktestRunResponse:
     """Enqueue a private-mode backtest run."""
 
     if not store.exists("features_latest"):
         raise HTTPException(status_code=404, detail="Feature panel not available.")
     job_id: str = uuid4().hex
     background_tasks.add_task(_run_backtest_job, store, config)
-    return {"job_id": job_id, "status": "accepted"}
+    return BacktestRunResponse(job_id=job_id, status="accepted")
