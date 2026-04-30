@@ -96,13 +96,25 @@ def tmp_results(tmp_path: Path) -> Path:
 @fixture
 def client(tmp_results: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[object, None, None]:
     """Create a FastAPI test client configured for public mode."""
-    from api.deps import set_store  # noqa: PLC0415
-    from api.main import app  # noqa: PLC0415
-    from fastapi.testclient import TestClient  # noqa: PLC0415
-
+    # Set env vars BEFORE importing api.main — the Settings singleton
+    # reads env vars at import time and is frozen afterward.
     monkeypatch.setenv("CSM_PUBLIC_MODE", "true")
     monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_results))
     monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
-    set_store(ParquetStore(tmp_path / "data" / "processed"))
-    with TestClient(app) as test_client:
-        yield test_client
+
+    # csm.config.__init__ re-exports `settings`, so `import csm.config.settings`
+    # returns the Settings instance, not the module. Use sys.modules instead.
+    import sys  # noqa: PLC0415
+    _settings_mod = sys.modules["csm.config.settings"]
+    _original_settings = _settings_mod.settings
+    _settings_mod.settings = Settings()
+    try:
+        from api.deps import set_store  # noqa: PLC0415
+        from api.main import app  # noqa: PLC0415
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        set_store(ParquetStore(tmp_path / "data" / "processed"))
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        _settings_mod.settings = _original_settings
