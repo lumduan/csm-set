@@ -8,9 +8,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 from starlette.responses import Response
 
 from api.deps import set_store
+from api.errors import general_exception_handler, http_exception_handler
+from api.jobs import JobRegistry
+from api.logging import RequestIDMiddleware
 from api.routers import (
     backtest_router,
     data_router,
@@ -19,6 +23,7 @@ from api.routers import (
     universe_router,
 )
 from api.scheduler.jobs import create_scheduler
+from csm import __version__
 from csm.config.settings import settings
 from csm.data.store import ParquetStore
 
@@ -35,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     scheduler = create_scheduler(settings=settings, store=store)
     app.state.store = store
     app.state.scheduler = scheduler
+    app.state.jobs = JobRegistry()
     if scheduler is not None:
         scheduler.start()
     try:
@@ -44,7 +50,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             scheduler.shutdown(wait=False)
 
 
-app: FastAPI = FastAPI(title="CSM-SET API", version="0.1.0", lifespan=lifespan)
+app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifespan)
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,6 +59,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, general_exception_handler)
 app.mount(
     "/static/notebooks",
     StaticFiles(directory=settings.results_dir / "notebooks"),
@@ -85,7 +94,7 @@ app.include_router(data_router, prefix="/api/v1")
 async def health() -> dict[str, object]:
     """Return a simple service health payload."""
 
-    return {"status": "ok", "version": "0.1.0", "public_mode": settings.public_mode}
+    return {"status": "ok", "version": __version__, "public_mode": settings.public_mode}
 
 
 __all__: list[str] = ["app"]

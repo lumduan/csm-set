@@ -29,6 +29,7 @@ dependencies = [
     "scipy>=1.17.1",
     "settfex>=0.1.0",
     "nbconvert>=7.17.1",
+    "python-ulid>=3",
 ]
 
 [dependency-groups]

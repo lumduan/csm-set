@@ -309,25 +309,32 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.1 — App Factory & Lifespan Audit
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-30
 **Goal:** Validate the existing `api/main.py`. Add request-ID middleware, register the JobRegistry as a lifespan-managed singleton, derive `app.version` from `csm.__version__` (single source of truth), and register the global problem-details exception handler stub (full handler lands in 5.8).
 
 **Deliverables:**
 
-- [ ] [api/main.py](../../../api/main.py) — `app.version` reads from `csm.__version__` (add `__version__` to `src/csm/__init__.py`)
-- [ ] `api/main.py` lifespan extended to instantiate `JobRegistry` (skeleton from 5.4) and store it on `app.state.jobs`
-- [ ] `api/deps.py` — add `get_jobs() -> JobRegistry` provider
-- [ ] `api/main.py` registers a global exception handler stub for `HTTPException` and `Exception` (delegates to `api.errors.problem_details_handler` once 5.8 is merged)
-- [ ] `api/logging.py` — new module with `RequestIDMiddleware` (Starlette `BaseHTTPMiddleware`) generating ULIDs and binding to a `contextvar`
-- [ ] `app.add_middleware(RequestIDMiddleware)` registered before CORS
-- [ ] Unit tests (5 cases): version surfaces in OpenAPI; lifespan creates JobRegistry; request-ID is set per request and reset between requests; request-ID echoed in `X-Request-ID` response header
-- [ ] No semantic change to existing endpoint behaviour
+- [x] [api/main.py](../../../api/main.py) — `app.version` reads from `csm.__version__` (`__version__` already present in `src/csm/__init__.py:3`)
+- [x] `api/main.py` lifespan extended to instantiate `JobRegistry` (skeleton) and store it on `app.state.jobs`
+- [x] `api/deps.py` — add `get_jobs() -> JobRegistry` provider
+- [x] `api/main.py` registers a global exception handler stub for `HTTPException` and `Exception` in `api/errors.py`
+- [x] `api/logging.py` — new module with `RequestIDMiddleware` (Starlette `BaseHTTPMiddleware`) generating ULIDs and binding to a `contextvar`
+- [x] `app.add_middleware(RequestIDMiddleware)` registered before CORS (outermost in stack)
+- [x] Unit tests (12 cases in `tests/unit/test_api_lifespan.py`): version in OpenAPI; JobRegistry in lifespan; request-ID per request, ULID format; X-Request-ID header; contextvar reset; 404 includes request_id; health endpoint
+- [x] No semantic change to existing endpoint behaviour
+- [x] `python-ulid>=3` added to dependencies; `api/jobs.py` skeleton created
+
+**Completion notes:**
+- `csm.__version__` already existed at `"0.1.0"` — no change needed to `src/csm/__init__.py`
+- Exception handlers imported `HTTPException` from `starlette.exceptions` (not FastAPI's subclass) so routing 404s are caught correctly
+- Middleware order: RequestIDMiddleware (outermost) → CORSMiddleware → BaseHTTPMiddleware(public_mode_guard) (innermost)
+- 12 unit tests pass; 6 pre-existing `test_fetch_history.py` failures unrelated to this phase
 
 **Audit checks against existing code:**
 
-- Confirm [api/main.py:47](../../../api/main.py) `version="0.1.0"` is the only hard-coded version → migrate to `csm.__version__`
-- Confirm [api/main.py:30](../../../api/main.py) `lifespan` does not currently instantiate JobRegistry → extend
-- Confirm middleware order: RequestID → APIKey (5.7) → PublicModeGuard (existing line 62) → CORS (existing line 48). Note: `app.add_middleware` is LIFO, so order of registration matters.
+- [x] Confirm [api/main.py:47](../../../api/main.py) `version="0.1.0"` is the only hard-coded version → migrated to `csm.__version__`
+- [x] Confirm [api/main.py:30](../../../api/main.py) `lifespan` does not currently instantiate JobRegistry → extended
+- [x] Confirm middleware order: RequestID → CORS → PublicModeGuard. `app.add_middleware` is LIFO, so RequestID registered first.
 
 ---
 

@@ -1,5 +1,8 @@
 """Shared dependency providers for the FastAPI layer."""
 
+from fastapi import Request
+
+from api.jobs import JobRegistry
 from csm.config.settings import Settings, settings
 from csm.data.store import ParquetStore
 
@@ -31,4 +34,10 @@ def get_store() -> ParquetStore:
     return _STORE
 
 
-__all__: list[str] = ["get_settings", "get_store", "set_store"]
+def get_jobs(request: Request) -> JobRegistry:
+    """Return the shared JobRegistry instance from application state."""
+
+    return request.app.state.jobs  # type: ignore[no-any-return]
+
+
+__all__: list[str] = ["get_jobs", "get_settings", "get_store", "set_store"]
