@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from csm.config.settings import Settings, settings
+from csm.config.settings import Settings
 from csm.data.store import ParquetStore
 
 FixtureFunction = TypeVar("FixtureFunction", bound=Callable[..., object])
@@ -94,7 +94,9 @@ def tmp_results(tmp_path: Path) -> Path:
 
 
 @fixture
-def client(tmp_results: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[object, None, None]:
+def client(
+    tmp_results: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[object, None, None]:
     """Create a FastAPI test client configured for public mode."""
     # Set env vars BEFORE importing api.main — the Settings singleton
     # reads env vars at import time and is frozen afterward.
@@ -105,16 +107,157 @@ def client(tmp_results: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     # csm.config.__init__ re-exports `settings`, so `import csm.config.settings`
     # returns the Settings instance, not the module. Use sys.modules instead.
     import sys  # noqa: PLC0415
-    _settings_mod = sys.modules["csm.config.settings"]
-    _original_settings = _settings_mod.settings
-    _settings_mod.settings = Settings()
+
+    _settings_mod: object = sys.modules["csm.config.settings"]
+    _original_settings: object = _settings_mod.settings  # type: ignore[attr-defined]
+    _settings_mod.settings = Settings()  # type: ignore[attr-defined]
+
+    # api.main and api.deps have ``from csm.config.settings import
+    # settings`` which creates local bindings — both must be patched.
+    import api.deps as _api_deps  # noqa: PLC0415
+    import api.main as _api_main  # noqa: PLC0415
+
+    _original_deps_settings = _api_deps.settings
+    _original_main_settings = _api_main.settings
+    _api_deps.settings = _settings_mod.settings
+    _api_main.settings = _settings_mod.settings
     try:
-        from api.deps import set_store  # noqa: PLC0415
-        from api.main import app  # noqa: PLC0415
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
-        set_store(ParquetStore(tmp_path / "data" / "processed"))
-        with TestClient(app) as test_client:
+        _api_deps.set_store(ParquetStore(tmp_path / "data" / "processed"))
+        with TestClient(_api_main.app) as test_client:
             yield test_client
     finally:
-        _settings_mod.settings = _original_settings
+        _api_deps.settings = _original_deps_settings
+        _api_main.settings = _original_main_settings
+        _settings_mod.settings = _original_settings  # type: ignore[attr-defined]
+
+
+@fixture
+def private_store(tmp_path: Path) -> ParquetStore:
+    """Create a populated ParquetStore for private-mode integration tests.
+
+    Populates universe_latest, portfolio_current, and portfolio_state
+    with synthetic data so private-mode endpoint tests can exercise
+    the full read path without depending on real pipeline artifacts.
+    """
+    store = ParquetStore(tmp_path / "data" / "processed")
+
+    universe_df = pd.DataFrame(
+        {
+            "symbol": ["SET001", "SET002", "SET003"],
+            "sector": ["BANK", "TECH", "ENERGY"],
+        }
+    )
+    store.save("universe_latest", universe_df)
+
+    portfolio_df = pd.DataFrame(
+        {
+            "symbol": ["SET001", "SET002"],
+            "weight": [0.6, 0.4],
+            "sector": ["BANK", "TECH"],
+        }
+    )
+    store.save("portfolio_current", portfolio_df)
+
+    state_df = pd.DataFrame(
+        [
+            {
+                "regime": "BULL",
+                "breaker_state": "NORMAL",
+                "equity_fraction": 1.0,
+            }
+        ]
+    )
+    store.save("portfolio_state", state_df)
+
+    return store
+
+
+@fixture
+def private_client(
+    tmp_path: Path,
+    private_store: ParquetStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[object, None, None]:
+    """Create a FastAPI TestClient configured for private mode.
+
+    Uses the populated private_store so read endpoints return real data.
+    """
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
+
+    # StaticFiles mount requires the notebooks directory to exist at import time.
+    (tmp_path / "results" / "notebooks").mkdir(parents=True, exist_ok=True)
+
+    import sys  # noqa: PLC0415
+
+    _settings_mod: object = sys.modules["csm.config.settings"]
+    _original_settings: object = _settings_mod.settings  # type: ignore[attr-defined]
+    _settings_mod.settings = Settings()  # type: ignore[attr-defined]
+
+    import api.deps as _api_deps  # noqa: PLC0415
+    import api.main as _api_main  # noqa: PLC0415
+
+    _original_deps_settings = _api_deps.settings
+    _original_main_settings = _api_main.settings
+    _api_deps.settings = _settings_mod.settings
+    _api_main.settings = _settings_mod.settings
+    try:
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        _api_deps.set_store(private_store)
+        with TestClient(_api_main.app) as test_client:
+            yield test_client
+    finally:
+        _api_deps.settings = _original_deps_settings
+        _api_main.settings = _original_main_settings
+        _settings_mod.settings = _original_settings  # type: ignore[attr-defined]
+
+
+@fixture
+def empty_store(tmp_path: Path) -> ParquetStore:
+    """Create an empty ParquetStore — no keys saved. Used for 404 tests."""
+    return ParquetStore(tmp_path / "data" / "processed")
+
+
+@fixture
+def empty_store_client(
+    tmp_path: Path,
+    empty_store: ParquetStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[object, None, None]:
+    """Create a FastAPI TestClient wired to an empty ParquetStore.
+
+    All read endpoints that depend on store data will return 404.
+    """
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
+
+    (tmp_path / "results" / "notebooks").mkdir(parents=True, exist_ok=True)
+
+    import sys  # noqa: PLC0415
+
+    _settings_mod: object = sys.modules["csm.config.settings"]
+    _original_settings: object = _settings_mod.settings  # type: ignore[attr-defined]
+    _settings_mod.settings = Settings()  # type: ignore[attr-defined]
+
+    import api.deps as _api_deps  # noqa: PLC0415
+    import api.main as _api_main  # noqa: PLC0415
+
+    _original_deps_settings = _api_deps.settings
+    _original_main_settings = _api_main.settings
+    _api_deps.settings = _settings_mod.settings
+    _api_main.settings = _settings_mod.settings
+    try:
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        _api_deps.set_store(empty_store)
+        with TestClient(_api_main.app) as test_client:
+            yield test_client
+    finally:
+        _api_deps.settings = _original_deps_settings
+        _api_main.settings = _original_main_settings
+        _settings_mod.settings = _original_settings  # type: ignore[attr-defined]

@@ -26,6 +26,20 @@ class PortfolioSnapshot(BaseModel):
     model_config = ConfigDict(extra="allow", frozen=True)
 
     as_of: str = Field(description="Snapshot timestamp (ISO-8601)")
+    regime: str = Field(
+        default="NEUTRAL",
+        description="Detected market regime (BULL, BEAR, NEUTRAL)",
+    )
+    breaker_state: str = Field(
+        default="NORMAL",
+        description="Drawdown circuit breaker state (NORMAL, TRIPPED, RECOVERING)",
+    )
+    equity_fraction: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.5,
+        description="Current equity allocation fraction after overlay adjustments",
+    )
     holdings: list[Holding] = Field(description="Current portfolio holdings")
     summary_metrics: dict[str, float] = Field(
         default_factory=dict,

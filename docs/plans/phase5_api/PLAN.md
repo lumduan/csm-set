@@ -373,17 +373,29 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.3 — Read-Only Routers Hardening
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-30
 **Goal:** Bring `universe`, `signals`, `portfolio` to production quality. Public/private parity tests, ETag/Last-Modified support for cacheable reads, deterministic error paths.
 
 **Deliverables:**
 
-- [ ] [api/routers/universe.py](../../../api/routers/universe.py) — returns `UniverseSnapshot`; ETag derived from snapshot date + symbol-list hash
-- [ ] [api/routers/signals.py](../../../api/routers/signals.py) — returns `SignalRanking`; public mode reads `results/signals/latest_ranking.json` (existing); private mode computes via `FeaturePipeline` + `CrossSectionalRanker` (existing); ETag derived from `as_of`
-- [ ] [api/routers/portfolio.py](../../../api/routers/portfolio.py) — returns `PortfolioSnapshot`; surfaces `regime` and `breaker_state` from Phase 4 modules; ETag derived from `as_of`
-- [ ] All three routers honour `If-None-Match` and return `304 Not Modified` when ETag matches
-- [ ] Error paths formalized: 404 when `results/` JSON missing in public mode (existing), 404 when parquet key missing in private mode (existing), 500 with problem-details when payload malformed
-- [ ] Integration tests: public + private + error matrix for each router (full suite in 5.9; baseline passes here)
+- [x] [api/routers/universe.py](../../../api/routers/universe.py) — returns `UniverseSnapshot`; ETag derived from snapshot date + symbol-list hash
+- [x] [api/routers/signals.py](../../../api/routers/signals.py) — returns `SignalRanking`; public mode reads `results/signals/latest_ranking.json` (existing); private mode computes via `FeaturePipeline` + `CrossSectionalRanker` (existing); ETag derived from content hash
+- [x] [api/routers/portfolio.py](../../../api/routers/portfolio.py) — returns `PortfolioSnapshot`; surfaces `regime` and `breaker_state` from Phase 4 modules; ETag derived from stable fields
+- [x] All three routers honour `If-None-Match` and return `304 Not Modified` when ETag matches
+- [x] Error paths formalized: 404 when `results/` JSON missing in public mode (existing), 404 when parquet key missing in private mode (existing), 500 with problem-details when payload malformed
+- [x] Integration tests: public + private + error matrix for each router (26 new tests, 580 total passing)
+- [x] New modules: `api/retry.py` (async retry with exp backoff + jitter), `api/schemas/params.py`
+- [x] `PortfolioSnapshot` extended with `regime`, `breaker_state`, `equity_fraction` fields
+- [x] All quality gates pass: ruff check, ruff format, mypy (api/), pytest (580/580)
+
+**Completion notes:**
+- Weak ETags (`W/"<sha256>"`) used consistently across all three routers
+- Portfolio ETag excludes dynamic `as_of` timestamp to allow cache hits
+- `portfolio_state` parquet key loaded optionally in private mode; defaults to NEUTRAL/NORMAL/1.0 if absent
+- Retry logic wraps all store.load, JSON file reads, and pipeline operations
+- Structured logging at INFO (success), WARNING (404/304), ERROR (I/O failure)
+- Error responses use `ProblemDetail` model with `request_id` from contextvar
+- Test fixtures patch both `api.main.settings` and `api.deps.settings` for proper isolation
 
 ---
 
