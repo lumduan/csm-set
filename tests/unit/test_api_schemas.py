@@ -204,6 +204,36 @@ class TestHealthStatus:
         public = HealthStatus(status="ok", version="0.1.0", public_mode=True)
         assert public.public_mode is True
 
+    def test_extended_fields_defaults(self) -> None:
+        h = HealthStatus(status="ok", version="0.1.0", public_mode=False)
+        assert h.scheduler_running is False
+        assert h.last_refresh_at is None
+        assert h.last_refresh_status is None
+        assert h.jobs_pending == 0
+
+    def test_degraded_status(self) -> None:
+        h = HealthStatus(status="degraded", version="0.1.0", public_mode=False)
+        assert h.status == "degraded"
+
+    def test_full_round_trip(self) -> None:
+        from datetime import UTC, datetime
+
+        now = datetime(2026, 4, 30, 10, 0, 0, tzinfo=UTC)
+        original = HealthStatus(
+            status="ok",
+            version="0.1.0",
+            public_mode=False,
+            scheduler_running=True,
+            last_refresh_at=now,
+            last_refresh_status="succeeded",
+            jobs_pending=3,
+        )
+        dumped = original.model_dump(mode="json")
+        restored = HealthStatus(**dumped)
+        assert restored.scheduler_running is True
+        assert restored.last_refresh_status == "succeeded"
+        assert restored.jobs_pending == 3
+
 
 # ---------------------------------------------------------------------------
 # Error schemas
@@ -211,12 +241,37 @@ class TestHealthStatus:
 
 
 class TestProblemDetail:
-    def test_round_trip(self) -> None:
+    def test_round_trip_basic(self) -> None:
         original = ProblemDetail(detail="Not found", request_id="01HXYEXAMPLE9K")
         dumped = original.model_dump()
         restored = ProblemDetail(**dumped)
         assert restored.detail == "Not found"
         assert restored.request_id == "01HXYEXAMPLE9K"
+
+    def test_full_rfc7807_round_trip(self) -> None:
+        original = ProblemDetail(
+            type="tag:csm-set,2026:problem/snapshot-not-found",
+            title="Universe snapshot not found",
+            status=404,
+            detail="Universe data was not found in the parquet store.",
+            instance="/api/v1/universe",
+            request_id="01HXYEXAMPLE9K",
+        )
+        dumped = original.model_dump()
+        restored = ProblemDetail(**dumped)
+        assert restored.type == "tag:csm-set,2026:problem/snapshot-not-found"
+        assert restored.title == "Universe snapshot not found"
+        assert restored.status == 404
+        assert restored.detail == "Universe data was not found in the parquet store."
+        assert restored.instance == "/api/v1/universe"
+        assert restored.request_id == "01HXYEXAMPLE9K"
+
+    def test_rfc7807_defaults(self) -> None:
+        p = ProblemDetail(detail="Something went wrong")
+        assert p.type == "about:blank"
+        assert p.title == ""
+        assert p.status == 0
+        assert p.instance is None
 
 
 # ---------------------------------------------------------------------------

@@ -508,26 +508,37 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.8 — Observability & Error Handling
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-30
 **Goal:** Production-grade logging and a single uniform error contract.
 
 **Deliverables:**
 
-- [ ] `api/logging.py` extended:
-  - [ ] `JsonFormatter` emitting `{ts, level, logger, msg, request_id, **extra}` per log line
-  - [ ] `configure_logging(settings)` invoked at lifespan startup; sets root logger level from `Settings.log_level`
-  - [ ] Uvicorn access log replaced by an `AccessLogMiddleware` emitting `{request_id, method, path, status, duration_ms, client_ip}` once per request
-- [ ] `api/errors.py`:
-  - [ ] `ProblemDetailException(status, type, title, detail)` — internal exception class
-  - [ ] `problem_details_handler(request, exc)` — registered via `app.add_exception_handler` for `HTTPException`, `RequestValidationError`, `Exception`
-  - [ ] Returns `application/problem+json` with `ProblemDetail` body including `request_id` from contextvar
-  - [ ] Maps stdlib `HTTPException` to `ProblemDetail`
-- [ ] [api/main.py:84-88](../../../api/main.py) `/health` extended:
-  - [ ] Returns `HealthStatus(status, version, public_mode, scheduler_running, last_refresh_at, last_refresh_status, jobs_pending)`
-  - [ ] `last_refresh_at` and `last_refresh_status` read from `results/.tmp/last_refresh.json` (Phase 5.5 marker)
-  - [ ] `scheduler_running` reads from `app.state.scheduler` if present
-  - [ ] `jobs_pending` reads from `app.state.jobs.list(status=ACCEPTED)`
-- [ ] Integration tests: error shape uniform across 401, 403, 404, 422, 500; request-ID round-trips request → log → response header → problem-details body
+- [x] `api/logging.py` extended:
+  - [x] `JsonFormatter` emitting `{ts, level, logger, msg, request_id, **extra}` per log line
+  - [x] `configure_logging(settings)` invoked at lifespan startup; sets root logger level from `Settings.log_level`
+  - [x] `AccessLogMiddleware` emitting `{request_id, method, path, status, duration_ms, client_ip}` once per request
+- [x] `api/errors.py`:
+  - [x] `ProblemDetailException(status, type, title, detail)` — internal exception class extending `HTTPException`
+  - [x] `problem_details_handler(request, exc)` — registered via `app.add_exception_handler` for `HTTPException`, `RequestValidationError`, `Exception`
+  - [x] Returns `application/problem+json` with `ProblemDetail` body including `request_id` from contextvar
+  - [x] Maps stdlib `HTTPException` to full `ProblemDetail`
+- [x] `api/main.py:84-88` `/health` extended:
+  - [x] Returns `HealthStatus(status, version, public_mode, scheduler_running, last_refresh_at, last_refresh_status, jobs_pending)`
+  - [x] `last_refresh_at` and `last_refresh_status` read from `results/.tmp/last_refresh.json`
+  - [x] `scheduler_running` reads from `app.state.scheduler`
+  - [x] `jobs_pending` reads from `app.state.jobs.list(status=ACCEPTED)`
+- [x] `api/security.py` `_problem_response` upgraded to full RFC 7807 shape with `type_uri` and `title`
+- [x] `api/schemas/errors.py` — full RFC 7807 `ProblemDetail` with `type`, `title`, `status`, `instance`
+- [x] `api/schemas/health.py` — extended with `scheduler_running`, `last_refresh_at`, `last_refresh_status`, `jobs_pending`; `status` → `Literal["ok","degraded"]`
+- [x] Unit tests: `test_error_handlers.py` (9 cases), `test_api_logging.py` (9 cases), updated `test_api_schemas.py` (+5 cases), `test_api_lifespan.py` (updated)
+- [x] Integration tests: `test_api_errors.py` (10 cases), `test_api_health.py` (7 cases)
+- [x] All quality gates pass: ruff, ruff format, mypy, pytest (710 tests, zero regressions)
+
+**Completion notes:**
+- `ProblemDetailException` extends `HTTPException` so it's caught by the existing handler registration
+- `configure_logging` uses `type(h) is not logging.StreamHandler` to avoid removing `LogCaptureHandler` (pytest's caplog)
+- Router-level error handling (signals, portfolio) catches exceptions internally — global handler covers Starlette routing 404s, auth middleware 401s, public-mode guard 403s, and uncaught exceptions
+- 40 new tests; 710 total passing; all quality gates green
 
 ---
 

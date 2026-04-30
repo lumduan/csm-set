@@ -51,9 +51,7 @@ def is_protected_path(method: str, path: str) -> bool:
 
     if path in PROTECTED_PATHS:
         return True
-    if method != "GET" and path.startswith("/api/v1/"):
-        return True
-    return False
+    return method != "GET" and path.startswith("/api/v1/")
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -104,6 +102,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return _problem_response(
                 detail=f"Missing {API_KEY_HEADER} header.",
                 request_id=request_id,
+                type_uri="tag:csm-set,2026:problem/missing-api-key",
+                title="Missing API key",
             )
 
         if not secrets.compare_digest(supplied, configured_key):
@@ -116,6 +116,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return _problem_response(
                 detail=f"Invalid {API_KEY_HEADER} header.",
                 request_id=request_id,
+                type_uri="tag:csm-set,2026:problem/invalid-api-key",
+                title="Invalid API key",
             )
 
         return await call_next(request)
@@ -135,12 +137,20 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         return module.settings  # type: ignore[no-any-return]
 
 
-def _problem_response(*, detail: str, request_id: str) -> JSONResponse:
-    """Return a 401 JSON response shaped like ``ProblemDetail``."""
+def _problem_response(*, detail: str, request_id: str, type_uri: str, title: str) -> JSONResponse:
+    """Return a 401 JSON response as an RFC 7807 problem detail."""
 
     return JSONResponse(
         status_code=401,
-        content={"detail": detail, "request_id": request_id},
+        content={
+            "type": type_uri,
+            "title": title,
+            "status": 401,
+            "detail": detail,
+            "instance": None,
+            "request_id": request_id,
+        },
+        headers={"Content-Type": "application/problem+json"},
     )
 
 

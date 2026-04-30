@@ -80,16 +80,23 @@ class TestRequestID:
 
 
 class TestErrorHandlers:
-    def test_http_404_includes_request_id(self, client: TestClient) -> None:
+    def test_http_404_includes_rfc7807_fields(self, client: TestClient) -> None:
         resp = client.get("/nonexistent-path")
         assert resp.status_code == 404
         body = resp.json()
-        assert "request_id" in body
+        assert body["type"] == "tag:csm-set,2026:problem/not-found"
+        assert body["title"] == "Not found"
+        assert body["status"] == 404
+        assert body["detail"] == "Not Found"
+        assert body["instance"] == "/nonexistent-path"
+        assert body["request_id"] is not None
+        assert "Content-Type" in resp.headers
+        assert resp.headers["Content-Type"] == "application/problem+json"
 
-    def test_http_exception_detail_preserved(self, client: TestClient) -> None:
+    def test_request_id_header_matches_body(self, client: TestClient) -> None:
         resp = client.get("/nonexistent-path")
         body = resp.json()
-        assert "detail" in body
+        assert resp.headers["x-request-id"] == body["request_id"]
 
 
 class TestHealthEndpoint:
