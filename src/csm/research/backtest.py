@@ -25,8 +25,10 @@ from csm.config.constants import (
     VOL_TARGET_ANNUAL,
 )
 from csm.data.store import ParquetStore
+from csm.portfolio.construction import PortfolioConstructor, SelectionConfig
 from csm.portfolio.optimizer import WeightOptimizer
 from csm.portfolio.rebalance import RebalanceScheduler
+from csm.portfolio.vol_scaler import VolScalingConfig
 from csm.research.exceptions import BacktestError
 from csm.risk.metrics import PerformanceMetrics
 from csm.risk.regime import RegimeDetector, RegimeState
@@ -161,10 +163,11 @@ class BacktestConfig(BaseModel):
     # 1=monthly, 2=bimonthly, 3=quarterly
     rebalance_every_n: int = Field(default=REBALANCE_EVERY_N)
     exit_rank_floor: float = Field(default=EXIT_RANK_FLOOR)  # evict holdings ranked below this pct
-    vol_scaling_enabled: bool = Field(default=False)  # off by default; preserves Phase 3.8 baseline
+    vol_scaling_enabled: bool = Field(default=True)  # FLIPPED: on by default
     vol_lookback_days: int = Field(default=VOL_LOOKBACK_DAYS)
     vol_target_annual: float = Field(default=VOL_TARGET_ANNUAL)
     vol_scale_cap: float = Field(default=VOL_SCALE_CAP)
+    vol_scaling_config: VolScalingConfig | None = Field(default=None)
     sector_max_weight: float = Field(default=SECTOR_MAX_WEIGHT)
 
 
@@ -209,8 +212,15 @@ class BacktestResult(BaseModel):
 class MomentumBacktest:
     """Vectorised monthly cross-sectional momentum backtest."""
 
-    def __init__(self, store: ParquetStore) -> None:
+    def __init__(
+        self,
+        store: ParquetStore,
+        portfolio_constructor: PortfolioConstructor | None = None,
+    ) -> None:
         self._store: ParquetStore = store
+        self._portfolio_constructor: PortfolioConstructor = (
+            portfolio_constructor or PortfolioConstructor()
+        )
         self._optimizer: WeightOptimizer = WeightOptimizer()
         self._scheduler: RebalanceScheduler = RebalanceScheduler()
         self._metrics: PerformanceMetrics = PerformanceMetrics()
@@ -248,54 +258,6 @@ class MomentumBacktest:
             logger.debug("ADTV filter excluded %d symbols at %s", excluded, asof)
         return cross_section.loc[keep]
 
-    def _apply_buffer_logic(
-        self,
-        current_holdings: list[str],
-        candidates: list[str],
-        cross_section: pd.DataFrame,
-        buffer_threshold: float,
-        exit_rank_floor: float = 0.0,
-    ) -> list[str]:
-        """Retain existing holdings unless a replacement ranks buffer_threshold better.
-
-        Uses cross-sectional percentile rank (0–1) of the composite z-score so
-        comparisons are scale-invariant across rebalance dates.
-
-        Phase 3.9: holdings ranked below *exit_rank_floor* are evicted unconditionally
-        regardless of whether any replacement qualifies — they have fallen to the
-        bottom of the universe and buffer protection no longer applies.
-        """
-        if not current_holdings:
-            return candidates
-
-        composite: pd.Series = cross_section.mean(axis=1)
-        pct_rank: pd.Series = composite.rank(pct=True)
-
-        candidate_set: set[str] = set(candidates)
-        final: list[str] = []
-
-        for sym in current_holdings:
-            if sym in candidate_set:
-                final.append(sym)
-                candidate_set.discard(sym)
-            else:
-                current_rank: float = float(pct_rank.get(sym, 0.0))
-                if exit_rank_floor > 0.0 and current_rank < exit_rank_floor:
-                    continue  # unconditional eviction — below the exit floor
-                best_replacement_rank: float = max(
-                    (float(pct_rank.get(c, 0.0)) for c in candidate_set), default=0.0
-                )
-                if best_replacement_rank - current_rank >= buffer_threshold:
-                    pass  # evict — will be replaced by top candidates below
-                else:
-                    final.append(sym)
-
-        # Fill remaining slots with highest-ranked new candidates not yet included.
-        final_set: set[str] = set(final)
-        new_entries: list[str] = [c for c in candidates if c not in final_set]
-        final.extend(new_entries)
-        return final
-
     def _select_holdings(
         self,
         cross_section: pd.DataFrame,
@@ -306,41 +268,18 @@ class MomentumBacktest:
     ) -> list[str]:
         """Select 40–60 holdings using composite z-score + buffer logic.
 
-        When *entry_mask* is provided, candidates for new entry are restricted to
-        symbols in the mask, but existing holdings are always eligible for buffer
-        retention (``"entry_only"`` RS filter gate).
-
-        Falls back to top_quantile selection when cross_section is too small to
-        fill n_holdings_min, ensuring at least one symbol is always returned.
+        Delegates to :class:`PortfolioConstructor.select` (Phase 4.1).
         """
-        if cross_section.empty:
-            return []
-        composite: pd.Series = cross_section.mean(axis=1)
-        # Restrict candidate pool to entry_mask when provided (entry-only RS gate).
-        if entry_mask is not None and entry_mask:
-            eligible_composite: pd.Series = composite[composite.index.isin(entry_mask)]
-            if eligible_composite.empty:
-                eligible_composite = composite  # fallback if gate emptied pool
-        else:
-            eligible_composite = composite
-        # Take top n_holdings_max candidates by raw composite score.
-        n_max: int = min(config.n_holdings_max, len(eligible_composite))
-        candidates: list[str] = [str(s) for s in eligible_composite.nlargest(n_max).index]
-        # Apply buffer to reduce unnecessary churn (Phase 3.9: also applies exit-rank floor).
-        buffered: list[str] = self._apply_buffer_logic(
-            current_holdings,
-            candidates,
-            cross_section,
-            config.buffer_rank_threshold,
-            config.exit_rank_floor,
+        sel_config: SelectionConfig = SelectionConfig(
+            n_holdings_min=config.n_holdings_min,
+            n_holdings_max=config.n_holdings_max,
+            buffer_rank_threshold=config.buffer_rank_threshold,
+            exit_rank_floor=config.exit_rank_floor,
         )
-        # Enforce bounds: cap at n_holdings_max, ensure at least n_holdings_min.
-        buffered = buffered[: config.n_holdings_max]
-        if len(buffered) < config.n_holdings_min and len(candidates) >= config.n_holdings_min:
-            # Top-up from candidates preserving order.
-            extra: list[str] = [c for c in candidates if c not in set(buffered)]
-            buffered.extend(extra[: config.n_holdings_min - len(buffered)])
-        return buffered if buffered else candidates[:1]
+        result = self._portfolio_constructor.select(
+            cross_section, current_holdings, sel_config, entry_mask=entry_mask
+        )
+        return result.selected
 
     def _compute_mode(
         self,

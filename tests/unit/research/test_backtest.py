@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from csm.data.store import ParquetStore
+from csm.portfolio.construction import PortfolioConstructor
 from csm.research.backtest import BacktestConfig, MomentumBacktest
 from csm.research.exceptions import BacktestError
 from csm.risk.regime import RegimeState
@@ -237,9 +238,7 @@ class TestAdtvFilter:
 
 
 class TestBufferLogic:
-    def test_retains_holdings_when_replacement_ranks_below_threshold(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_retains_holdings_when_replacement_ranks_below_threshold(self) -> None:
         """Holding is kept when the best replacement ranks only 5 pct-pts better."""
         symbols = ["A", "B", "C", "D"]
         # Composite scores: C(1.0) > A(0.8) > B(0.6) > D(0.2)
@@ -252,11 +251,14 @@ class TestBufferLogic:
         candidates = ["C", "A"]
         # B is not in candidates; best replacement is C (rank=1.0) vs B (rank=0.5).
         # Difference = 0.5 >= 0.125 → B is evicted.
-        result = backtest._apply_buffer_logic(current, candidates, cross_section, 0.125)
+        result, evicted, retained = PortfolioConstructor._apply_buffer_logic(
+            current, candidates, cross_section, 0.125, 0.0
+        )
         assert "A" in result  # A retained (in candidates)
         assert "C" in result  # C admitted
+        assert "B" in evicted
 
-    def test_retains_holding_below_buffer_threshold(self, backtest: MomentumBacktest) -> None:
+    def test_retains_holding_below_buffer_threshold(self) -> None:
         """Holding is kept when best replacement ranks < buffer_threshold better."""
         symbols = ["A", "B"]
         # Scores equal → ranks equal (both 0.75 with pct=True including ties handling)
@@ -266,8 +268,11 @@ class TestBufferLogic:
         current = ["B"]
         candidates = ["A"]
         # rank diff = 1.0 - 0.5 = 0.5; with threshold=0.9, B is kept
-        result = backtest._apply_buffer_logic(current, candidates, cross_section, 0.9)
+        result, evicted, retained = PortfolioConstructor._apply_buffer_logic(
+            current, candidates, cross_section, 0.9, 0.0
+        )
         assert "B" in result
+        assert "B" in retained
 
 
 class TestSelectHoldings:
@@ -734,7 +739,7 @@ class TestExitFloor:
     def _make_cross_section(self, symbols: list[str], scores: list[float]) -> pd.DataFrame:
         return pd.DataFrame({"signal": scores}, index=symbols)
 
-    def test_holdings_below_floor_always_evicted(self, backtest: MomentumBacktest) -> None:
+    def test_holdings_below_floor_always_evicted(self) -> None:
         """A holding at rank ~0.20 is evicted when floor=0.35, even with no good replacement."""
         symbols = ["A", "B", "C", "D", "E"]
         # Ascending scores so rank of "A" is lowest (pct_rank ~ 0.20)
@@ -742,7 +747,7 @@ class TestExitFloor:
         cross_section = self._make_cross_section(symbols, scores)
         # A is current holding (rank ~ 0.20); candidates don't include A
         candidates = ["B", "C"]
-        result = backtest._apply_buffer_logic(
+        result, evicted, _ = PortfolioConstructor._apply_buffer_logic(
             current_holdings=["A"],
             candidates=candidates,
             cross_section=cross_section,
@@ -750,15 +755,16 @@ class TestExitFloor:
             exit_rank_floor=0.35,  # A's rank < 0.35 → evicted unconditionally
         )
         assert "A" not in result
+        assert "A" in evicted
 
-    def test_holdings_above_floor_protected_by_buffer(self, backtest: MomentumBacktest) -> None:
+    def test_holdings_above_floor_protected_by_buffer(self) -> None:
         """A holding at rank ~0.80 is retained when the best replacement is only 0.10 better."""
         symbols = ["A", "B", "C", "D", "E"]
         # D at rank ~0.80 (4th of 5)
         scores = [0.1, 0.3, 0.5, 0.7, 0.9]
         cross_section = self._make_cross_section(symbols, scores)
         # Best replacement candidate "E" has rank 1.0; diff = 0.20 < buffer 0.25 → retained
-        result = backtest._apply_buffer_logic(
+        result, evicted, retained = PortfolioConstructor._apply_buffer_logic(
             current_holdings=["D"],
             candidates=["E"],
             cross_section=cross_section,
@@ -766,14 +772,15 @@ class TestExitFloor:
             exit_rank_floor=0.35,
         )
         assert "D" in result
+        assert "D" in retained
 
-    def test_floor_zero_disables_hard_eviction(self, backtest: MomentumBacktest) -> None:
+    def test_floor_zero_disables_hard_eviction(self) -> None:
         """exit_rank_floor=0.0 disables unconditional eviction — buffer-only behaviour."""
         symbols = ["A", "B", "C", "D", "E"]
         scores = [0.1, 0.3, 0.5, 0.7, 0.9]
         cross_section = self._make_cross_section(symbols, scores)
         # A has the lowest rank; no good replacement (diff < buffer)
-        result = backtest._apply_buffer_logic(
+        result, evicted, retained = PortfolioConstructor._apply_buffer_logic(
             current_holdings=["A"],
             candidates=["B"],  # rank diff = 0.20 < buffer 0.25 → retained by buffer alone
             cross_section=cross_section,
@@ -781,6 +788,7 @@ class TestExitFloor:
             exit_rank_floor=0.0,  # floor disabled
         )
         assert "A" in result
+        assert "A" in retained
 
 
 class TestRebalanceEveryN:
@@ -917,10 +925,10 @@ class TestVolScaling:
             price *= 1.0 + daily_ret
         return pd.DataFrame({sym: prices for sym in symbols}, index=dates)
 
-    def test_vol_scaling_disabled_by_default(self, backtest: MomentumBacktest) -> None:
-        """vol_scaling_enabled=False (default) — equity_fraction unchanged."""
+    def test_vol_scaling_enabled_by_default(self, backtest: MomentumBacktest) -> None:
+        """vol_scaling_enabled=True (Phase 4 default)."""
         config = BacktestConfig()
-        assert config.vol_scaling_enabled is False
+        assert config.vol_scaling_enabled is True
 
     def test_high_realized_vol_reduces_equity_fraction(self, backtest: MomentumBacktest) -> None:
         """Realized vol 2× target → equity fraction is approximately halved."""
@@ -983,8 +991,8 @@ class TestPhase39Defaults:
     def test_exit_rank_floor_default(self) -> None:
         assert BacktestConfig().exit_rank_floor == 0.35
 
-    def test_vol_scaling_disabled_by_default(self) -> None:
-        assert BacktestConfig().vol_scaling_enabled is False
+    def test_vol_scaling_enabled_by_default(self) -> None:
+        assert BacktestConfig().vol_scaling_enabled is True
 
     def test_vol_lookback_days_default(self) -> None:
         assert BacktestConfig().vol_lookback_days == 63
