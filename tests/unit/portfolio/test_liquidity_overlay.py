@@ -49,7 +49,11 @@ def price_data() -> pd.DataFrame:
     dates = pd.date_range("2024-01-01", periods=200, freq="B")
     data: dict[str, np.ndarray] = {}
     base_prices: dict[str, float] = {
-        "A": 100.0, "B": 50.0, "C": 200.0, "D": 30.0, "E": 80.0,
+        "A": 100.0,
+        "B": 50.0,
+        "C": 200.0,
+        "D": 30.0,
+        "E": 80.0,
     }
     for sym, base in base_prices.items():
         returns = rng.normal(0.0005, 0.02, size=200)
@@ -192,13 +196,19 @@ class TestLiquidityOverlay:
     """Core overlay behaviour tests."""
 
     def test_disabled_pass_through(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Disabled overlay returns weights unchanged."""
         cfg = LiquidityConfig(enabled=False)
         adj, result = overlay.apply(
-            uniform_weights, price_data, high_volume_data, cfg,
+            uniform_weights,
+            price_data,
+            high_volume_data,
+            cfg,
         )
         pd.testing.assert_series_equal(adj, uniform_weights)
         assert result.effective_equity_fraction == pytest.approx(1.0)
@@ -206,25 +216,36 @@ class TestLiquidityOverlay:
         assert result.n_total == 5
 
     def test_empty_weights(
-        self, overlay: LiquidityOverlay,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Empty weights produce empty result."""
         empty = pd.Series(dtype=float)
         adj, result = overlay.apply(
-            empty, price_data, high_volume_data, LiquidityConfig(),
+            empty,
+            price_data,
+            high_volume_data,
+            LiquidityConfig(),
         )
         assert adj.empty
         assert result.n_total == 0
         assert result.effective_equity_fraction == 0.0
 
     def test_no_cap_binding_at_high_volume(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """High-volume data → no positions capped, equity fraction = 1.0."""
         adj, result = overlay.apply(
-            uniform_weights, price_data, high_volume_data, LiquidityConfig(),
+            uniform_weights,
+            price_data,
+            high_volume_data,
+            LiquidityConfig(),
         )
         assert result.n_capped == 0
         assert result.n_zero_adtv == 0
@@ -234,13 +255,19 @@ class TestLiquidityOverlay:
             assert info.adjusted_weight == pytest.approx(info.original_weight)
 
     def test_cap_binds_at_low_volume(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """Low-volume data → positions are capped, equity fraction < 1.0."""
         cfg = LiquidityConfig(assumed_aum_thb=200_000_000)
         adj, result = overlay.apply(
-            uniform_weights, price_data, low_volume_data, cfg,
+            uniform_weights,
+            price_data,
+            low_volume_data,
+            cfg,
         )
         assert result.n_capped > 0
         assert result.effective_equity_fraction < 1.0
@@ -249,19 +276,26 @@ class TestLiquidityOverlay:
             assert info.adjusted_weight <= info.original_weight + 1e-12
 
     def test_all_positions_capped_at_extreme_aum(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """Extreme AUM → every position capped."""
         cfg = LiquidityConfig(assumed_aum_thb=1_000_000_000_000)
         adj, result = overlay.apply(
-            uniform_weights, price_data, low_volume_data, cfg,
+            uniform_weights,
+            price_data,
+            low_volume_data,
+            cfg,
         )
         assert result.n_capped == len(uniform_weights)
         assert result.effective_equity_fraction < 0.01
 
     def test_zero_advt_symbols_weight_zeroed(
-        self, overlay: LiquidityOverlay,
+        self,
+        overlay: LiquidityOverlay,
         price_data: pd.DataFrame,
     ) -> None:
         """Symbol with zero volume → weight zeroed, logged as zero_adtv."""
@@ -273,7 +307,10 @@ class TestLiquidityOverlay:
             index=dates,
         )
         adj, result = overlay.apply(
-            weights, price_data[["A", "B"]], volumes, LiquidityConfig(),
+            weights,
+            price_data[["A", "B"]],
+            volumes,
+            LiquidityConfig(),
         )
         assert result.n_zero_adtv == 1
         assert result.per_position["B"].cap_binding is True
@@ -283,8 +320,10 @@ class TestLiquidityOverlay:
         assert result.per_position["A"].adjusted_weight > 0.0
 
     def test_adtv_computation_matches_manual(
-        self, overlay: LiquidityOverlay,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """_compute_adtv matches manual mean(close × volume)."""
         adtv = overlay._compute_adtv(price_data, high_volume_data, 63)
@@ -296,47 +335,70 @@ class TestLiquidityOverlay:
         assert adtv["A"] == pytest.approx(expected)
 
     def test_weights_sum_to_equity_fraction(
-        self, overlay: LiquidityOverlay, skewed_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        skewed_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """Adjusted weights sum to result.effective_equity_fraction."""
         adj, result = overlay.apply(
-            skewed_weights, price_data, low_volume_data, LiquidityConfig(),
+            skewed_weights,
+            price_data,
+            low_volume_data,
+            LiquidityConfig(),
         )
         assert float(adj.sum()) == pytest.approx(result.effective_equity_fraction)
 
     def test_disabled_preserves_weight_sum(
-        self, overlay: LiquidityOverlay, skewed_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        skewed_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """Disabled overlay preserves original weight sum."""
         cfg = LiquidityConfig(enabled=False)
         adj, result = overlay.apply(
-            skewed_weights, price_data, low_volume_data, cfg,
+            skewed_weights,
+            price_data,
+            low_volume_data,
+            cfg,
         )
         assert float(adj.sum()) == pytest.approx(float(skewed_weights.sum()))
 
     def test_single_position(
-        self, overlay: LiquidityOverlay,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Single-asset portfolio."""
         weights = pd.Series([1.0], index=["A"], dtype=float)
         adj, result = overlay.apply(
-            weights, price_data, high_volume_data, LiquidityConfig(),
+            weights,
+            price_data,
+            high_volume_data,
+            LiquidityConfig(),
         )
         assert len(adj) == 1
         assert result.n_total == 1
         assert "A" in result.per_position
 
     def test_symbol_missing_from_volumes(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Symbol in weights but missing from volumes → zero ADTV, weight zeroed."""
         vols = high_volume_data.drop(columns=["E"])
         adj, result = overlay.apply(
-            uniform_weights, price_data, vols, LiquidityConfig(),
+            uniform_weights,
+            price_data,
+            vols,
+            LiquidityConfig(),
         )
         assert result.n_zero_adtv >= 1
         info = result.per_position["E"]
@@ -344,13 +406,19 @@ class TestLiquidityOverlay:
         assert info.adjusted_weight == 0.0
 
     def test_symbol_missing_from_prices(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Symbol in weights but missing from prices → zero ADTV, weight zeroed."""
         prices = price_data.drop(columns=["C"])
         adj, result = overlay.apply(
-            uniform_weights, prices, high_volume_data, LiquidityConfig(),
+            uniform_weights,
+            prices,
+            high_volume_data,
+            LiquidityConfig(),
         )
         assert result.n_zero_adtv >= 1
         info = result.per_position["C"]
@@ -358,19 +426,26 @@ class TestLiquidityOverlay:
         assert info.adjusted_weight == 0.0
 
     def test_zero_weight_symbols_skipped(
-        self, overlay: LiquidityOverlay,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        overlay: LiquidityOverlay,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Zero-weight entries are passed through as zero."""
         weights = pd.Series([0.5, 0.5, 0.0], index=["A", "B", "C"], dtype=float)
         adj, result = overlay.apply(
-            weights, price_data, high_volume_data, LiquidityConfig(),
+            weights,
+            price_data,
+            high_volume_data,
+            LiquidityConfig(),
         )
         assert adj["C"] == 0.0
         assert result.n_total == 3
 
     def test_short_but_sufficient_history(
-        self, overlay: LiquidityOverlay, uniform_weights: pd.Series,
+        self,
+        overlay: LiquidityOverlay,
+        uniform_weights: pd.Series,
     ) -> None:
         """63-bar lookback works when exactly 63 bars available."""
         dates = pd.date_range("2024-01-01", periods=63, freq="B")
@@ -384,7 +459,10 @@ class TestLiquidityOverlay:
             index=dates,
         )
         adj, result = overlay.apply(
-            uniform_weights, prices, volumes, LiquidityConfig(assumed_aum_thb=1_000_000),
+            uniform_weights,
+            prices,
+            volumes,
+            LiquidityConfig(assumed_aum_thb=1_000_000),
         )
         assert result.n_total == 5
         # At 1M AUM with ~1.5M ADTV, 20% weight = 200k notional, or ~13% participation
@@ -401,56 +479,79 @@ class TestComputeCapacityCurve:
     """Capacity curve tests."""
 
     def test_curve_has_expected_columns(
-        self, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """Capacity curve returns DataFrame with correct columns."""
         curve = compute_capacity_curve(
-            uniform_weights, price_data, high_volume_data,
+            uniform_weights,
+            price_data,
+            high_volume_data,
             aum_grid=[10_000_000, 100_000_000, 1_000_000_000],
         )
         expected_cols = [
-            "aum_thb", "n_capped", "fraction_capped",
-            "effective_equity_fraction", "max_participation_rate",
+            "aum_thb",
+            "n_capped",
+            "fraction_capped",
+            "effective_equity_fraction",
+            "max_participation_rate",
         ]
         for col in expected_cols:
             assert col in curve.columns
         assert len(curve) == 3
 
     def test_curve_n_capped_monotonic_in_aum(
-        self, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """As AUM increases, n_capped is non-decreasing."""
         curve = compute_capacity_curve(
-            uniform_weights, price_data, low_volume_data,
+            uniform_weights,
+            price_data,
+            low_volume_data,
             aum_grid=[
-                1_000_000, 10_000_000, 50_000_000,
-                100_000_000, 500_000_000, 1_000_000_000,
+                1_000_000,
+                10_000_000,
+                50_000_000,
+                100_000_000,
+                500_000_000,
+                1_000_000_000,
             ],
         )
         n_capped = curve["n_capped"].to_numpy()
         assert np.all(np.diff(n_capped) >= 0), f"n_capped not monotonic: {n_capped.tolist()}"
 
     def test_curve_equity_fraction_decreasing_in_aum(
-        self, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, low_volume_data: pd.DataFrame,
+        self,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        low_volume_data: pd.DataFrame,
     ) -> None:
         """As AUM increases, effective_equity_fraction is non-increasing."""
         curve = compute_capacity_curve(
-            uniform_weights, price_data, low_volume_data,
+            uniform_weights,
+            price_data,
+            low_volume_data,
             aum_grid=[10_000_000, 100_000_000, 1_000_000_000],
         )
         ef = curve["effective_equity_fraction"].to_numpy()
         assert np.all(np.diff(ef) <= 1e-12), f"equity fraction not decreasing: {ef.tolist()}"
 
     def test_curve_at_zero_aum_all_pass(
-        self, uniform_weights: pd.Series,
-        price_data: pd.DataFrame, high_volume_data: pd.DataFrame,
+        self,
+        uniform_weights: pd.Series,
+        price_data: pd.DataFrame,
+        high_volume_data: pd.DataFrame,
     ) -> None:
         """At very small AUM, no positions are capped."""
         curve = compute_capacity_curve(
-            uniform_weights, price_data, high_volume_data,
+            uniform_weights,
+            price_data,
+            high_volume_data,
             aum_grid=[1_000],  # 1k THB
         )
         assert curve["n_capped"].iloc[0] == 0
@@ -461,10 +562,12 @@ class TestComputeCapacityCurve:
         rng = np.random.default_rng(55)
         dates = pd.date_range("2024-01-01", periods=200, freq="B")
         prices = pd.DataFrame(
-            {"X": rng.uniform(90, 110, size=200)}, index=dates,
+            {"X": rng.uniform(90, 110, size=200)},
+            index=dates,
         )
         volumes = pd.DataFrame(
-            {"X": rng.uniform(1_000_000, 2_000_000, size=200)}, index=dates,
+            {"X": rng.uniform(1_000_000, 2_000_000, size=200)},
+            index=dates,
         )
         weights = pd.Series([1.0], index=["X"], dtype=float)
         curve = compute_capacity_curve(weights, prices, volumes)

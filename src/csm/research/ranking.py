@@ -15,9 +15,7 @@ def _validate_panel(panel_df: object) -> pd.DataFrame:
         raise TypeError(f"panel_df must be a pd.DataFrame, got {type(panel_df).__name__}")
     df: pd.DataFrame = panel_df
     if not isinstance(df.index, pd.MultiIndex):
-        raise ValueError(
-            f"panel_df.index must be a pd.MultiIndex; got {type(df.index).__name__}"
-        )
+        raise ValueError(f"panel_df.index must be a pd.MultiIndex; got {type(df.index).__name__}")
     if list(df.index.names) != ["date", "symbol"]:
         raise ValueError(
             f"panel_df.index.names must be ['date', 'symbol']; got {list(df.index.names)}"

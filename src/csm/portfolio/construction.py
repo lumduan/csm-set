@@ -100,9 +100,7 @@ class PortfolioConstructor:
 
         # Build percentile-rank map for the full cross-section.
         pct_rank: pd.Series = composite.rank(pct=True)
-        ranks: dict[str, float] = {
-            str(idx): float(pct_rank[idx]) for idx in cross_section.index
-        }
+        ranks: dict[str, float] = {str(idx): float(pct_rank[idx]) for idx in cross_section.index}
 
         return SelectionResult(
             selected=buffered,

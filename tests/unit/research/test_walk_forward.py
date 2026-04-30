@@ -162,9 +162,7 @@ class TestWalkForwardRun:
         """Empty feature panel raises BacktestError immediately."""
         dates = _make_dates(84)
         symbols = ["A", "B"]
-        empty_panel = pd.DataFrame(
-            index=pd.MultiIndex.from_tuples([], names=["date", "symbol"])
-        )
+        empty_panel = pd.DataFrame(index=pd.MultiIndex.from_tuples([], names=["date", "symbol"]))
         prices = _make_prices(dates, symbols, [[100.0, 100.0]] * 84)
         config = BacktestConfig()
         wf_config = WalkForwardConfig(n_folds=2, test_years=1, min_train_years=5)

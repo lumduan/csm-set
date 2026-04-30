@@ -84,9 +84,7 @@ class Settings(BaseSettings):
     def _validate_adjustment(cls, value: str) -> str:
         allowed: set[str] = {"splits", "dividends"}
         if value not in allowed:
-            raise ValueError(
-                f"tvkit_adjustment must be one of {sorted(allowed)!r}, got {value!r}"
-            )
+            raise ValueError(f"tvkit_adjustment must be one of {sorted(allowed)!r}, got {value!r}")
         return value
 
 

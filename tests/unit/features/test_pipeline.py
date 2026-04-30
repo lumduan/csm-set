@@ -51,9 +51,7 @@ def test_pipeline_z_scores_cross_sectionally(
 # ---------------------------------------------------------------------------
 
 
-def test_z_score_std_approx_one(
-    sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path
-) -> None:
+def test_z_score_std_approx_one(sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path) -> None:
     dates = [pd.Timestamp("2023-06-30", tz=_TZ), pd.Timestamp("2023-12-29", tz=_TZ)]
     panel = FeaturePipeline(store=_store(tmp_path)).build(
         prices=sample_ohlcv_map, rebalance_dates=dates
@@ -98,16 +96,12 @@ def test_symbol_with_nan_feature_dropped(
 ) -> None:
     rng = np.random.default_rng(0)
     short_dates = pd.date_range("2023-06-01", periods=10, freq="B", tz=_TZ)
-    short_close = pd.Series(
-        100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, 10))), index=short_dates
-    )
+    short_close = pd.Series(100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, 10))), index=short_dates)
     short_map = dict(sample_ohlcv_map)
     short_map["SHORT"] = pd.DataFrame({"close": short_close})
 
     dates = [pd.Timestamp("2023-06-30", tz=_TZ)]
-    panel = FeaturePipeline(store=_store(tmp_path)).build(
-        prices=short_map, rebalance_dates=dates
-    )
+    panel = FeaturePipeline(store=_store(tmp_path)).build(prices=short_map, rebalance_dates=dates)
     panel_symbols = set(panel.index.get_level_values("symbol").unique())
     assert "SHORT" not in panel_symbols
 
@@ -117,9 +111,7 @@ def test_symbol_with_nan_feature_dropped(
 # ---------------------------------------------------------------------------
 
 
-def test_feature_columns_float32(
-    sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path
-) -> None:
+def test_feature_columns_float32(sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path) -> None:
     dates = [pd.Timestamp("2023-06-30", tz=_TZ)]
     panel = FeaturePipeline(store=_store(tmp_path)).build(
         prices=sample_ohlcv_map, rebalance_dates=dates
@@ -246,9 +238,7 @@ def test_forward_return_no_horizon_drift(
     assert _DATES[1] in panel_dates, "DATES[1] must be in panel — all symbols need history"
 
     # Drop the MIDDLE date (DATES[1]) from the panel, simulating all symbols being NaN there.
-    surviving_panel = panel.loc[
-        panel.index.get_level_values("date").isin([_DATES[0], _DATES[2]])
-    ]
+    surviving_panel = panel.loc[panel.index.get_level_values("date").isin([_DATES[0], _DATES[2]])]
 
     # Pass the original 3-date calendar explicitly so build_forward_returns
     # uses the calendar-anchored shift (A→B), not the surviving-panel shift (A→C).
@@ -266,14 +256,12 @@ def test_forward_return_no_horizon_drift(
     c_b = float(close.loc[close.index <= _DATES[1]].iloc[-1])
     c_c = float(close.loc[close.index <= _DATES[2]].iloc[-1])
 
-    correct = float(np.log(c_b / c_a))   # calendar-anchored: A → B
-    drifted = float(np.log(c_c / c_a))   # panel-anchored (wrong): A → C
+    correct = float(np.log(c_b / c_a))  # calendar-anchored: A → B
+    drifted = float(np.log(c_c / c_a))  # panel-anchored (wrong): A → C
 
     actual = float(panel_fwd.at[(_DATES[0], sym), "fwd_ret_1m"])
 
-    assert abs(actual - correct) < 1e-4, (
-        f"expected {correct:.6f} (calendar A→B), got {actual:.6f}"
-    )
+    assert abs(actual - correct) < 1e-4, f"expected {correct:.6f} (calendar A→B), got {actual:.6f}"
     assert abs(actual - drifted) > 1e-4, (
         f"Forward return matches the drifted value {drifted:.6f} — drift prevention "
         "may not be working"

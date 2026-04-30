@@ -123,9 +123,7 @@ class WeightOptimizer:
             raise OptimizationError(f"Minimum-variance optimization failed: {result.message}")
         return pd.Series(result.x, index=symbols, dtype=float)
 
-    def _inverse_vol_weights(
-        self, symbols: list[str], returns: pd.DataFrame
-    ) -> pd.Series:
+    def _inverse_vol_weights(self, symbols: list[str], returns: pd.DataFrame) -> pd.Series:
         """Compute inverse-volatility weights (no target-vol logging)."""
         if not symbols:
             return pd.Series(dtype=float)
@@ -137,7 +135,9 @@ class WeightOptimizer:
         return weights.fillna(0.0)
 
     def _enforce_position_constraints(
-        self, weights: pd.Series, config: OptimizerConfig,
+        self,
+        weights: pd.Series,
+        config: OptimizerConfig,
     ) -> pd.Series:
         """Clip each weight to [min_position, max_position] and renormalise to sum 1.0.
 
@@ -152,13 +152,15 @@ class WeightOptimizer:
         if n * config.max_position < 1.0 - 1e-12:
             logger.warning(
                 "Position cap unsatisfiable (n=%d, max=%.4f); falling back to equal weight",
-                n, config.max_position,
+                n,
+                config.max_position,
             )
             return pd.Series(1.0 / n, index=weights.index, dtype=float)
         if n * config.min_position > 1.0 + 1e-12:
             logger.warning(
                 "Position floor unsatisfiable (n=%d, min=%.4f); falling back to equal weight",
-                n, config.min_position,
+                n,
+                config.min_position,
             )
             return pd.Series(1.0 / n, index=weights.index, dtype=float)
 
@@ -180,9 +182,10 @@ class WeightOptimizer:
                 free = ~below
                 if free.any():
                     w[free] -= deficit / float(free.sum())
-            if not (w > config.max_position + 1e-9).any() and not (
-                w < config.min_position - 1e-9
-            ).any():
+            if (
+                not (w > config.max_position + 1e-9).any()
+                and not (w < config.min_position - 1e-9).any()
+            ):
                 break
         else:
             logger.warning(
@@ -210,27 +213,23 @@ class WeightOptimizer:
         n_assets: int = len(symbols)
         return_matrix: np.ndarray = returns[symbols].dropna().to_numpy()
         if return_matrix.shape[0] < 21:
-            raise OptimizationError(
-                "Insufficient return history for Monte Carlo optimisation"
-            )
+            raise OptimizationError("Insufficient return history for Monte Carlo optimisation")
         rng: np.random.Generator = np.random.default_rng(42)
         # Generate all weight vectors in one batch via Dirichlet(1, …, 1)
         # Shape: (mc_samples, n_assets) — each row sums to 1, all ≥ 0
         weights_matrix: np.ndarray = rng.dirichlet(
-            np.ones(n_assets, dtype=float), size=config.mc_samples,
+            np.ones(n_assets, dtype=float),
+            size=config.mc_samples,
         )
         # Vectorised portfolio metrics
         port_returns: np.ndarray = weights_matrix @ return_matrix.mean(axis=0) * 252
         cov: np.ndarray = np.cov(return_matrix, rowvar=False)
-        port_vols: np.ndarray = (
-            np.sqrt(np.einsum("ij,jk,ik->i", weights_matrix, cov, weights_matrix))
-            * np.sqrt(252)
-        )
+        port_vols: np.ndarray = np.sqrt(
+            np.einsum("ij,jk,ik->i", weights_matrix, cov, weights_matrix)
+        ) * np.sqrt(252)
         # Guard against zero / negative vol
         port_vols = np.maximum(port_vols, 1e-12)
-        sharpes: np.ndarray = (
-            port_returns - config.mc_risk_free_rate
-        ) / port_vols
+        sharpes: np.ndarray = (port_returns - config.mc_risk_free_rate) / port_vols
         best_idx: int = int(np.argmax(sharpes))
         best_weights: np.ndarray = weights_matrix[best_idx].copy()
         # Ensure no negative due to floating-point rounding
@@ -263,28 +262,22 @@ class WeightOptimizer:
             raise OptimizationError("Need at least 2 assets for Monte Carlo frontier")
         return_matrix: np.ndarray = returns[symbols].dropna().to_numpy()
         if return_matrix.shape[0] < 21:
-            raise OptimizationError(
-                "Insufficient return history for Monte Carlo simulation"
-            )
+            raise OptimizationError("Insufficient return history for Monte Carlo simulation")
         rng: np.random.Generator = np.random.default_rng(42)
         weights_matrix = rng.dirichlet(
-            np.ones(n_assets, dtype=float), size=config.mc_samples,
+            np.ones(n_assets, dtype=float),
+            size=config.mc_samples,
         )
         # Vectorised portfolio metrics
         mean_ret: np.ndarray = return_matrix.mean(axis=0)
         cov_matrix: np.ndarray = np.cov(return_matrix, rowvar=False)
         annual_factor: float = 252.0
         port_returns: np.ndarray = weights_matrix @ mean_ret * annual_factor
-        port_vols: np.ndarray = (
-            np.sqrt(
-                np.einsum("ij,jk,ik->i", weights_matrix, cov_matrix, weights_matrix)
-            )
-            * np.sqrt(annual_factor)
-        )
+        port_vols: np.ndarray = np.sqrt(
+            np.einsum("ij,jk,ik->i", weights_matrix, cov_matrix, weights_matrix)
+        ) * np.sqrt(annual_factor)
         port_vols = np.maximum(port_vols, 1e-12)
-        sharpes: np.ndarray = (
-            port_returns - config.mc_risk_free_rate
-        ) / port_vols
+        sharpes: np.ndarray = (port_returns - config.mc_risk_free_rate) / port_vols
 
         # Identify efficient frontier (Pareto-optimal points)
         idx_sorted: np.ndarray = np.argsort(port_vols)
@@ -370,7 +363,9 @@ class WeightOptimizer:
             raw = self._inverse_vol_weights(selected, trailing_returns)
         elif scheme is WeightScheme.VOL_TARGET:
             raw = self.vol_target_weight(
-                selected, trailing_returns, target_vol=config.target_position_vol,
+                selected,
+                trailing_returns,
+                target_vol=config.target_position_vol,
             )
         elif scheme is WeightScheme.MIN_VARIANCE:
             try:
@@ -395,9 +390,7 @@ class WeightOptimizer:
 
         if (raw < 0.0).any():
             offending: list[str] = [str(s) for s in raw.index[raw < 0]]
-            raise OptimizationError(
-                f"Negative weight produced for symbols: {offending}"
-            )
+            raise OptimizationError(f"Negative weight produced for symbols: {offending}")
 
         constrained: pd.Series = self._enforce_position_constraints(raw, config)
         return constrained

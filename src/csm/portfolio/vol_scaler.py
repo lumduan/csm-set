@@ -86,13 +86,18 @@ class VolatilityScaler:
 
         if config.fast_blend_weight > 0.0:
             realized, slow_vol, fast_vol = self._compute_blended_vol(
-                weights, prices, config.lookback_days,
-                config.fast_lookback_days, config.fast_blend_weight,
+                weights,
+                prices,
+                config.lookback_days,
+                config.fast_lookback_days,
+                config.fast_blend_weight,
             )
             blended = True
         else:
             realized = self._compute_realized_vol(
-                weights, prices, config.lookback_days,
+                weights,
+                prices,
+                config.lookback_days,
             )
             slow_vol = realized
             fast_vol = 0.0
@@ -153,9 +158,7 @@ class VolatilityScaler:
             return float("nan")
         w = w / w_sum
 
-        returns: pd.DataFrame = (
-            prices[available].pct_change().dropna(how="all").tail(lookback_days)
-        )
+        returns: pd.DataFrame = prices[available].pct_change().dropna(how="all").tail(lookback_days)
         if len(returns) < 21:
             return float("nan")
 
@@ -178,10 +181,14 @@ class VolatilityScaler:
             the fast window has insufficient data.
         """
         slow: float = VolatilityScaler._compute_realized_vol(
-            weights, prices, slow_lookback,
+            weights,
+            prices,
+            slow_lookback,
         )
         fast: float = VolatilityScaler._compute_realized_vol(
-            weights, prices, fast_lookback,
+            weights,
+            prices,
+            fast_lookback,
         )
 
         if math.isnan(fast) or fast <= 0.0:

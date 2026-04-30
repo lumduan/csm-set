@@ -44,6 +44,7 @@ class Adjustment(StrEnum):
     SPLITS = "splits"
     DIVIDENDS = "dividends"
 
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 _TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (

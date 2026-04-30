@@ -119,9 +119,7 @@ class RiskAdjustedFeatures:
             if len(idx_hist) >= _MIN_HIST:
                 sym_slice = hist.iloc[-274:-21]
                 idx_slice = idx_hist.reindex(sym_slice.index)
-                aligned = pd.concat(
-                    [sym_slice.rename("s"), idx_slice.rename("i")], axis=1
-                ).dropna()
+                aligned = pd.concat([sym_slice.rename("s"), idx_slice.rename("i")], axis=1).dropna()
                 if len(aligned) >= 2:
                     sym_rets = _safe_log_returns(aligned["s"].values.astype(float))
                     idx_rets = _safe_log_returns(aligned["i"].values.astype(float))
@@ -130,9 +128,7 @@ class RiskAdjustedFeatures:
                         and not np.any(np.isnan(sym_rets))
                         and not np.any(np.isnan(idx_rets))
                     ):
-                        row["residual_momentum"] = _ols_alpha_annualised(
-                            y=sym_rets, x=idx_rets
-                        )
+                        row["residual_momentum"] = _ols_alpha_annualised(y=sym_rets, x=idx_rets)
 
             rows.append(row)
 

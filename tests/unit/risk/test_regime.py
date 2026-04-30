@@ -31,17 +31,13 @@ class TestComputeEma:
 
     def test_ema_lags_behind_sharp_rise(self) -> None:
         """EMA should be below the last price after a sharp run-up."""
-        prices = pd.Series(
-            np.concatenate([np.full(200, 100.0), np.full(50, 200.0)])
-        )
+        prices = pd.Series(np.concatenate([np.full(200, 100.0), np.full(50, 200.0)]))
         ema = RegimeDetector.compute_ema(prices, window=200)
         assert float(ema.iloc[-1]) < float(prices.iloc[-1])
 
     def test_ema_above_last_price_after_sharp_drop(self) -> None:
         """EMA should be above the last price after a sharp crash."""
-        prices = pd.Series(
-            np.concatenate([np.full(200, 100.0), np.linspace(100.0, 50.0, 50)])
-        )
+        prices = pd.Series(np.concatenate([np.full(200, 100.0), np.linspace(100.0, 50.0, 50)]))
         ema = RegimeDetector.compute_ema(prices, window=200)
         assert float(ema.iloc[-1]) > float(prices.iloc[-1])
 
@@ -56,9 +52,7 @@ class TestIsBullMarket:
     def test_returns_false_when_price_below_ema(self) -> None:
         detector = RegimeDetector()
         dates = pd.date_range("2020-01-01", periods=250, freq="B", tz="Asia/Bangkok")
-        prices_arr = np.concatenate(
-            [np.linspace(100.0, 130.0, 230), np.linspace(130.0, 70.0, 20)]
-        )
+        prices_arr = np.concatenate([np.linspace(100.0, 130.0, 230), np.linspace(130.0, 70.0, 20)])
         prices = pd.Series(prices_arr, index=dates)
         assert detector.is_bull_market(prices, dates[-1], window=200) is False
 
@@ -74,9 +68,7 @@ class TestIsBullMarket:
         detector = RegimeDetector()
         dates = pd.date_range("2020-01-01", periods=300, freq="B", tz="Asia/Bangkok")
         # First 250 bars: rising (Bull). Last 50 bars: crash (would flip to Bear).
-        prices_arr = np.concatenate(
-            [np.linspace(100.0, 130.0, 250), np.linspace(130.0, 50.0, 50)]
-        )
+        prices_arr = np.concatenate([np.linspace(100.0, 130.0, 250), np.linspace(130.0, 50.0, 50)])
         prices = pd.Series(prices_arr, index=dates)
         # Cut off at bar 250 — should still be Bull.
         assert detector.is_bull_market(prices, dates[249], window=200) is True
@@ -88,19 +80,23 @@ class TestHasNegativeEmaSlope:
         detector = RegimeDetector()
         # 250 rising bars to warm up, then 50 sharply falling to make EMA slope negative.
         dates = pd.date_range("2020-01-01", periods=300, freq="B", tz="Asia/Bangkok")
-        prices_arr = np.concatenate(
-            [np.linspace(100.0, 130.0, 250), np.linspace(130.0, 60.0, 50)]
-        )
+        prices_arr = np.concatenate([np.linspace(100.0, 130.0, 250), np.linspace(130.0, 60.0, 50)])
         prices = pd.Series(prices_arr, index=dates)
         # At the last date the EMA should be declining.
-        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is True
+        assert (
+            detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21)
+            is True
+        )
 
     def test_returns_false_when_ema_is_rising(self) -> None:
         """Sustained rise → EMA is rising → False."""
         detector = RegimeDetector()
         dates = pd.date_range("2020-01-01", periods=260, freq="B", tz="Asia/Bangkok")
         prices = pd.Series(np.linspace(100.0, 150.0, 260), index=dates)
-        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is False
+        assert (
+            detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21)
+            is False
+        )
 
     def test_returns_false_when_insufficient_history(self) -> None:
         """Fewer than window + slope_lookback bars → False (conservative default)."""
@@ -108,4 +104,7 @@ class TestHasNegativeEmaSlope:
         dates = pd.date_range("2023-01-01", periods=210, freq="B", tz="Asia/Bangkok")
         prices = pd.Series(np.linspace(100.0, 80.0, 210), index=dates)
         # Only 210 bars but we need ≥ 200+22 = 222 → insufficient for slope check.
-        assert detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21) is False
+        assert (
+            detector.has_negative_ema_slope(prices, dates[-1], window=200, slope_lookback=21)
+            is False
+        )

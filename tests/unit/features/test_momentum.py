@@ -23,6 +23,7 @@ def _make_close(n: int = 300, seed: int = 42, tz: str = _TZ) -> pd.Series:
 # Test Case 1: mom_12_1 matches manual pandas calculation
 # ---------------------------------------------------------------------------
 
+
 def test_mom_12_1_matches_manual() -> None:
     close = _make_close(300)
     t = close.index[-1]
@@ -35,20 +36,33 @@ def test_mom_12_1_matches_manual() -> None:
 # Test Case 2: all four signals match reference calculations
 # ---------------------------------------------------------------------------
 
+
 def test_all_signals_match_reference() -> None:
     close = _make_close(300)
     t = close.index[-1]
     result = MomentumFeatures().compute(close, pd.DatetimeIndex([t]))
 
-    assert abs(float(result.at[t, "mom_12_1"]) - float(np.log(close.iloc[-22] / close.iloc[-253]))) < 1e-5
-    assert abs(float(result.at[t, "mom_6_1"]) - float(np.log(close.iloc[-22] / close.iloc[-127]))) < 1e-5
-    assert abs(float(result.at[t, "mom_3_1"]) - float(np.log(close.iloc[-22] / close.iloc[-64]))) < 1e-5
-    assert abs(float(result.at[t, "mom_1_0"]) - float(np.log(close.iloc[-1] / close.iloc[-22]))) < 1e-5
+    assert (
+        abs(float(result.at[t, "mom_12_1"]) - float(np.log(close.iloc[-22] / close.iloc[-253])))
+        < 1e-5
+    )
+    assert (
+        abs(float(result.at[t, "mom_6_1"]) - float(np.log(close.iloc[-22] / close.iloc[-127])))
+        < 1e-5
+    )
+    assert (
+        abs(float(result.at[t, "mom_3_1"]) - float(np.log(close.iloc[-22] / close.iloc[-64])))
+        < 1e-5
+    )
+    assert (
+        abs(float(result.at[t, "mom_1_0"]) - float(np.log(close.iloc[-1] / close.iloc[-22]))) < 1e-5
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test Case 3a: no look-ahead — mutating prices after t leaves all signals unchanged
 # ---------------------------------------------------------------------------
+
 
 def test_no_lookahead_mutation_after_t() -> None:
     close = _make_close(300)
@@ -74,6 +88,7 @@ def test_no_lookahead_mutation_after_t() -> None:
 #   signals (end price = t-21) are unchanged, while mom_1_0 (end price = t) changes.
 # ---------------------------------------------------------------------------
 
+
 def test_no_lookahead_skip_boundary() -> None:
     close = _make_close(300)
     t = close.index[279]
@@ -91,12 +106,15 @@ def test_no_lookahead_skip_boundary() -> None:
         assert float(result.at[t, col]) == pytest.approx(float(baseline.at[t, col]), rel=1e-5), col
 
     # Reversal signal (end price at t = index 279) must change.
-    assert float(result.at[t, "mom_1_0"]) != pytest.approx(float(baseline.at[t, "mom_1_0"]), rel=1e-5)
+    assert float(result.at[t, "mom_1_0"]) != pytest.approx(
+        float(baseline.at[t, "mom_1_0"]), rel=1e-5
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test Case 4: NaN propagation when history shorter than lookback window
 # ---------------------------------------------------------------------------
+
 
 def test_nan_when_insufficient_history() -> None:
     close = _make_close(50)
@@ -104,14 +122,15 @@ def test_nan_when_insufficient_history() -> None:
     result = MomentumFeatures().compute(close, pd.DatetimeIndex([t]))
 
     assert np.isnan(float(result.at[t, "mom_12_1"]))  # needs 253
-    assert np.isnan(float(result.at[t, "mom_6_1"]))   # needs 127
-    assert np.isnan(float(result.at[t, "mom_3_1"]))   # needs 64
+    assert np.isnan(float(result.at[t, "mom_6_1"]))  # needs 127
+    assert np.isnan(float(result.at[t, "mom_3_1"]))  # needs 64
     assert not np.isnan(float(result.at[t, "mom_1_0"]))  # needs 22, have 50
 
 
 # ---------------------------------------------------------------------------
 # Test Case 5: rebalance date falls on a non-trading day
 # ---------------------------------------------------------------------------
+
 
 def test_nontrading_rebalance_date() -> None:
     close = _make_close(300)
@@ -136,6 +155,7 @@ def test_nontrading_rebalance_date() -> None:
 # Test Case 6: boundary price is NaN → all signals NaN
 # ---------------------------------------------------------------------------
 
+
 def test_nan_boundary_price() -> None:
     close = _make_close(300)
     t = close.index[-1]
@@ -150,6 +170,7 @@ def test_nan_boundary_price() -> None:
 # ---------------------------------------------------------------------------
 # Test Case 6b: boundary price is pd.NA (nullable dtype)
 # ---------------------------------------------------------------------------
+
 
 def test_pd_na_boundary_price() -> None:
     close = _make_close(300)
@@ -167,6 +188,7 @@ def test_pd_na_boundary_price() -> None:
 # Test Case 7: boundary price is non-positive → all signals NaN
 # ---------------------------------------------------------------------------
 
+
 def test_nonpositive_boundary_price() -> None:
     close = _make_close(300)
     t = close.index[-1]
@@ -181,6 +203,7 @@ def test_nonpositive_boundary_price() -> None:
 # ---------------------------------------------------------------------------
 # Test Case 8: unsorted input is handled transparently
 # ---------------------------------------------------------------------------
+
 
 def test_unsorted_input_is_handled() -> None:
     close = _make_close(300)
@@ -200,6 +223,7 @@ def test_unsorted_input_is_handled() -> None:
 # Test Case 9a: multiple rebalance dates preserve order and columns
 # ---------------------------------------------------------------------------
 
+
 def test_multiple_dates_preserve_order_and_columns() -> None:
     close = _make_close(300)
     dates = pd.DatetimeIndex([close.index[260], close.index[270], close.index[299]])
@@ -215,6 +239,7 @@ def test_multiple_dates_preserve_order_and_columns() -> None:
 # Test Case 9b: duplicate index raises ValueError
 # ---------------------------------------------------------------------------
 
+
 def test_duplicate_index_raises() -> None:
     close = _make_close(50)
     duped = pd.concat([close, close.iloc[:1]])  # append duplicate of first row
@@ -226,6 +251,7 @@ def test_duplicate_index_raises() -> None:
 # ---------------------------------------------------------------------------
 # Regression: empty rebalance_dates returns empty frame with correct columns/dtype
 # ---------------------------------------------------------------------------
+
 
 def test_empty_rebalance_dates() -> None:
     close = _make_close(300)
@@ -239,6 +265,7 @@ def test_empty_rebalance_dates() -> None:
 # ---------------------------------------------------------------------------
 # Type validation: non-DatetimeIndex raises TypeError
 # ---------------------------------------------------------------------------
+
 
 def test_non_datetime_index_raises() -> None:
     close = pd.Series([100.0, 101.0], index=[0, 1])

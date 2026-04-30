@@ -42,9 +42,7 @@ def _validate_panel(panel_df: object) -> pd.DataFrame:
         raise TypeError(f"panel_df must be a pd.DataFrame, got {type(panel_df).__name__}")
     df: pd.DataFrame = panel_df
     if not isinstance(df.index, pd.MultiIndex):
-        raise ValueError(
-            f"panel_df.index must be a pd.MultiIndex; got {type(df.index).__name__}"
-        )
+        raise ValueError(f"panel_df.index must be a pd.MultiIndex; got {type(df.index).__name__}")
     if list(df.index.names) != ["date", "symbol"]:
         raise ValueError(
             f"panel_df.index.names must be ['date', 'symbol']; got {list(df.index.names)}"
@@ -139,9 +137,7 @@ class ICAnalyzer:
             TypeError: If ic_series is not a pd.Series.
         """
         if not isinstance(ic_series, pd.Series):
-            raise TypeError(
-                f"ic_series must be a pd.Series, got {type(ic_series).__name__}"
-            )
+            raise TypeError(f"ic_series must be a pd.Series, got {type(ic_series).__name__}")
         valid = ic_series.dropna()
         if len(valid) < _MIN_IC_PERIODS:
             return float("nan")
@@ -212,9 +208,7 @@ class ICAnalyzer:
             std_ic = float(valid.std(ddof=1)) if len(valid) > 1 else float("nan")
             icir = self.compute_icir(ic_s)
             t_val = len(valid)
-            t_stat = (
-                icir * math.sqrt(t_val) if not math.isnan(icir) and t_val > 0 else float("nan")
-            )
+            t_stat = icir * math.sqrt(t_val) if not math.isnan(icir) and t_val > 0 else float("nan")
             pct_pos = float((valid > 0).mean()) if len(valid) > 0 else float("nan")
             rows.append(
                 {

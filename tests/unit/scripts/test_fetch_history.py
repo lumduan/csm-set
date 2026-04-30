@@ -34,7 +34,9 @@ main = _fh_module.main
 _DEFAULT_ADJUSTMENT = "dividends"
 
 
-def _make_settings(*, public_mode: bool = False, adjustment: str = _DEFAULT_ADJUSTMENT) -> MagicMock:
+def _make_settings(
+    *, public_mode: bool = False, adjustment: str = _DEFAULT_ADJUSTMENT
+) -> MagicMock:
     settings = MagicMock()
     settings.public_mode = public_mode
     settings.log_level = "WARNING"
@@ -256,7 +258,14 @@ async def test_deletes_fetch_failures_json_on_success(
     raw_dir.mkdir(parents=True, exist_ok=True)
     stale = raw_dir / "fetch_failures.json"
     stale.write_text(
-        json.dumps({"run_timestamp": "old", "adjustment": _DEFAULT_ADJUSTMENT, "failed_symbols": ["SET:AOT"], "count": 1})
+        json.dumps(
+            {
+                "run_timestamp": "old",
+                "adjustment": _DEFAULT_ADJUSTMENT,
+                "failed_symbols": ["SET:AOT"],
+                "count": 1,
+            }
+        )
     )
 
     mock_store = MagicMock()
@@ -468,7 +477,9 @@ async def test_adjustment_dividends_stores_in_dividends_subdir(
     )
 
     with (
-        patch("scripts.fetch_history.Settings", return_value=_make_settings(adjustment="dividends")),
+        patch(
+            "scripts.fetch_history.Settings", return_value=_make_settings(adjustment="dividends")
+        ),
         patch("scripts.fetch_history.ParquetStore", side_effect=_CapturingParquetStore),
         patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
     ):

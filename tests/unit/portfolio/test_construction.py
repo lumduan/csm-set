@@ -73,15 +73,9 @@ class TestPortfolioConstructorSelect:
 
     def test_buffer_retains_holdings_within_candidates(self) -> None:
         """Holdings that are also in the candidate pool are retained."""
-        cross_section = self._make_cross_section(
-            ["A", "B", "C", "D"], [0.8, 0.6, 1.0, 0.2]
-        )
-        config = SelectionConfig(
-            n_holdings_min=2, n_holdings_max=4, buffer_rank_threshold=0.25
-        )
-        result = PortfolioConstructor().select(
-            cross_section, ["A", "B"], config
-        )
+        cross_section = self._make_cross_section(["A", "B", "C", "D"], [0.8, 0.6, 1.0, 0.2])
+        config = SelectionConfig(n_holdings_min=2, n_holdings_max=4, buffer_rank_threshold=0.25)
+        result = PortfolioConstructor().select(cross_section, ["A", "B"], config)
         # A is in top-4 candidates, B is borderline but in the candidate pool
         assert "A" in result.selected
         assert "A" in result.retained
@@ -92,12 +86,8 @@ class TestPortfolioConstructorSelect:
         # C(1.0) > A(0.8) > B(0.6) > D(0.2)
         cross_section = self._make_cross_section(symbols, [0.8, 0.6, 1.0, 0.2])
         # n_max=2 so only top 2 (C, A) are candidates; B is outside candidate pool.
-        config = SelectionConfig(
-            n_holdings_min=2, n_holdings_max=2, buffer_rank_threshold=0.125
-        )
-        result = PortfolioConstructor().select(
-            cross_section, ["A", "B"], config
-        )
+        config = SelectionConfig(n_holdings_min=2, n_holdings_max=2, buffer_rank_threshold=0.125)
+        result = PortfolioConstructor().select(cross_section, ["A", "B"], config)
         # A is in candidates → retained. B not in candidates → rank diff check:
         # B (rank 0.5) vs best replacement C (rank 1.0): diff=0.5 >= 0.125 → B evicted
         assert "C" in result.selected
@@ -109,13 +99,9 @@ class TestPortfolioConstructorSelect:
         scores = [0.1, 0.3, 0.5, 0.7, 0.9]
         cross_section = self._make_cross_section(symbols, scores)
         # n_max=2 so only top 2 (E, D) are candidates; A is outside candidate pool.
-        config = SelectionConfig(
-            n_holdings_min=2, n_holdings_max=2, exit_rank_floor=0.35
-        )
+        config = SelectionConfig(n_holdings_min=2, n_holdings_max=2, exit_rank_floor=0.35)
         # A has the lowest score → rank ~0.20 < 0.35 → unconditionally evicted
-        result = PortfolioConstructor().select(
-            cross_section, ["A", "D"], config
-        )
+        result = PortfolioConstructor().select(cross_section, ["A", "D"], config)
         assert "A" in result.evicted
         assert "D" in result.selected
 
@@ -136,12 +122,8 @@ class TestPortfolioConstructorSelect:
         scores = np.random.randn(100).tolist()
         cross_section = self._make_cross_section(symbols, scores)
         # Only 2 current holdings → after buffer, should top-up to n_min=40.
-        config = SelectionConfig(
-            n_holdings_min=40, n_holdings_max=60, buffer_rank_threshold=0.25
-        )
-        result = PortfolioConstructor().select(
-            cross_section, ["S000", "S001"], config
-        )
+        config = SelectionConfig(n_holdings_min=40, n_holdings_max=60, buffer_rank_threshold=0.25)
+        result = PortfolioConstructor().select(cross_section, ["S000", "S001"], config)
         assert len(result.selected) >= 40
 
     def test_entry_mask_restricts_new_entries(self) -> None:
@@ -153,9 +135,7 @@ class TestPortfolioConstructorSelect:
         entry_mask: set[str] = {"A", "B"}
         config = SelectionConfig(n_holdings_min=2, n_holdings_max=5)
         # Current holding "E" is outside entry mask, but is eligible for buffer.
-        result = PortfolioConstructor().select(
-            cross_section, ["E"], config, entry_mask=entry_mask
-        )
+        result = PortfolioConstructor().select(cross_section, ["E"], config, entry_mask=entry_mask)
         # E should not be in the selected list since it ranks low, and A,B are top
         assert "A" in result.selected
         assert "B" in result.selected
@@ -168,9 +148,7 @@ class TestPortfolioConstructorSelect:
         # Mask contains symbols not in the cross-section → pool would be empty.
         entry_mask: set[str] = {"X", "Y"}
         config = SelectionConfig(n_holdings_min=1, n_holdings_max=5)
-        result = PortfolioConstructor().select(
-            cross_section, [], config, entry_mask=entry_mask
-        )
+        result = PortfolioConstructor().select(cross_section, [], config, entry_mask=entry_mask)
         # Should fall back to full composite and select top symbols.
         assert len(result.selected) > 0
         assert set(result.selected).issubset(set(symbols))
@@ -182,12 +160,8 @@ class TestPortfolioConstructorSelect:
         scores = np.random.randn(100).tolist()
         cross_section = self._make_cross_section(symbols, scores)
         config = SelectionConfig()
-        result1 = PortfolioConstructor().select(
-            cross_section, ["S000", "S001", "S002"], config
-        )
-        result2 = PortfolioConstructor().select(
-            cross_section, ["S000", "S001", "S002"], config
-        )
+        result1 = PortfolioConstructor().select(cross_section, ["S000", "S001", "S002"], config)
+        result2 = PortfolioConstructor().select(cross_section, ["S000", "S001", "S002"], config)
         assert result1.selected == result2.selected
         assert result1.evicted == result2.evicted
         assert result1.retained == result2.retained

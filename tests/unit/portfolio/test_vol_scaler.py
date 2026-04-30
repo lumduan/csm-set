@@ -149,7 +149,10 @@ class TestVolScalingResult:
 
 class TestVolatilityScaler:
     def test_disabled_pass_through(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """enabled=False returns weights unchanged with scale_factor=1.0."""
         config = VolScalingConfig(enabled=False)
@@ -159,7 +162,10 @@ class TestVolatilityScaler:
         assert result.equity_fraction == pytest.approx(1.0)
 
     def test_high_vol_reduces_equity(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """When realized vol > target, equity_fraction < 1.0."""
         config = VolScalingConfig(target_annual=0.05, lookback_days=63)
@@ -169,7 +175,10 @@ class TestVolatilityScaler:
         assert result.equity_fraction == pytest.approx(float(scaled.sum()))
 
     def test_low_vol_capped_at_cap(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, low_vol_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        low_vol_prices: pd.DataFrame,
     ) -> None:
         """Very low realized vol produces scale_factor = cap, equity = 1.0."""
         config = VolScalingConfig(target_annual=0.15, cap=1.5, lookback_days=63)
@@ -180,7 +189,10 @@ class TestVolatilityScaler:
         assert result.equity_fraction == pytest.approx(float(scaled.sum()))
 
     def test_zero_vol_returns_cap(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, constant_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        constant_prices: pd.DataFrame,
     ) -> None:
         """Constant prices → zero realized vol → scale_factor = cap."""
         config = VolScalingConfig(target_annual=0.15, cap=1.5, lookback_days=63)
@@ -200,7 +212,9 @@ class TestVolatilityScaler:
         assert result.scale_factor == pytest.approx(1.5)
 
     def test_empty_weights(
-        self, scaler: VolatilityScaler, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """Empty weights returns empty Series and scale_factor = cap."""
         config = VolScalingConfig()
@@ -211,7 +225,9 @@ class TestVolatilityScaler:
         assert result.equity_fraction == pytest.approx(config.cap)
 
     def test_single_asset(
-        self, scaler: VolatilityScaler, single_asset_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        single_asset_prices: pd.DataFrame,
     ) -> None:
         """Single-asset portfolio scales correctly."""
         config = VolScalingConfig(target_annual=0.15, lookback_days=63)
@@ -223,7 +239,10 @@ class TestVolatilityScaler:
         assert 0.0 <= result.equity_fraction <= 1.0
 
     def test_floor_enforced(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """High vol with floor=0.3 → scale_factor never drops below 0.3."""
         config = VolScalingConfig(
@@ -235,7 +254,10 @@ class TestVolatilityScaler:
         assert result.scale_factor >= 0.3
 
     def test_equity_fraction_capped_at_one(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, low_vol_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        low_vol_prices: pd.DataFrame,
     ) -> None:
         """Even when scale_factor > 1.0, equity_fraction never exceeds 1.0."""
         config = VolScalingConfig(target_annual=0.15, cap=2.0, lookback_days=63)
@@ -243,7 +265,10 @@ class TestVolatilityScaler:
         assert result.equity_fraction <= 1.0
 
     def test_scaled_weights_sum_to_equity_fraction(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """Invariant: sum(scaled_weights) == result.equity_fraction."""
         config = VolScalingConfig(target_annual=0.15, lookback_days=63)
@@ -265,7 +290,9 @@ class TestVolatilityScaler:
         pd.testing.assert_series_equal(ratios_before, ratios_after, check_exact=False, rtol=1e-9)
 
     def test_missing_symbol_in_prices(
-        self, scaler: VolatilityScaler, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """Symbol in weights but not in prices is excluded gracefully."""
         weights = pd.Series(
@@ -279,7 +306,10 @@ class TestVolatilityScaler:
         assert result.equity_fraction <= 1.0
 
     def test_regime_aware_noop(
-        self, scaler: VolatilityScaler, uniform_weights: pd.Series, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        uniform_weights: pd.Series,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """regime_aware=True does not crash (behaviour deferred to Phase 4.6)."""
         config = VolScalingConfig(regime_aware=True)
@@ -288,7 +318,9 @@ class TestVolatilityScaler:
         assert result.equity_fraction <= 1.0
 
     def test_all_zero_weights(
-        self, scaler: VolatilityScaler, volatile_prices: pd.DataFrame,
+        self,
+        scaler: VolatilityScaler,
+        volatile_prices: pd.DataFrame,
     ) -> None:
         """All-zero weights still produce valid result (NaN vol → cap fallback)."""
         weights = pd.Series(0.0, index=["A", "B", "C", "D", "E"], dtype=float)
@@ -309,8 +341,7 @@ class TestComputeRealizedVol:
         daily_a = rng.normal(0.0005, 0.20 / math.sqrt(252), len(dates))
         daily_b = rng.normal(0.0005, 0.40 / math.sqrt(252), len(dates))
         prices = pd.DataFrame(
-            {"A": 100.0 * np.exp(np.cumsum(daily_a)),
-             "B": 100.0 * np.exp(np.cumsum(daily_b))},
+            {"A": 100.0 * np.exp(np.cumsum(daily_a)), "B": 100.0 * np.exp(np.cumsum(daily_b))},
             index=dates,
         )
         weights = pd.Series([0.5, 0.5], index=["A", "B"], dtype=float)

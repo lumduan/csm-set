@@ -154,8 +154,7 @@ class WalkForwardGate:
 
             if not oos_sharpe_pass:
                 failures.append(
-                    f"Fold {fold}: OOS Sharpe {oos_sharpe:.4f} ≤ "
-                    f"min {config.min_oos_sharpe:.4f}"
+                    f"Fold {fold}: OOS Sharpe {oos_sharpe:.4f} ≤ min {config.min_oos_sharpe:.4f}"
                 )
             if not is_oos_ratio_pass and is_sharpe is not None and oos_sharpe > 0:
                 fold_ratio = is_sharpe / oos_sharpe
@@ -194,17 +193,11 @@ class WalkForwardGate:
         # Aggregate checks
         if len(fold_metrics) < config.min_folds_required:
             failures.append(
-                f"Insufficient folds: {len(fold_metrics)} < "
-                f"min {config.min_folds_required}"
+                f"Insufficient folds: {len(fold_metrics)} < min {config.min_folds_required}"
             )
 
-        if (
-            config.require_all_folds_positive_sharpe
-            and n_passing < len(fold_metrics)
-        ):
-            failures.append(
-                "Not all folds have positive OOS Sharpe"
-            )
+        if config.require_all_folds_positive_sharpe and n_passing < len(fold_metrics):
+            failures.append("Not all folds have positive OOS Sharpe")
 
         if is_oos_sharpe_ratio is not None and is_oos_sharpe_ratio > config.max_is_oos_sharpe_ratio:
             failures.append(

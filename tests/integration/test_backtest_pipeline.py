@@ -37,6 +37,6 @@ def test_full_prices_to_backtest_pipeline(
     assert result.metrics
     assert result.equity_curve
     # Confirm the ADTV-skipped warning is NOT emitted — volumes were threaded successfully.
-    assert not any(
-        "volumes not provided" in rec.message for rec in caplog.records
-    ), "ADTV filter unexpectedly skipped — volume threading broken"
+    assert not any("volumes not provided" in rec.message for rec in caplog.records), (
+        "ADTV filter unexpectedly skipped — volume threading broken"
+    )

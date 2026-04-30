@@ -87,7 +87,9 @@ class TestFundamentalPath:
     ) -> None:
         cfg = QualityFilterConfig()
         passed, result = quality_filter.apply(
-            symbols, cfg, fundamental_data=good_fundamental_data,
+            symbols,
+            cfg,
+            fundamental_data=good_fundamental_data,
         )
         assert passed == symbols
         assert result.n_filtered == 0
@@ -101,7 +103,9 @@ class TestFundamentalPath:
         data = {**good_fundamental_data, "C": {"earnings": -50.0, "net_profit_margin": 0.05}}
         cfg = QualityFilterConfig()
         passed, result = quality_filter.apply(
-            symbols, cfg, fundamental_data=data,
+            symbols,
+            cfg,
+            fundamental_data=data,
         )
         assert "C" not in passed
         assert result.n_filtered == 1
@@ -115,19 +119,25 @@ class TestFundamentalPath:
     ) -> None:
         cfg = QualityFilterConfig(min_net_profit_margin=0.10)
         passed, result = quality_filter.apply(
-            symbols, cfg, fundamental_data=good_fundamental_data,
+            symbols,
+            cfg,
+            fundamental_data=good_fundamental_data,
         )
         assert "D" not in passed  # NPM = 0.02
         assert "B" not in passed  # NPM = 0.08
         assert "low_profit_margin" in result.filtered_reasons
 
     def test_missing_fundamental_data(
-        self, quality_filter: QualityFilter, symbols: list[str],
+        self,
+        quality_filter: QualityFilter,
+        symbols: list[str],
     ) -> None:
         partial = {"A": {"earnings": 100.0, "net_profit_margin": 0.15}}
         cfg = QualityFilterConfig()
         passed, result = quality_filter.apply(
-            symbols, cfg, fundamental_data=partial,
+            symbols,
+            cfg,
+            fundamental_data=partial,
         )
         assert passed == ["A"]
         assert result.n_filtered == 4
@@ -139,39 +149,49 @@ class TestFundamentalPath:
 
 class TestSyntheticProxy:
     def test_filters_negative_trailing_return(
-        self, quality_filter: QualityFilter, price_data: pd.DataFrame,
+        self,
+        quality_filter: QualityFilter,
+        price_data: pd.DataFrame,
     ) -> None:
         # Manually force symbol "F" to have a negative 126d return
         forced = price_data.copy()
-        forced["F"] = forced["F"].iloc[0] * np.exp(
-            -np.linspace(0.0, 0.4, len(forced))
-        )
+        forced["F"] = forced["F"].iloc[0] * np.exp(-np.linspace(0.0, 0.4, len(forced)))
         symbols = ["A", "B", "C", "D", "E", "F"]
         cfg = QualityFilterConfig(synthetic_quality_threshold=0.0)
         passed, result = quality_filter.apply(
-            symbols, cfg, price_data=forced,
+            symbols,
+            cfg,
+            price_data=forced,
         )
         assert len(passed) < len(symbols)
         assert "negative_trailing_return" in result.filtered_reasons
 
     def test_all_pass_with_positive_returns(
-        self, quality_filter: QualityFilter, price_data: pd.DataFrame,
+        self,
+        quality_filter: QualityFilter,
+        price_data: pd.DataFrame,
     ) -> None:
         symbols = ["A", "B", "C"]
         cfg = QualityFilterConfig(synthetic_quality_threshold=-1.0)
         passed, result = quality_filter.apply(
-            symbols, cfg, price_data=price_data,
+            symbols,
+            cfg,
+            price_data=price_data,
         )
         assert len(passed) == len(symbols)
         assert result.n_filtered == 0
 
     def test_insufficient_price_data(
-        self, quality_filter: QualityFilter, symbols: list[str],
+        self,
+        quality_filter: QualityFilter,
+        symbols: list[str],
     ) -> None:
         short = pd.DataFrame({"A": [100, 101, 102]})
         cfg = QualityFilterConfig()
         passed, result = quality_filter.apply(
-            symbols, cfg, price_data=short,
+            symbols,
+            cfg,
+            price_data=short,
         )
         assert passed == symbols  # pass-through when too short
 
@@ -181,7 +201,9 @@ class TestSyntheticProxy:
 
 class TestNoDataFallback:
     def test_no_data_pass_through(
-        self, quality_filter: QualityFilter, symbols: list[str],
+        self,
+        quality_filter: QualityFilter,
+        symbols: list[str],
     ) -> None:
         cfg = QualityFilterConfig()
         passed, result = quality_filter.apply(symbols, cfg)
