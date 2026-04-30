@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         tvkit_retry_attempts: Retry count for transient tvkit errors.
         api_host: API bind host.
         api_port: API bind port.
+        api_key: Shared secret for ``X-API-Key`` auth on private-mode protected endpoints.
         ui_port: NiceGUI port.
         refresh_cron: Cron expression for owner-side refresh jobs.
         tvkit_browser: Optional browser profile name for tvkit authentication.
@@ -57,6 +58,14 @@ class Settings(BaseSettings):
     )
     api_host: str = Field(default="0.0.0.0", description="API bind host.")
     api_port: int = Field(default=8000, description="API bind port.")
+    api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared secret enforced via the X-API-Key header on private-mode protected "
+            "endpoints. None disables auth (dev-only); production deployments must set "
+            "CSM_API_KEY to a strong random value."
+        ),
+    )
     ui_port: int = Field(default=8080, description="NiceGUI bind port.")
     refresh_cron: str = Field(
         default="0 18 * * 1-5",

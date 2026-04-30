@@ -242,6 +242,63 @@ def private_client(
         _settings_mod.settings = _original_settings  # type: ignore[attr-defined]
 
 
+PRIVATE_API_KEY: str = "test-key-12345"
+
+
+@fixture
+def private_client_with_key(
+    tmp_path: Path,
+    private_store: ParquetStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[tuple[object, str], None, None]:
+    """Private-mode TestClient with ``CSM_API_KEY`` configured.
+
+    Yields ``(TestClient, api_key)`` so tests can build the
+    ``X-API-Key`` header from the same secret the server is using.
+    """
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
+    monkeypatch.setenv("CSM_API_KEY", PRIVATE_API_KEY)
+
+    (tmp_path / "results" / "notebooks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "results" / ".tmp" / "jobs").mkdir(parents=True, exist_ok=True)
+
+    import sys  # noqa: PLC0415
+
+    _settings_mod: object = sys.modules["csm.config.settings"]
+    _original_settings: object = _settings_mod.settings  # type: ignore[attr-defined]
+    _settings_mod.settings = Settings()  # type: ignore[attr-defined]
+
+    import api.deps as _api_deps  # noqa: PLC0415
+    import api.main as _api_main  # noqa: PLC0415
+
+    _original_deps_settings = _api_deps.settings
+    _original_main_settings = _api_main.settings
+    _api_deps.settings = _settings_mod.settings
+    _api_main.settings = _settings_mod.settings
+    try:
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        _api_deps.set_store(private_store)
+        with TestClient(_api_main.app) as test_client:
+            yield test_client, PRIVATE_API_KEY
+    finally:
+        _api_deps.settings = _original_deps_settings
+        _api_main.settings = _original_main_settings
+        _settings_mod.settings = _original_settings  # type: ignore[attr-defined]
+        # Drop any KeyRedactionFilter the lifespan attached so subsequent
+        # tests see clean log records.
+        import logging as _logging  # noqa: PLC0415
+
+        from api.logging import KeyRedactionFilter  # noqa: PLC0415
+
+        root = _logging.getLogger()
+        for f in list(root.filters):
+            if isinstance(f, KeyRedactionFilter):
+                root.removeFilter(f)
+
+
 @fixture
 def empty_store(tmp_path: Path) -> ParquetStore:
     """Create an empty ParquetStore — no keys saved. Used for 404 tests."""

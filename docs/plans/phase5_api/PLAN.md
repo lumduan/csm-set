@@ -471,23 +471,38 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.7 — Authentication & Public-Mode Hardening
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-30
 **Goal:** Lock down private-mode endpoints behind an API-key header. Tighten the public-mode contract with explicit per-endpoint tests.
 
 **Deliverables:**
 
-- [ ] [src/csm/config/settings.py](../../../src/csm/config/settings.py) — add `api_key: SecretStr | None = None` field with description; documented in `.env.example`
-- [ ] `api/security.py` — `APIKeyMiddleware` (BaseHTTPMiddleware)
-  - [ ] In public mode: always allow (read endpoints are public; write endpoints already 403'd by `public_mode_guard`)
-  - [ ] In private mode with `api_key=None`: log a warning at startup; allow all (dev mode)
-  - [ ] In private mode with `api_key` set: require header `X-API-Key`; otherwise return 401 problem-details
-  - [ ] Exempt paths: `/health`, `/docs`, `/redoc`, `/openapi.json`, `/static/notebooks/*` (always public), and the read-only `GET` routes (configurable allowlist)
-- [ ] `api/logging.py` log filter redacts `X-API-Key` header values
-- [ ] Integration tests:
-  - [ ] Public mode 403 contract test for every write endpoint (already partially covered)
-  - [ ] Private mode with key set: 401 without header; 401 with wrong key; 200 with correct key
-  - [ ] Private mode with `api_key=None`: warning logged; all endpoints accessible
-  - [ ] API key never appears in any log line
+- [x] [src/csm/config/settings.py](../../../src/csm/config/settings.py) — add `api_key: SecretStr | None = None` field with description; documented in `.env.example`
+- [x] `api/security.py` — `APIKeyMiddleware` (BaseHTTPMiddleware)
+  - [x] In public mode: always allow (read endpoints are public; write endpoints already 403'd by `public_mode_guard`)
+  - [x] In private mode with `api_key=None`: log a warning at startup; allow all (dev mode)
+  - [x] In private mode with `api_key` set: require header `X-API-Key`; otherwise return 401 problem-details
+  - [x] Exempt paths: `/health`, `/docs`, `/redoc`, `/openapi.json`, `/static/notebooks/*` (always public), and the read-only `GET` routes via `is_protected_path()` predicate
+- [x] `api/logging.py` — `KeyRedactionFilter` redacts the configured key from all log records; `install_key_redaction()` attaches it to root logger at lifespan startup
+- [x] `api/main.py` — middleware order: RequestIDMiddleware (outermost) → APIKeyMiddleware → public_mode_guard → CORSMiddleware → routers; dev-mode warning emits once at startup
+- [x] Integration tests (16 new in `tests/integration/test_api_auth.py`):
+  - [x] Public mode 403 contract test for every write endpoint (4 paths, ProblemDetail-shaped body with request_id)
+  - [x] Private mode with key set: 401 without header; 401 with wrong key; 200 with correct key
+  - [x] Private mode with `api_key=None`: warning logged; all endpoints accessible
+  - [x] API key never appears in any log line
+  - [x] Read endpoints exempt from key requirement
+  - [x] Health / docs / static paths exempt from key requirement
+- [x] Unit tests (13 new in `tests/unit/test_api_security.py`): is_protected_path truth table, middleware dispatch branches, KeyRedactionFilter (msg/args/non-string/empty-secret/unrelated)
+- [x] `tests/conftest.py` — `private_client_with_key` fixture added
+
+**Completion notes:**
+- Auth is enforced exclusively at the middleware layer; routers remain unaware of the header
+- `is_protected_path(method, path)` uses an explicit `PROTECTED_PATHS` frozenset plus a defence-in-depth rule: any non-GET on `/api/v1/*` is protected
+- Constant-time comparison via `secrets.compare_digest()` to avoid timing oracle
+- Middleware reads live settings via `sys.modules` to honour test fixture patches
+- `KeyRedactionFilter` is a no-op when key is unset or empty; scans both `record.msg` and `record.args`
+- Startup warning emitted exactly once in lifespan, not per request
+- Test coverage: 13 unit + 16 integration = 29 new tests; 670 total passing (zero regressions)
+- Type checking clean: `uv run mypy api/` passes on all new modules
 
 ---
 

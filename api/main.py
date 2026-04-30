@@ -13,7 +13,7 @@ from starlette.responses import Response
 from api.deps import set_store
 from api.errors import general_exception_handler, http_exception_handler
 from api.jobs import JobRegistry
-from api.logging import RequestIDMiddleware
+from api.logging import RequestIDMiddleware, get_request_id, install_key_redaction
 from api.routers import (
     backtest_router,
     data_router,
@@ -26,6 +26,7 @@ from api.routers import (
 )
 from api.scheduler.jobs import create_scheduler
 from api.schemas.health import HealthStatus
+from api.security import APIKeyMiddleware
 from api.static_files import NotebookStaticFiles
 from csm import __version__
 from csm.config.settings import settings
@@ -43,6 +44,13 @@ WRITE_PATHS: set[str] = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialise shared services and owner-side scheduler."""
+
+    install_key_redaction(settings.api_key)
+    if not settings.public_mode and settings.api_key is None:
+        logger.warning(
+            "CSM_API_KEY is not configured; private-mode auth is DISABLED. "
+            "Set CSM_API_KEY before exposing this API beyond loopback."
+        )
 
     store: ParquetStore = ParquetStore(settings.data_dir / "processed")
     set_store(store)
@@ -65,20 +73,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifespan)
-app.add_middleware(RequestIDMiddleware)
+
+# Middleware registration is LIFO — the LAST registered ends up OUTERMOST in the
+# runtime stack.  Desired runtime order, outermost first:
+#   RequestIDMiddleware → APIKeyMiddleware → public_mode_guard → CORSMiddleware → routers
+# RequestID must be outermost so the request_id contextvar is set before the auth
+# layer or public-mode guard build their JSON error bodies.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
-app.add_exception_handler(Exception, general_exception_handler)
-app.mount(
-    "/static/notebooks",
-    NotebookStaticFiles(),
-    name="notebooks",
 )
 
 
@@ -91,10 +97,24 @@ async def public_mode_guard(
 
     if settings.public_mode and request.url.path in WRITE_PATHS:
         return JSONResponse(
-            {"detail": "Disabled in public mode. Set CSM_PUBLIC_MODE=false to enable."},
+            {
+                "detail": "Disabled in public mode. Set CSM_PUBLIC_MODE=false to enable.",
+                "request_id": get_request_id(),
+            },
             status_code=403,
         )
     return await call_next(request)
+
+
+app.add_middleware(APIKeyMiddleware)
+app.add_middleware(RequestIDMiddleware)
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, general_exception_handler)
+app.mount(
+    "/static/notebooks",
+    NotebookStaticFiles(),
+    name="notebooks",
+)
 
 
 app.include_router(universe_router, prefix="/api/v1")
