@@ -103,7 +103,7 @@ Dependency management must ensure:
 - [ ] All dependencies declared in `pyproject.toml`
 - [ ] `uv.lock` file is up to date
 - [ ] No conflicting package versions
-- [ ] Python 3.13+ compatibility maintained
+- [ ] Python 3.11+ compatibility maintained
 - [ ] All async dependencies properly configured
 - [ ] Security vulnerabilities addressed
 - [ ] Development environment reproducible

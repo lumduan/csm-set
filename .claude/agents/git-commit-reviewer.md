@@ -54,7 +54,7 @@ Ensures commit quality, message standards, and repository hygiene for the csm-se
 ## Quality Gates
 All commits must pass:
 - [ ] All tests pass: `uv run python -m pytest tests/ -v`
-- [ ] Type checking passes: `uv run mypy tvkit/`
+- [ ] Type checking passes: `uv run mypy src/`
 - [ ] Linting passes: `uv run ruff check .`
 - [ ] Code is formatted: `uv run ruff format .`
 - [ ] No debug code or print statements
