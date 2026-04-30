@@ -111,9 +111,6 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 2.1 Momentum Features
 
-
-### 2.1 Momentum Features
-
 - [x] `src/csm/features/momentum.py` — `MomentumFeatures`
   - [x] `mom_12_1`: 12-month return, skip last month (Jegadeesh–Titman)
   - [x] `mom_6_1`: 6-month return, skip last month
@@ -187,42 +184,42 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 3.1 Backtest Engine
 
-- [ ] `src/csm/research/backtest.py` — `MomentumBacktest`
-  - [ ] Monthly rebalance on last trading day of month
-  - [ ] Survivorship-bias-safe universe (use dated universe snapshots)
-  - [ ] Transaction cost: 15 bps per side (0.15%) round-trip
-  - [ ] Position sizing: equal weight by default
-  - [ ] Output: `BacktestResult` with equity curve, positions history, turnover log
-- [ ] Pydantic models: `BacktestConfig`, `BacktestResult`
-  - [ ] `BacktestResult.metrics_dict()` → JSON-serialisable dict (no raw prices)
-  - [ ] `BacktestResult.equity_curve_dict()` → NAV indexed to 100 (no absolute prices)
-  - [ ] `BacktestResult.annual_returns_dict()` → year → return float
-- [ ] Unit test: zero-cost backtest of perfect signal returns correct PnL
-- [ ] Unit test: transaction cost reduces return by expected amount
+- [x] `src/csm/research/backtest.py` — `MomentumBacktest`
+  - [x] Monthly rebalance on last trading day of month
+  - [x] Survivorship-bias-safe universe (use dated universe snapshots)
+  - [x] Transaction cost: 15 bps per side (0.15%) round-trip
+  - [x] Position sizing: equal weight by default
+  - [x] Output: `BacktestResult` with equity curve, positions history, turnover log
+- [x] Pydantic models: `BacktestConfig`, `BacktestResult`
+  - [x] `BacktestResult.metrics_dict()` → JSON-serialisable dict (no raw prices)
+  - [x] `BacktestResult.equity_curve_dict()` → NAV indexed to 100 (no absolute prices)
+  - [x] `BacktestResult.annual_returns_dict()` → year → return float
+- [x] Unit test: zero-cost backtest of perfect signal returns correct PnL
+- [x] Unit test: transaction cost reduces return by expected amount
 
 ### 3.2 Performance Metrics
 
-- [ ] `src/csm/risk/metrics.py` — `PerformanceMetrics`
-  - [ ] CAGR, Sharpe, Sortino, Calmar, Max Drawdown
-  - [ ] Win rate, avg monthly return, annualised volatility
-  - [ ] Alpha and Beta vs SET index
-- [ ] Unit test: Sharpe ratio vs manual calculation
+- [x] `src/csm/risk/metrics.py` — `PerformanceMetrics`
+  - [x] CAGR, Sharpe, Sortino, Calmar, Max Drawdown
+  - [x] Win rate, avg monthly return, annualised volatility
+  - [x] Alpha and Beta vs SET index
+- [x] Unit test: Sharpe ratio vs manual calculation
 
 ### 3.3 Drawdown Analysis
 
-- [ ] `src/csm/risk/drawdown.py` — `DrawdownAnalyzer`
-  - [ ] Max drawdown, underwater curve, recovery statistics
+- [x] `src/csm/risk/drawdown.py` — `DrawdownAnalyzer`
+  - [x] Max drawdown, underwater curve, recovery statistics
 
 ### 3.4 Backtest Notebook
 
-- [ ] Notebook `03_backtest_analysis.ipynb`
-  - [ ] Equity curve vs SET TRI benchmark
-  - [ ] Annual return bar chart
-  - [ ] Rolling Sharpe (12-month window)
-  - [ ] Drawdown chart
-  - [ ] Performance table by formation period
-  - [ ] Sensitivity analysis: top_quantile 10% / 20% / 30%
-  - [ ] **Decision**: final parameter set
+- [x] Notebook `03_backtest_analysis.ipynb`
+  - [x] Equity curve vs SET TRI benchmark
+  - [x] Annual return bar chart
+  - [x] Rolling Sharpe (12-month window)
+  - [x] Drawdown chart
+  - [x] Performance table by formation period
+  - [x] Sensitivity analysis: top_quantile 10% / 20% / 30%
+  - [x] **Decision**: final parameter set
 
 **Exit criteria:** walk-forward CAGR > SET benchmark, Sharpe > 0.5, max drawdown documented.
 
@@ -234,38 +231,38 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 4.1 Portfolio Construction
 
-- [ ] `src/csm/portfolio/construction.py` — `PortfolioConstructor`
-  - [ ] Top-quintile selection from ranked signal
-  - [ ] Sector diversification constraint (max 40% in any one sector)
-  - [ ] Min position size (1% floor), max position size (10% cap)
-- [ ] Unit test: weight constraints satisfied
+- [x] `src/csm/portfolio/construction.py` — `PortfolioConstructor`
+  - [x] Top-quintile selection from ranked signal
+  - [x] Sector diversification constraint (max 40% in any one sector)
+  - [x] Min position size (1% floor), max position size (10% cap)
+- [x] Unit test: weight constraints satisfied
 
 ### 4.2 Weight Optimizer
 
-- [ ] `src/csm/portfolio/optimizer.py` — `WeightOptimizer`
-  - [ ] Equal weight, vol-target, minimum-variance
-- [ ] Unit test: all schemes sum to 1.0, no negative weights
+- [x] `src/csm/portfolio/optimizer.py` — `WeightOptimizer`
+  - [x] Equal weight, vol-target, minimum-variance
+- [x] Unit test: all schemes sum to 1.0, no negative weights
 
 ### 4.3 Rebalance Scheduler
 
-- [ ] `src/csm/portfolio/rebalance.py` — `RebalanceScheduler`
-  - [ ] Last trading day of month schedule
-  - [ ] Turnover calculation and trade list output
+- [x] `src/csm/portfolio/rebalance.py` — `RebalanceScheduler`
+  - [x] Last trading day of month schedule
+  - [x] Turnover calculation and trade list output
 
 ### 4.4 Regime Detection
 
-- [ ] `src/csm/risk/regime.py` — `RegimeDetector`
-  - [ ] BULL / BEAR / NEUTRAL via 200-day SMA + 3M return
-  - [ ] BEAR → reduce allocation to 50%
-- [ ] Unit test: regime transitions on known price series
+- [x] `src/csm/risk/regime.py` — `RegimeDetector`
+  - [x] BULL / BEAR / NEUTRAL via 200-day SMA + 3M return
+  - [x] BEAR → reduce allocation to 50%
+- [x] Unit test: regime transitions on known price series
 
 ### 4.5 Portfolio Optimization Notebook
 
-- [ ] Notebook `04_portfolio_optimization.ipynb`
-  - [ ] Equal vs vol-target vs min-variance equity curves
-  - [ ] Regime-filtered vs unfiltered performance
-  - [ ] Sector exposure over time, turnover analysis
-  - [ ] **Decision**: final portfolio construction config
+- [x] Notebook `04_portfolio_optimization.ipynb`
+  - [x] Equal vs vol-target vs min-variance equity curves
+  - [x] Regime-filtered vs unfiltered performance
+  - [x] Sector exposure over time, turnover analysis
+  - [x] **Decision**: final portfolio construction config
 
 **Exit criteria:** regime filter reduces drawdown in bear periods.
 
@@ -279,7 +276,9 @@ Development phases ordered by dependency — each phase must be complete and val
 
 - [ ] `api/main.py` — app factory with lifespan, CORS, router mounting
   - [ ] Public mode middleware: block write endpoints when `CSM_PUBLIC_MODE=true`
+  - [ ] CORS middleware: `allow_origins`, `allow_methods`, `allow_headers` configured for future UI projects on different domains/ports
   - [ ] Mount `results/notebooks/` as `/static/notebooks/` (StaticFiles)
+  - [ ] OpenAPI auto-docs at `/docs` (Swagger) and `/redoc` (ReDoc) — leveraged for future UI/dashboard integration
 - [ ] `/health` returns `{"status": "ok", "version": "...", "public_mode": true/false}`
 
 ### 5.2 Routers
@@ -305,9 +304,122 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ---
 
-## Phase 6 — Web Dashboard (UI)
+## Phase 6 — Docker & Public Distribution
 
-> Goal: NiceGUI dashboard functional in both private and public mode from single Docker image.
+> Goal: `git clone` + `docker compose up` → research visible at `localhost:8000`. Zero setup required.
+
+### 6.1 Dockerfile
+
+- [ ] `Dockerfile` — single image: python:3.11-slim + uv + source + `results/`
+- [ ] Default `ENV CSM_PUBLIC_MODE=true`
+- [ ] Expose port 8000 (API)
+- [ ] Docker HEALTHCHECK using `/health` endpoint for container monitoring
+
+### 6.2 Docker Compose
+
+- [ ] `docker-compose.yml` — public mode, `results/` mounted read-only
+  ```yaml
+  volumes:
+    - ./results:/app/results:ro
+  ```
+- [ ] `docker-compose.private.yml` — owner override
+  ```yaml
+  # docker compose -f docker-compose.yml -f docker-compose.private.yml up
+  environment:
+    CSM_PUBLIC_MODE: "false"
+    TVKIT_BROWSER: "chrome"
+  volumes:
+    - ./data:/app/data          # live data directory
+    - ./results:/app/results    # writable for export_results.py
+  ```
+- [ ] Test: `docker compose up` from fresh clone with no `.env` → no errors
+
+### 6.3 Export Results Script
+
+- [ ] `scripts/export_results.py` — complete and tested
+  - [ ] Export 4 notebooks to `results/notebooks/*.html`
+    - `jupyter nbconvert --to html --execute --no-input`
+  - [ ] Export `results/backtest/summary.json` — metrics only, no prices
+  - [ ] Export `results/backtest/equity_curve.json` — NAV indexed to 100
+  - [ ] Export `results/backtest/annual_returns.json`
+  - [ ] Export `results/signals/latest_ranking.json` — scores/quintiles only
+- [ ] Owner workflow:
+  ```bash
+  uv run python scripts/export_results.py
+  git add results/
+  git commit -m "results: update YYYY-MM-DD"
+  git push
+  ```
+
+### 6.4 Data Boundary Audit
+
+- [ ] `results/backtest/equity_curve.json` — NAV only, no absolute prices
+- [ ] `results/signals/latest_ranking.json` — scores/quintiles only, no OHLCV
+- [ ] Notebook HTML (`--no-input`) — charts visible, no raw data tables
+- [ ] `.gitignore` excludes all of `data/` directory
+
+### 6.5 README Update
+
+- [ ] Quick Start section:
+  ```bash
+  git clone https://github.com/lumduan/csm-set
+  cd csm-set
+  docker compose up
+  # open http://localhost:8000
+  ```
+- [ ] "What you will see" section: notebooks, backtest results, signal rankings
+- [ ] "What requires credentials" section: data fetch, notebook re-execution
+- [ ] Owner workflow section: fetch → export_results → git add results/ → push
+
+**Exit criteria:** fresh `git clone` + `docker compose up` → all notebook pages load, backtest chart renders, signal rankings visible. Zero errors in container logs.
+
+---
+
+## Phase 7 — Hardening & Documentation
+
+> Goal: production-ready quality, complete documentation.
+
+### 7.1 Test Coverage
+
+- [ ] All unit tests passing
+- [ ] All integration tests passing (public mode + private mode variants)
+- [ ] Coverage ≥ 80% on `src/csm/`
+
+### 7.2 Documentation
+
+- [ ] All `docs/` pages complete
+- [ ] `docs/guides/public-mode.md` — **NEW**: data boundaries, Docker, owner workflow
+- [ ] `README.md` — full, with quick start and badges
+
+### 7.3 API Security
+
+- [ ] API key or HTTP Basic Auth middleware to protect strategy data endpoints
+- [ ] Ensures read-only public mode doesn't leak portfolio composition/signal data unintentionally
+
+### 7.4 CI
+
+- [ ] `ci.yml`: lint → type-check → test → docker build check on every push
+- [ ] CI step: verify `results/` contains required files (fail if missing)
+
+**Exit criteria:** all tests green, Docker builds in CI, docs complete.
+
+---
+
+## Phase 8 — Enhancement (Post-MVP)
+
+> Optional upgrades after Phase 7 is complete.
+
+- [ ] Fundamental filter (P/BV, ROE) via SET SMART
+- [ ] Foreign flow signal from SET website
+- [ ] LightGBM ranking model
+- [ ] Intraday entry timing using 1H data
+- [ ] Multi-factor composite: momentum + value + quality
+
+---
+
+## Note: Future Multi-Strategy Dashboard
+
+เนื่องจากต้องการรองรับการทำ Multi-Strategy Aggregation (แสดงผลตอบแทนรวมจากหลายกลยุทธ์) จึงจะแยกส่วน UI ไปพัฒนาเป็นโปรเจกต์ใหม่ที่สามารถเชื่อมต่อกับหลาย API ได้ในภายหลัง
 
 ### 6.1 App Shell
 
@@ -352,113 +464,6 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ---
 
-## Phase 7 — Docker & Public Distribution
-
-> Goal: `git clone` + `docker compose up` → research visible at `localhost:8080`. Zero setup required.
-
-### 7.1 Dockerfile
-
-- [ ] `Dockerfile` — single image: python:3.11-slim + uv + source + `results/`
-- [ ] Default `ENV CSM_PUBLIC_MODE=true`
-- [ ] Expose ports 8000 (API) and 8080 (UI)
-
-### 7.2 Docker Compose
-
-- [ ] `docker-compose.yml` — public mode, `results/` mounted read-only
-  ```yaml
-  volumes:
-    - ./results:/app/results:ro
-  ```
-- [ ] `docker-compose.private.yml` — owner override
-  ```yaml
-  # docker compose -f docker-compose.yml -f docker-compose.private.yml up
-  environment:
-    CSM_PUBLIC_MODE: "false"
-    TVKIT_BROWSER: "chrome"
-  volumes:
-    - ./data:/app/data          # live data directory
-    - ./results:/app/results    # writable for export_results.py
-  ```
-- [ ] Test: `docker compose up` from fresh clone with no `.env` → no errors
-
-### 7.3 Export Results Script
-
-- [ ] `scripts/export_results.py` — complete and tested
-  - [ ] Export 4 notebooks to `results/notebooks/*.html`
-    - `jupyter nbconvert --to html --execute --no-input`
-  - [ ] Export `results/backtest/summary.json` — metrics only, no prices
-  - [ ] Export `results/backtest/equity_curve.json` — NAV indexed to 100
-  - [ ] Export `results/backtest/annual_returns.json`
-  - [ ] Export `results/signals/latest_ranking.json` — scores/quintiles only
-- [ ] Owner workflow:
-  ```bash
-  uv run python scripts/export_results.py
-  git add results/
-  git commit -m "results: update YYYY-MM-DD"
-  git push
-  ```
-
-### 7.4 Data Boundary Audit
-
-- [ ] `results/backtest/equity_curve.json` — NAV only, no absolute prices
-- [ ] `results/signals/latest_ranking.json` — scores/quintiles only, no OHLCV
-- [ ] Notebook HTML (`--no-input`) — charts visible, no raw data tables
-- [ ] `.gitignore` excludes all of `data/` directory
-
-### 7.5 README Update
-
-- [ ] Quick Start section:
-  ```bash
-  git clone https://github.com/lumduan/csm-set
-  cd csm-set
-  docker compose up
-  # open http://localhost:8080
-  ```
-- [ ] "What you will see" section: notebooks, backtest results, signal rankings
-- [ ] "What requires credentials" section: data fetch, notebook re-execution
-- [ ] Owner workflow section: fetch → export_results → git add results/ → push
-
-**Exit criteria:** fresh `git clone` + `docker compose up` → all notebook pages load, backtest chart renders, signal rankings visible. Zero errors in container logs.
-
----
-
-## Phase 8 — Hardening & Documentation
-
-> Goal: production-ready quality, complete documentation.
-
-### 8.1 Test Coverage
-
-- [ ] All unit tests passing
-- [ ] All integration tests passing (public mode + private mode variants)
-- [ ] Coverage ≥ 80% on `src/csm/`
-
-### 8.2 Documentation
-
-- [ ] All `docs/` pages complete
-- [ ] `docs/guides/public-mode.md` — **NEW**: data boundaries, Docker, owner workflow
-- [ ] `README.md` — full, with quick start and badges
-
-### 8.3 CI
-
-- [ ] `ci.yml`: lint → type-check → test → docker build check on every push
-- [ ] CI step: verify `results/` contains required files (fail if missing)
-
-**Exit criteria:** all tests green, Docker builds in CI, docs complete.
-
----
-
-## Phase 9 — Enhancement (Post-MVP)
-
-> Optional upgrades after Phase 8 is complete.
-
-- [ ] Fundamental filter (P/BV, ROE) via SET SMART
-- [ ] Foreign flow signal from SET website
-- [ ] LightGBM ranking model
-- [ ] Intraday entry timing using 1H data
-- [ ] Multi-factor composite: momentum + value + quality
-
----
-
 ## Dependency Map
 
 ```
@@ -468,10 +473,9 @@ Phase 0 (Bootstrap)
                     └── Phase 3 (Backtesting)
                             └── Phase 4 (Portfolio & Risk)
                                     ├── Phase 5 (API)
-                                    │       └── Phase 6 (UI)
-                                    │               └── Phase 7 (Docker & Public)
-                                    │                           └── Phase 8 (Hardening)
-                                    └── Phase 9 (Enhancement)
+                                    │       └── Phase 6 (Docker & Public)
+                                    │               └── Phase 7 (Hardening)
+                                    └── Phase 8 (Enhancement)
 ```
 
 ---
@@ -486,12 +490,11 @@ Phase 0 (Bootstrap)
 | 3     | Backtesting                  | 1 week     |
 | 4     | Portfolio & Risk             | 1 week     |
 | 5     | API                          | 3–4 days   |
-| 6     | UI                           | 1 week     |
-| 7     | Docker & Public Distribution | 3–4 days   |
-| 8     | Hardening & Docs             | 1 week     |
-| 9     | Enhancement (optional)       | open-ended |
+| 6     | Docker & Public Distribution | 3–4 days   |
+| 7     | Hardening & Docs             | 1 week     |
+| 8     | Enhancement (optional)       | open-ended |
 
-**MVP with public distribution (Phase 0–7): ~9–11 weeks**
+**MVP with public distribution (Phase 0–6): ~8–10 weeks**
 
 ---
 
@@ -499,7 +502,10 @@ Phase 0 (Bootstrap)
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 2 — Signal Research
-- **Completed phases:** Phase 1 (Data Pipeline) — all sub-phases 1.1–1.7 complete as of 2026-04-23
-  - 1.1 Config & Constants, 1.2 Storage Layer, 1.3 tvkit Loader, 1.4 Universe Builder, 1.5 Price Cleaner, 1.6 Bulk Fetch Script, 1.7 Data Quality Check (all 6 sign-off checks PASS)
+- **Active phase:** Phase 5 — API
+- **Completed phases:**
+  - Phase 1 (Data Pipeline) — sub-phases 1.1–1.7 complete as of 2026-04-23
+  - Phase 2 (Signal Research) — sub-phases 2.1–2.7 complete
+  - Phase 3 (Backtesting) — sub-phases 3.1–3.4 complete
+  - Phase 4 (Portfolio Construction & Risk) — sub-phases 4.1–4.5 complete, confirmed by `results/notebooks/04_portfolio_optimization.html`
 - **Blocked by:** nothing
