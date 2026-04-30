@@ -20,6 +20,7 @@ from api.routers import (
     data_router,
     jobs_router,
     portfolio_router,
+    scheduler_router,
     signals_router,
     universe_router,
 )
@@ -30,7 +31,12 @@ from csm.config.settings import settings
 from csm.data.store import ParquetStore
 
 logger: logging.Logger = logging.getLogger(__name__)
-WRITE_PATHS: set[str] = {"/api/v1/data/refresh", "/api/v1/backtest/run", "/api/v1/jobs"}
+WRITE_PATHS: set[str] = {
+    "/api/v1/data/refresh",
+    "/api/v1/backtest/run",
+    "/api/v1/jobs",
+    "/api/v1/scheduler/run/daily_refresh",
+}
 
 
 @asynccontextmanager
@@ -96,6 +102,7 @@ app.include_router(portfolio_router, prefix="/api/v1")
 app.include_router(backtest_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(scheduler_router, prefix="/api/v1")
 
 
 @app.get(

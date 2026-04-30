@@ -437,18 +437,18 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.5 — Scheduler Production Wiring
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete (2026-04-30)
 **Goal:** Bind the daily-refresh job to `Settings.refresh_cron`, add a missed-run policy, surface job state to `/health`, and provide a private-mode manual trigger endpoint.
 
 **Deliverables:**
 
-- [ ] [api/scheduler/jobs.py:58](../../../api/scheduler/jobs.py) — `scheduler.add_job` extended with `CronTrigger.from_crontab(settings.refresh_cron, timezone="Asia/Bangkok")` and `misfire_grace_time=3600`, `coalesce=True`, `max_instances=1`
-- [ ] `daily_refresh` extended to write a marker file `results/.tmp/last_refresh.json` (timestamp, symbols_fetched, duration_seconds, failures) on success — surfaced by extended `/health` (5.8)
-- [ ] `daily_refresh` failures logged at ERROR with structured fields; do not crash the scheduler
-- [ ] `api/routers/scheduler.py` — NEW
-  - [ ] `POST /api/v1/scheduler/run/{job_id}` — manual trigger (private mode only); valid job IDs: `daily_refresh`; submits via JobRegistry
-  - [ ] Public mode: this router is registered but every endpoint returns 403 via the `WRITE_PATHS` middleware (extend the set in [api/main.py:26](../../../api/main.py))
-- [ ] Unit tests: cron expression parsing; missed-run policy; private-mode skip parity (`create_scheduler(public_mode=True) is None`); manual trigger submits via JobRegistry not directly
+- [x] [api/scheduler/jobs.py:58](../../../api/scheduler/jobs.py) — `scheduler.add_job` extended with `CronTrigger.from_crontab(settings.refresh_cron, timezone="Asia/Bangkok")` and `misfire_grace_time=3600`, `coalesce=True`, `max_instances=1`
+- [x] `daily_refresh` extended to write a marker file `results/.tmp/last_refresh.json` (timestamp, symbols_fetched, duration_seconds, failures) on success — surfaced by extended `/health` (5.8)
+- [x] `daily_refresh` failures logged at ERROR with structured fields; do not crash the scheduler
+- [x] `api/routers/scheduler.py` — NEW
+  - [x] `POST /api/v1/scheduler/run/{job_id}` — manual trigger (private mode only); valid job IDs: `daily_refresh`; submits via JobRegistry
+  - [x] Public mode: this router is registered but every endpoint returns 403 via the `WRITE_PATHS` middleware (extend the set in [api/main.py:26](../../../api/main.py))
+- [x] Unit tests: cron expression parsing; missed-run policy; private-mode skip parity (`create_scheduler(public_mode=True) is None`); manual trigger submits via JobRegistry not directly
 
 ---
 
