@@ -157,11 +157,15 @@ class TestPortfolioSnapshot:
 
 class TestBacktestRunResponse:
     def test_round_trip(self) -> None:
-        original = BacktestRunResponse(job_id="abc123def456", status="accepted")
+        original = BacktestRunResponse(job_id="abc123def456", status=JobStatus.ACCEPTED)
         dumped = original.model_dump()
         restored = BacktestRunResponse(**dumped)
         assert restored.job_id == "abc123def456"
-        assert restored.status == "accepted"
+        assert restored.status == JobStatus.ACCEPTED
+
+    def test_status_serializes_as_string(self) -> None:
+        original = BacktestRunResponse(job_id="abc123def456", status=JobStatus.ACCEPTED)
+        assert original.model_dump()["status"] == "accepted"
 
 
 # ---------------------------------------------------------------------------
@@ -171,16 +175,15 @@ class TestBacktestRunResponse:
 
 class TestRefreshResult:
     def test_round_trip(self) -> None:
-        original = RefreshResult(refreshed=50, requested=50)
+        original = RefreshResult(job_id="01JQEXAMPLE0000000000000000", status=JobStatus.ACCEPTED)
         dumped = original.model_dump()
         restored = RefreshResult(**dumped)
-        assert restored.refreshed == 50
-        assert restored.requested == 50
+        assert restored.job_id == "01JQEXAMPLE0000000000000000"
+        assert restored.status == JobStatus.ACCEPTED
 
-    def test_zero_counts(self) -> None:
-        original = RefreshResult(refreshed=0, requested=0)
-        assert original.refreshed == 0
-        assert original.requested == 0
+    def test_status_serializes_as_string(self) -> None:
+        original = RefreshResult(job_id="01JQEXAMPLE0000000000000000", status=JobStatus.ACCEPTED)
+        assert original.model_dump()["status"] == "accepted"
 
 
 # ---------------------------------------------------------------------------

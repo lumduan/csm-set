@@ -401,28 +401,37 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.4 — Write Routers & Job Lifecycle
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-04-30
 **Goal:** Replace ephemeral `BackgroundTasks` with a persistent `JobRegistry`. Every write request returns a job ID that can be polled to completion. Restart-safe.
 
 **Deliverables:**
 
-- [ ] `api/jobs.py` — `JobRegistry` class
-  - [ ] `submit(kind: JobKind, runner: Callable[..., Awaitable[JobOutcome]], **kwargs) -> JobRecord`
-  - [ ] `get(job_id: str) -> JobRecord | None`
-  - [ ] `list(kind: JobKind | None, status: JobStatus | None, limit: int) -> list[JobRecord]`
-  - [ ] `_persist(record: JobRecord)` — atomic JSON write to `results/.tmp/jobs/{job_id}.json`
-  - [ ] `load_all()` — invoked at lifespan startup; rehydrates registry from disk
-  - [ ] State machine: `accepted → running → succeeded | failed | cancelled`; transitions guarded
-- [ ] `api/jobs.py` — `JobKind` (`DATA_REFRESH`, `BACKTEST_RUN`) and `JobStatus` enums
-- [ ] `api/jobs.py` — concurrency control via `asyncio.Semaphore(1)` per job kind (no two backtests at once); FIFO queue
-- [ ] [api/routers/data.py](../../../api/routers/data.py) — `POST /api/v1/data/refresh` returns `RefreshResult(job_id, status="accepted")`; the actual work runs as a JobRegistry task
-- [ ] [api/routers/backtest.py](../../../api/routers/backtest.py) — `POST /api/v1/backtest/run` returns `BacktestRunResponse(job_id, status="accepted")`; runs as JobRegistry task; existing `_run_backtest_job` body becomes the runner
-- [ ] `api/routers/jobs.py` — NEW
-  - [ ] `GET /api/v1/jobs/{job_id}` → `JobRecord` (404 if unknown)
-  - [ ] `GET /api/v1/jobs?kind=&status=&limit=` → `list[JobRecord]` (private mode only; public returns 403)
-- [ ] Integration tests: submit job → poll until `succeeded` → verify result; restart-safety test (instantiate registry twice, confirm completed jobs persist)
+- [x] `api/jobs.py` — `JobRegistry` class
+  - [x] `submit(kind: JobKind, runner: Callable[..., Awaitable[JobOutcome]], **kwargs) -> JobRecord`
+  - [x] `get(job_id: str) -> JobRecord | None`
+  - [x] `list(kind: JobKind | None, status: JobStatus | None, limit: int) -> list[JobRecord]`
+  - [x] `_persist(record: JobRecord)` — atomic JSON write to `results/.tmp/jobs/{job_id}.json`
+  - [x] `load_all()` — invoked at lifespan startup; rehydrates registry from disk
+  - [x] State machine: `accepted → running → succeeded | failed | cancelled`; transitions guarded
+- [x] `api/jobs.py` — `JobKind` (`DATA_REFRESH`, `BACKTEST_RUN`) and `JobStatus` enums
+- [x] `api/jobs.py` — concurrency control via per-kind async queues + dedicated worker tasks (equivalent to `asyncio.Semaphore(1)` per job kind); FIFO queue
+- [x] [api/routers/data.py](../../../api/routers/data.py) — `POST /api/v1/data/refresh` returns `RefreshResult(job_id, status="accepted")`; the actual work runs as a JobRegistry task
+- [x] [api/routers/backtest.py](../../../api/routers/backtest.py) — `POST /api/v1/backtest/run` returns `BacktestRunResponse(job_id, status="accepted")`; runs as JobRegistry task; existing `_run_backtest_job` body becomes the runner
+- [x] `api/routers/jobs.py` — NEW
+  - [x] `GET /api/v1/jobs/{job_id}` → `JobRecord` (404 if unknown)
+  - [x] `GET /api/v1/jobs?kind=&status=&limit=` → `list[JobRecord]` (private mode only; public returns 403)
+- [x] Integration tests: submit job → poll until `succeeded` → verify result; restart-safety test (instantiate registry twice, confirm completed jobs persist)
 
 **Persistence boundary:** `results/.tmp/jobs/` is gitignored (already covered by `results/.tmp/` ignore if present; verify and add if missing). Jobs hold metadata only — no raw OHLCV or strategy outputs.
+
+**Completion notes:**
+- Per-kind `asyncio.Queue` with dedicated worker tasks instead of bare semaphores — gives natural FIFO ordering
+- ULID job IDs for consistency with request IDs from Phase 5.1
+- `load_all()` marks RUNNING jobs as FAILED on restart (orphaned process detection)
+- `cancel()` only works from ACCEPTED state; worker skips CANCELLED items
+- Sync `MomentumBacktest.run()` wrapped in `asyncio.to_thread()` to avoid blocking the event loop
+- `RefreshResult` schema changed: `refreshed`/`requested` → `job_id`/`status`; counts moved to `JobRecord.summary`
+- 595/595 tests pass (15 new: 2 schema + 13 integration)
 
 ---
 

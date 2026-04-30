@@ -125,6 +125,7 @@ def client(
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         _api_deps.set_store(ParquetStore(tmp_path / "data" / "processed"))
+        (tmp_path / "results" / ".tmp" / "jobs").mkdir(parents=True, exist_ok=True)
         with TestClient(_api_main.app) as test_client:
             yield test_client
     finally:
@@ -171,6 +172,30 @@ def private_store(tmp_path: Path) -> ParquetStore:
     )
     store.save("portfolio_state", state_df)
 
+    # Minimal data so the backtest router accepts submissions.
+    rng = np.random.default_rng(42)
+    dates = pd.date_range("2024-01-01", periods=60, freq="B", tz="Asia/Bangkok")
+    symbols = ["SET001", "SET002", "SET003"]
+    prices_data: dict[str, np.ndarray] = {}
+    for sym in symbols:
+        returns = rng.normal(0.0005, 0.015, size=len(dates))
+        prices_data[sym] = 100.0 * np.exp(np.cumsum(returns))
+    prices_df = pd.DataFrame(prices_data, index=dates)
+    store.save("prices_latest", prices_df)
+
+    features_rows: list[dict[str, object]] = []
+    for date in dates:
+        for sym in symbols:
+            features_rows.append(
+                {
+                    "date": date,
+                    "symbol": sym,
+                    "mom_12_1": rng.normal(0.05, 0.15),
+                }
+            )
+    features_df = pd.DataFrame(features_rows)
+    store.save("features_latest", features_df)
+
     return store
 
 
@@ -190,6 +215,7 @@ def private_client(
 
     # StaticFiles mount requires the notebooks directory to exist at import time.
     (tmp_path / "results" / "notebooks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "results" / ".tmp" / "jobs").mkdir(parents=True, exist_ok=True)
 
     import sys  # noqa: PLC0415
 
@@ -237,6 +263,7 @@ def empty_store_client(
     monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
 
     (tmp_path / "results" / "notebooks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "results" / ".tmp" / "jobs").mkdir(parents=True, exist_ok=True)
 
     import sys  # noqa: PLC0415
 

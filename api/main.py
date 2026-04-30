@@ -18,6 +18,7 @@ from api.logging import RequestIDMiddleware
 from api.routers import (
     backtest_router,
     data_router,
+    jobs_router,
     portfolio_router,
     signals_router,
     universe_router,
@@ -29,7 +30,7 @@ from csm.config.settings import settings
 from csm.data.store import ParquetStore
 
 logger: logging.Logger = logging.getLogger(__name__)
-WRITE_PATHS: set[str] = {"/api/v1/data/refresh", "/api/v1/backtest/run"}
+WRITE_PATHS: set[str] = {"/api/v1/data/refresh", "/api/v1/backtest/run", "/api/v1/jobs"}
 
 
 @asynccontextmanager
@@ -38,10 +39,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     store: ParquetStore = ParquetStore(settings.data_dir / "processed")
     set_store(store)
+
+    jobs_persistence_dir = settings.results_dir / ".tmp" / "jobs"
+    jobs = JobRegistry.load_all(jobs_persistence_dir)
+    app.state.jobs = jobs
+
     scheduler = create_scheduler(settings=settings, store=store)
     app.state.store = store
     app.state.scheduler = scheduler
-    app.state.jobs = JobRegistry()
     if scheduler is not None:
         scheduler.start()
     try:
@@ -49,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if scheduler is not None:
             scheduler.shutdown(wait=False)
+        await jobs.shutdown()
 
 
 app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifespan)
@@ -89,6 +95,7 @@ app.include_router(signals_router, prefix="/api/v1")
 app.include_router(portfolio_router, prefix="/api/v1")
 app.include_router(backtest_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
+app.include_router(jobs_router, prefix="/api/v1")
 
 
 @app.get(

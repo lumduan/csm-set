@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from api.jobs import JobStatus
+
 
 class RefreshResult(BaseModel):
-    """Result of a data refresh operation."""
+    """Response returned immediately after submitting a data refresh job."""
 
-    refreshed: int = Field(ge=0, description="Number of symbols successfully refreshed")
-    requested: int = Field(ge=0, description="Number of symbols requested")
+    job_id: str = Field(description="ULID of the submitted refresh job")
+    status: JobStatus = Field(description="Initial job status (always 'accepted')")

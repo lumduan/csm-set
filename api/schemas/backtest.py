@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from api.jobs import JobStatus
+
 
 class BacktestRunResponse(BaseModel):
-    """Response from submitting a backtest run."""
+    """Response returned immediately after submitting a backtest run."""
 
-    job_id: str = Field(description="UUID of the submitted job")
-    status: str = Field(
-        description="Initial job status",
-        examples=["accepted"],
-    )
+    job_id: str = Field(description="ULID of the submitted job")
+    status: JobStatus = Field(description="Initial job status (always 'accepted')")
