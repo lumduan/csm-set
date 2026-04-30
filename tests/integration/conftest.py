@@ -46,6 +46,15 @@ def tmp_results_portfolio_full(tmp_results: Path) -> Path:
 
 
 @pytest.fixture
+def tmp_results_notebooks_full(tmp_results: Path) -> Path:
+    """Write sample notebook HTML files for notebook index and static serving tests."""
+    notebooks_dir = tmp_results / "notebooks"
+    for name in ["01_test.html", "02_test.html"]:
+        (notebooks_dir / name).write_text(f"<html><body><h1>{name}</h1></body></html>")
+    return tmp_results
+
+
+@pytest.fixture
 def tmp_results_malformed(tmp_results: Path) -> Path:
     """Replace JSON files with malformed content for 500 error-path tests."""
     (tmp_results / "signals" / "latest_ranking.json").write_text("not valid json{{{")

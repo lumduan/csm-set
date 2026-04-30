@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
 
@@ -19,6 +18,7 @@ from api.routers import (
     backtest_router,
     data_router,
     jobs_router,
+    notebooks_router,
     portfolio_router,
     scheduler_router,
     signals_router,
@@ -26,6 +26,7 @@ from api.routers import (
 )
 from api.scheduler.jobs import create_scheduler
 from api.schemas.health import HealthStatus
+from api.static_files import NotebookStaticFiles
 from csm import __version__
 from csm.config.settings import settings
 from csm.data.store import ParquetStore
@@ -76,7 +77,7 @@ app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore
 app.add_exception_handler(Exception, general_exception_handler)
 app.mount(
     "/static/notebooks",
-    StaticFiles(directory=settings.results_dir / "notebooks"),
+    NotebookStaticFiles(),
     name="notebooks",
 )
 
@@ -102,6 +103,7 @@ app.include_router(portfolio_router, prefix="/api/v1")
 app.include_router(backtest_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(notebooks_router, prefix="/api/v1")
 app.include_router(scheduler_router, prefix="/api/v1")
 
 

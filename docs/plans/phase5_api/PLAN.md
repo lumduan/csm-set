@@ -454,16 +454,18 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ### Phase 5.6 — Static Asset & Notebook Serving
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete (2026-04-30)
 **Goal:** Audit the StaticFiles mount, add ETag headers, ship a fallback page, and expose a typed `GET /api/v1/notebooks` index.
 
 **Deliverables:**
 
-- [ ] [api/main.py:55-59](../../../api/main.py) StaticFiles mount kept; verified to serve `*.html` with correct content-type and `Cache-Control: public, max-age=300`
-- [ ] Fallback HTML at `api/static/notebook_missing.html` returned for any 404 within `/static/notebooks/`
-- [ ] `api/routers/notebooks.py` — `GET /api/v1/notebooks` → `NotebookIndex(items=[NotebookEntry(name, path, size_bytes, last_modified)])`
-- [ ] Notebook listing reads from `Settings.results_dir / "notebooks"` (no fs walk outside that root)
-- [ ] Integration tests: index lists existing HTMLs; missing notebook returns fallback HTML; ETag header round-trip
+- [x] `api/main.py` StaticFiles mount replaced with `NotebookStaticFiles`; serves `*.html` with `Cache-Control: public, max-age=300`
+- [x] Fallback HTML at `api/static/notebook_missing.html` returned for any 404 within `/static/notebooks/`
+- [x] `api/routers/notebooks.py` — `GET /api/v1/notebooks` → `NotebookIndex(items=[NotebookEntry(name, path, size_bytes, last_modified)])`
+- [x] `api/static_files.py` — `NotebookStaticFiles` subclass with dynamic directory resolution and `lookup_path` override
+- [x] Notebook listing reads from `Settings.results_dir / "notebooks"` (no fs walk outside that root; path traversal defence)
+- [x] Integration tests: index lists existing HTMLs; missing notebook returns fallback HTML; ETag header round-trip (21 new tests)
+- [x] Full quality gate: ruff, ruff format, mypy, pytest (632 passed, zero regressions)
 
 ---
 
