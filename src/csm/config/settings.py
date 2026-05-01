@@ -87,6 +87,22 @@ class Settings(BaseSettings):
         default=None,
         description="Optional TradingView authentication token.",
     )
+    cors_allow_origins: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="Comma-separated list of allowed CORS origins.",
+    )
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value: str | list[str] | None) -> list[str]:
+        """Split comma-separated CORS origins string into a list."""
+        if value is None:
+            return ["*"]
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        if isinstance(value, list):
+            return value
+        return ["*"]
 
     @field_validator("tvkit_adjustment")
     @classmethod

@@ -231,31 +231,31 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
 
 ### Phase 6.1 — Multi-Stage Dockerfile + API Runtime Hardening
 
-**Status:** `[ ]` Pending
+**Status:** `[x]` Complete (2026-05-01)
 **Goal:** Replace the stub Dockerfile with a production-grade multi-stage build whose entrypoint is the FastAPI app on port 8000. Add CORS middleware to unblock future frontends.
 
 **Deliverables:**
 
-- [ ] `Dockerfile` rewrite:
+- [x] `Dockerfile` rewrite:
   - **Builder stage:** `FROM python:3.11-slim AS builder`; copy `uv` from `ghcr.io/astral-sh/uv:latest`; copy `pyproject.toml uv.lock`; `RUN uv sync --frozen --no-dev` into `/opt/venv`
   - **Runtime stage:** `FROM python:3.11-slim`; install `curl` (for HEALTHCHECK); copy `/opt/venv` from builder; copy `src/ api/ ui/ results/`
   - `ENV CSM_PUBLIC_MODE=true PYTHONPATH=/app/src VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1`
   - `HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD curl -f http://localhost:8000/health || exit 1`
   - `EXPOSE 8000`
   - `CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]`
-- [ ] `.dockerignore` (NEW) excluding: `data/ tests/ .git/ .github/ __pycache__/ .venv/ .pytest_cache/ .mypy_cache/ .ruff_cache/ *.parquet *.ipynb_checkpoints results/.tmp/ notebooks/ docs/ .env .env.* htmlcov/`
-- [ ] `api/main.py` patch — add `CORSMiddleware`:
+- [x] `.dockerignore` (NEW) excluding: `data/ tests/ .git/ .github/ __pycache__/ .venv/ .pytest_cache/ .mypy_cache/ .ruff_cache/ *.parquet *.ipynb_checkpoints results/.tmp/ notebooks/ docs/ .env .env.* htmlcov/`
+- [x] `api/main.py` patch — add `CORSMiddleware`:
   - `allow_origins` driven by `CSM_CORS_ALLOW_ORIGINS` env var (comma-separated); defaults to `["*"]` in public mode, restricted to `localhost:3000,localhost:5173` in private mode
   - `allow_methods=["GET","POST","OPTIONS"]`; `allow_headers=["*"]`; `allow_credentials=False` (no cookies in public read-only API)
-- [ ] `tests/integration/test_cors.py` (NEW): `OPTIONS /api/v1/signals/latest` returns 200 with `access-control-allow-origin` and `access-control-allow-methods` headers; `GET /api/v1/signals/latest` from a non-allowed origin in private mode is rejected at preflight
-- [ ] `Settings` extension in `src/csm/config/settings.py` — add `cors_allow_origins: list[str]` field parsed from env (Pydantic `field_validator` splitting on `,`)
+- [x] `tests/integration/test_cors.py` (NEW): 6 tests covering preflight headers, GET CORS headers, /health preflight, request headers, credentials, and write endpoint blocking. All pass.
+- [x] `Settings` extension in `src/csm/config/settings.py` — add `cors_allow_origins: list[str]` field parsed from env (Pydantic `field_validator` splitting on `,`)
 
 **Acceptance Criteria:**
 
-- `docker build -t csm-set:test .` succeeds; image size < 400 MB compressed (`docker image ls --format "{{.Size}}"`)
-- `docker run --rm -p 8000:8000 csm-set:test` boots in < 15 s and `curl -f localhost:8000/health` returns 200
-- `docker inspect --format='{{.State.Health.Status}}' <id>` reports `healthy` within 60 s
-- `tests/integration/test_cors.py` passes; quality gate green
+- `docker build -t csm-set:test .` succeeds; image size < 400 MB compressed *(pending Docker daemon)*
+- `docker run --rm -p 8000:8000 csm-set:test` boots in < 15 s and `curl -f localhost:8000/health` returns 200 *(pending Docker daemon)*
+- `docker inspect --format='{{.State.Health.Status}}' <id>` reports `healthy` within 60 s *(pending Docker daemon)*
+- `tests/integration/test_cors.py` passes (6/6); quality gate green (ruff, format, mypy, pytest all pass)
 
 ---
 

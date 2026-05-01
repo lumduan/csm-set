@@ -96,9 +96,9 @@ app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifesp
 # auth layer, access-log middleware, or public-mode guard build their responses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -202,9 +202,7 @@ async def health(request: Request) -> HealthStatus:
         jobs_pending = len(jobs.list(status=JobStatus.ACCEPTED))
 
     is_private: bool = not settings.public_mode
-    is_degraded: bool = (is_private and not scheduler_running) or (
-        last_refresh_status == "failed"
-    )
+    is_degraded: bool = (is_private and not scheduler_running) or (last_refresh_status == "failed")
 
     return HealthStatus(
         status="degraded" if is_degraded else "ok",
