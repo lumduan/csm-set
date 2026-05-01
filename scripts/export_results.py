@@ -276,9 +276,7 @@ async def export_backtest(
     ]
     equity_model = EquityCurve(series=eq_series)
 
-    annual_pairs = sorted(
-        (int(y), float(v)) for y, v in result.annual_returns.items()
-    )
+    annual_pairs = sorted((int(y), float(v)) for y, v in result.annual_returns.items())
     annual_model = AnnualReturns(
         rows=[AnnualRow(year=y, portfolio_return=r) for y, r in annual_pairs]
     )

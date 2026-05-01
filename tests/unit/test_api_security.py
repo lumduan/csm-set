@@ -160,8 +160,13 @@ class TestKeyRedactionFilter:
     def test_redacts_secret_in_msg(self) -> None:
         f = KeyRedactionFilter("topsecret")
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="API key was topsecret here", args=None, exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="API key was topsecret here",
+            args=None,
+            exc_info=None,
         )
         assert f.filter(record) is True
         assert "topsecret" not in record.getMessage()
@@ -170,8 +175,13 @@ class TestKeyRedactionFilter:
     def test_redacts_secret_in_string_args(self) -> None:
         f = KeyRedactionFilter("topsecret")
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="got %s", args=("topsecret",), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="got %s",
+            args=("topsecret",),
+            exc_info=None,
         )
         f.filter(record)
         assert record.args == ("***REDACTED***",)
@@ -179,8 +189,13 @@ class TestKeyRedactionFilter:
     def test_does_not_modify_non_string_args(self) -> None:
         f = KeyRedactionFilter("topsecret")
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="count=%d", args=(42,), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="count=%d",
+            args=(42,),
+            exc_info=None,
         )
         f.filter(record)
         assert record.args == (42,)
@@ -188,8 +203,13 @@ class TestKeyRedactionFilter:
     def test_noop_when_secret_empty(self) -> None:
         f = KeyRedactionFilter("")
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="anything goes", args=None, exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="anything goes",
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert record.getMessage() == "anything goes"
@@ -197,8 +217,13 @@ class TestKeyRedactionFilter:
     def test_unrelated_message_passes_through(self) -> None:
         f = KeyRedactionFilter("topsecret")
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="nothing sensitive", args=None, exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="nothing sensitive",
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert record.getMessage() == "nothing sensitive"

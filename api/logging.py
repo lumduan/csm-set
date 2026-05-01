@@ -115,9 +115,7 @@ def configure_logging(settings: Settings) -> None:
     root: logging.Logger = logging.getLogger()
     root.setLevel(level)
 
-    root.handlers = [
-        h for h in root.handlers if type(h) is not logging.StreamHandler
-    ]
+    root.handlers = [h for h in root.handlers if type(h) is not logging.StreamHandler]
     handler: logging.StreamHandler = logging.StreamHandler(sys.stderr)  # type: ignore[type-arg]
     handler.setFormatter(JsonFormatter())
     root.addHandler(handler)
@@ -126,9 +124,7 @@ def configure_logging(settings: Settings) -> None:
     uvicorn_access.handlers.clear()
     uvicorn_access.propagate = False
 
-    logging.getLogger(__name__).info(
-        "Logging configured", extra={"log_level": settings.log_level}
-    )
+    logging.getLogger(__name__).info("Logging configured", extra={"log_level": settings.log_level})
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
@@ -181,9 +177,7 @@ class KeyRedactionFilter(logging.Filter):
         if record.args:
             args = record.args if isinstance(record.args, tuple) else (record.args,)
             redacted_args: tuple[object, ...] = tuple(
-                a.replace(self._secret, REDACTED)
-                if isinstance(a, str) and self._secret in a
-                else a
+                a.replace(self._secret, REDACTED) if isinstance(a, str) and self._secret in a else a
                 for a in args
             )
             record.args = redacted_args

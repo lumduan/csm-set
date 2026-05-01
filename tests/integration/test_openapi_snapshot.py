@@ -81,7 +81,6 @@ def test_every_route_has_summary_and_response_model(client: TestClient) -> None:
             if resp_200 and not resp_200.get("content"):
                 missing.append(f"{label}: missing response_model / content schema on 200")
 
-    assert not missing, (
-        f"{len(missing)} route(s) have incomplete OpenAPI metadata:\n"
-        + "\n".join(f"  - {m}" for m in missing)
+    assert not missing, f"{len(missing)} route(s) have incomplete OpenAPI metadata:\n" + "\n".join(
+        f"  - {m}" for m in missing
     )

@@ -70,9 +70,7 @@ class TestCreateSchedulerConfig:
         assert field_map["hour"] == "18"
         assert field_map["day_of_week"] == "1-5"
 
-    def test_misfire_policies(
-        self, settings_override: Settings, mock_store: MagicMock
-    ) -> None:
+    def test_misfire_policies(self, settings_override: Settings, mock_store: MagicMock) -> None:
         scheduler = create_scheduler(settings_override, mock_store)
         assert scheduler is not None
         job = scheduler.get_job("daily_refresh")

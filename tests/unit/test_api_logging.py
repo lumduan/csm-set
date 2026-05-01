@@ -15,8 +15,13 @@ class TestJsonFormatter:
     def test_formats_record_as_valid_json(self) -> None:
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="test.logger", level=logging.INFO, pathname="", lineno=0,
-            msg="Hello world", args=(), exc_info=None,
+            name="test.logger",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Hello world",
+            args=(),
+            exc_info=None,
         )
         output = formatter.format(record)
         parsed = json.loads(output)
@@ -25,8 +30,13 @@ class TestJsonFormatter:
     def test_includes_standard_fields(self) -> None:
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="api.routers.signals", level=logging.WARNING, pathname="",
-            lineno=0, msg="Something happened", args=(), exc_info=None,
+            name="api.routers.signals",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="Something happened",
+            args=(),
+            exc_info=None,
         )
         output = formatter.format(record)
         parsed = json.loads(output)
@@ -42,9 +52,15 @@ class TestJsonFormatter:
             raise ValueError("test error")
         except ValueError:
             import sys
+
             record = logging.LogRecord(
-                name="test", level=logging.ERROR, pathname="", lineno=0,
-                msg="Failed", args=(), exc_info=sys.exc_info(),
+                name="test",
+                level=logging.ERROR,
+                pathname="",
+                lineno=0,
+                msg="Failed",
+                args=(),
+                exc_info=sys.exc_info(),
             )
         output = formatter.format(record)
         parsed = json.loads(output)
@@ -54,8 +70,13 @@ class TestJsonFormatter:
     def test_merges_extra_fields(self) -> None:
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="Event", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Event",
+            args=(),
+            exc_info=None,
         )
         record.__dict__["duration_ms"] = 42.5
         record.__dict__["method"] = "GET"
@@ -67,8 +88,13 @@ class TestJsonFormatter:
     def test_request_id_from_contextvar(self) -> None:
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="Event", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Event",
+            args=(),
+            exc_info=None,
         )
         output = formatter.format(record)
         parsed = json.loads(output)
@@ -77,8 +103,13 @@ class TestJsonFormatter:
     def test_request_id_not_overridden_by_extra(self) -> None:
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="Event", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Event",
+            args=(),
+            exc_info=None,
         )
         record.__dict__["request_id"] = "fake-override"
         output = formatter.format(record)
@@ -102,9 +133,7 @@ class TestConfigureLogging:
         settings = Settings()
         configure_logging(settings)
         root = logging.getLogger()
-        json_handlers = [
-            h for h in root.handlers if isinstance(h.formatter, JsonFormatter)
-        ]
+        json_handlers = [h for h in root.handlers if isinstance(h.formatter, JsonFormatter)]
         assert len(json_handlers) >= 1
 
     def test_uvicorn_access_silenced(self, monkeypatch: pytest.MonkeyPatch) -> None:

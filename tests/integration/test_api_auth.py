@@ -127,15 +127,13 @@ class TestPrivateModeNoKey:
                     root.removeFilter(f)
 
         warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.WARNING and "CSM_API_KEY" in r.getMessage()
         ]
-        assert len(warnings) >= 1, (
-            "Expected WARNING about CSM_API_KEY not configured"
-        )
+        assert len(warnings) >= 1, "Expected WARNING about CSM_API_KEY not configured"
         assert any(
-            "not configured" in r.getMessage() or "DISABLED" in r.getMessage()
-            for r in warnings
+            "not configured" in r.getMessage() or "DISABLED" in r.getMessage() for r in warnings
         )
 
     def test_write_paths_pass_through(self, private_client: TestClient) -> None:
@@ -168,9 +166,7 @@ class TestPrivateModeWithKey:
         assert API_KEY_HEADER in body["detail"]
         assert "request_id" in body
 
-    def test_wrong_key_returns_401(
-        self, private_client_with_key: tuple[TestClient, str]
-    ) -> None:
+    def test_wrong_key_returns_401(self, private_client_with_key: tuple[TestClient, str]) -> None:
         client, _key = private_client_with_key
         resp = client.post(
             "/api/v1/data/refresh",
@@ -204,9 +200,7 @@ class TestPrivateModeWithKey:
             headers={API_KEY_HEADER: key},
         )
         # Accept either 200 (accepted) or 422 (validation error on empty body)
-        assert resp.status_code in (200, 422), (
-            f"Expected 200 or 422, got {resp.status_code}"
-        )
+        assert resp.status_code in (200, 422), f"Expected 200 or 422, got {resp.status_code}"
 
     def test_correct_key_allows_jobs_list(
         self, private_client_with_key: tuple[TestClient, str]
@@ -355,6 +349,7 @@ class TestPrivateModeParity:
 # Key never appears in logs
 # ---------------------------------------------------------------------------
 
+
 class TestKeyRedactionInLogs:
     def test_api_key_never_appears_in_logs(
         self,
@@ -383,15 +378,9 @@ class TestKeyRedactionInLogs:
         # The raw key must never appear in any log record.
         for record in caplog.records:
             msg = record.getMessage()
-            assert key not in msg, (
-                f"API key leaked in log message: {msg[:200]}"
-            )
+            assert key not in msg, f"API key leaked in log message: {msg[:200]}"
             # Also check args
             if record.args:
-                for arg in (
-                    record.args if isinstance(record.args, tuple) else (record.args,)
-                ):
+                for arg in record.args if isinstance(record.args, tuple) else (record.args,):
                     if isinstance(arg, str):
-                        assert key not in arg, (
-                            f"API key leaked in log arg: {arg[:200]}"
-                        )
+                        assert key not in arg, f"API key leaked in log arg: {arg[:200]}"

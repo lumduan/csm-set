@@ -34,9 +34,7 @@ class TestAccessLogContent:
         handler = logging.getLogger("api.logging").handlers[-1]
         handler.flush()
         access_objs = [
-            json.loads(line)
-            for line in buf.getvalue().splitlines()
-            if '"msg": "access"' in line
+            json.loads(line) for line in buf.getvalue().splitlines() if '"msg": "access"' in line
         ]
         logging.getLogger("api.logging").removeHandler(handler)
         assert len(access_objs) >= 1, "Expected at least one JSON access log line"
@@ -57,16 +55,12 @@ class TestAccessLogContent:
         handler = logging.getLogger("api.logging").handlers[-1]
         handler.flush()
         access_objs = [
-            json.loads(line)
-            for line in buf.getvalue().splitlines()
-            if '"msg": "access"' in line
+            json.loads(line) for line in buf.getvalue().splitlines() if '"msg": "access"' in line
         ]
         logging.getLogger("api.logging").removeHandler(handler)
         assert len(access_objs) >= 1
         log_request_id = access_objs[-1].get("request_id")
-        assert log_request_id == header_id, (
-            f"Log request_id {log_request_id} != header {header_id}"
-        )
+        assert log_request_id == header_id, f"Log request_id {log_request_id} != header {header_id}"
 
     def test_one_access_log_line_per_request(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
@@ -79,13 +73,9 @@ class TestAccessLogContent:
 
         handler = logging.getLogger("api.logging").handlers[-1]
         handler.flush()
-        access_lines = [
-            line for line in buf.getvalue().splitlines() if '"msg": "access"' in line
-        ]
+        access_lines = [line for line in buf.getvalue().splitlines() if '"msg": "access"' in line]
         logging.getLogger("api.logging").removeHandler(handler)
-        assert len(access_lines) >= n, (
-            f"Expected >= {n} access log lines, got {len(access_lines)}"
-        )
+        assert len(access_lines) >= n, f"Expected >= {n} access log lines, got {len(access_lines)}"
 
     def test_access_log_fields_are_set_on_record(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
@@ -94,7 +84,8 @@ class TestAccessLogContent:
         caplog.set_level(logging.INFO, logger="api.logging")
         client.get("/health")
         access_lines = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.name == "api.logging" and getattr(r, "msg", "") == "access"
         ]
         assert len(access_lines) >= 1
