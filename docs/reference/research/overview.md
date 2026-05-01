@@ -1,12 +1,12 @@
-# ข้อมูลอ้างอิง: การวิจัย
+# Reference: Research
 
-หน้านี้ครอบคลุมชั้นการวิจัย รวมถึงการจัดอันดับ, การวิเคราะห์ information coefficient, การตั้งค่า backtest, และการ serialize ผลลัพธ์ที่ปลอดภัยสำหรับสาธารณะ
+This page covers the research layer, including ranking, information coefficient analysis, backtest configuration, and public-safe result serialisation.
 
-## สารบัญ
+## Table of Contents
 
-- การจัดอันดับสัญญาณ
-- การวิเคราะห์ IC และ rank IC
-- การตั้งค่า backtest
-- วัตถุผลลัพธ์ที่ปลอดภัยสำหรับสาธารณะ
+- Signal ranking
+- IC and rank IC analysis
+- Backtest configuration
+- Public-safe result objects
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

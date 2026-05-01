@@ -1,12 +1,12 @@
-# ข้อมูลอ้างอิง: พอร์ตโฟลิโอ
+# Reference: Portfolio
 
-หน้านี้อธิบายการคัดเลือกพอร์ต การปรับน้ำหนักให้เหมาะสม และ utilities สำหรับการ rebalance รายเดือนที่ใช้โดย strategy engine ของ csm-set
+This page describes portfolio selection, weight optimisation, and monthly rebalancing utilities used by the csm-set strategy engine.
 
-## สารบัญ
+## Table of Contents
 
-- การคัดเลือก top-quintile
-- รูปแบบการถ่วงน้ำหนัก
-- วันที่ rebalance
-- Turnover และรายการการซื้อขาย
+- Top-quintile selection
+- Weighting schemes
+- Rebalance dates
+- Turnover and trade lists
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

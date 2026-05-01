@@ -1,12 +1,12 @@
-# คู่มือ Docker
+# Docker Guide
 
-หน้านี้อธิบายวิธีรัน csm-set ด้วย Docker ทั้งในโหมด public และ private รวมถึง environment variables, mounted volumes, และพฤติกรรมการทำงานที่คาดหวัง
+This page explains how to run csm-set with Docker in both public and private modes, including environment variables, mounted volumes, and expected runtime behaviour.
 
-## สารบัญ
+## Table of Contents
 
-- การตั้งค่า compose สำหรับโหมด public
-- การใช้งาน override สำหรับโหมด private
-- ไดเรกทอรีที่ mount และข้อมูลประจำตัว
-- การแก้ปัญหาการเริ่มต้น container
+- Compose setup for public mode
+- Using the override for private mode
+- Mounted directories and credentials
+- Container startup troubleshooting
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

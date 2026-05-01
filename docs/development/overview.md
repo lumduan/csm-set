@@ -1,12 +1,12 @@
-# คู่มือการพัฒนา
+# Development Guide
 
-หน้านี้อธิบาย workflow การพัฒนา local สำหรับ csm-set รวมถึงการใช้งาน uv, การตรวจสอบคุณภาพโค้ด, ความคาดหวังในการทดสอบ, และแนวทางการมีส่วนร่วม
+This page explains the local development workflow for csm-set, including uv usage, code quality checks, testing expectations, and contribution guidelines.
 
-## สารบัญ
+## Table of Contents
 
-- การตั้งค่า environment
-- การตรวจสอบคุณภาพโค้ดที่จำเป็น
-- Workflow การทดสอบ
-- ความคาดหวังในการมีส่วนร่วม
+- Environment setup
+- Required code quality checks
+- Testing workflow
+- Contribution expectations
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

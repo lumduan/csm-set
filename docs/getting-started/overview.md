@@ -1,12 +1,12 @@
-# เริ่มต้นใช้งาน
+# Getting Started
 
-หน้านี้แนะนำโปรเจกต์ csm-set โหมดการทำงาน public และ private และวิธีที่เร็วที่สุดในการตั้งค่า environment ในเครื่องของคุณ
+This page introduces the csm-set project, its public and private runtime modes, and the fastest way to set up your local environment.
 
-## สารบัญ
+## Table of Contents
 
-- เป้าหมายของโปรเจกต์และกลุ่มเป้าหมาย
-- เริ่มต้นใช้งานโหมด public อย่างรวดเร็ว
-- ข้อกำหนดเบื้องต้นสำหรับโหมด private
-- คำสั่งแรกที่ต้องรัน
+- Project goals and target audience
+- Quick start for public mode
+- Prerequisites for private mode
+- First commands to run
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

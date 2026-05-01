@@ -1,12 +1,12 @@
-# แนวคิดเรื่อง Momentum
+# Momentum Concept
 
-หน้านี้อธิบายแนวคิดงานวิจัยเบื้องหลัง cross-sectional momentum รวมถึงช่วงเวลา formation การข้ามช่วง skip period การจัดอันดับ และข้อสมมติในการสร้างพอร์ต
+This page explains the research concepts behind cross-sectional momentum, including formation periods, skip periods, ranking methodology, and portfolio construction assumptions.
 
-## สารบัญ
+## Table of Contents
 
-- หลักการของ cross-sectional momentum
-- ช่วงเวลา formation และ skip
-- การจัดอันดับแบบ quintile
-- ข้อพิจารณาในการนำไปใช้งานจริง
+- Cross-sectional momentum principles
+- Formation and skip periods
+- Quintile ranking
+- Practical implementation considerations
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.
