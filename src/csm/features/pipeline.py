@@ -47,8 +47,7 @@ def _validate_prices(prices: dict[str, pd.DataFrame]) -> None:
         idx = frame["close"].index
         if not isinstance(idx, pd.DatetimeIndex):
             raise ValueError(
-                f"prices[{sym!r}]['close'] must have a DatetimeIndex; "
-                f"got {type(idx).__name__}"
+                f"prices[{sym!r}]['close'] must have a DatetimeIndex; got {type(idx).__name__}"
             )
         if idx.duplicated().any():
             raise ValueError(
@@ -65,14 +64,10 @@ def _validate_prices(prices: dict[str, pd.DataFrame]) -> None:
 def _validate_panel_df(panel_df: pd.DataFrame) -> None:
     """Raise ValueError if panel_df does not meet the expected MultiIndex contract."""
     if not isinstance(panel_df.index, pd.MultiIndex):
-        raise ValueError(
-            "panel_df must have a MultiIndex; "
-            f"got {type(panel_df.index).__name__}"
-        )
+        raise ValueError(f"panel_df must have a MultiIndex; got {type(panel_df.index).__name__}")
     if list(panel_df.index.names) != ["date", "symbol"]:
         raise ValueError(
-            "panel_df index names must be ['date', 'symbol']; "
-            f"got {list(panel_df.index.names)}"
+            f"panel_df index names must be ['date', 'symbol']; got {list(panel_df.index.names)}"
         )
     if panel_df.index.duplicated().any():
         raise ValueError(
@@ -189,9 +184,7 @@ class FeaturePipeline:
                     )
                     symbol_risk[symbol] = risk_df
                 except (TypeError, ValueError) as exc:
-                    logger.warning(
-                        "Skipping risk-adjusted features for symbol %s: %s", symbol, exc
-                    )
+                    logger.warning("Skipping risk-adjusted features for symbol %s: %s", symbol, exc)
             if symbol_sectors and symbol in symbol_sectors and sector_index_closes:
                 try:
                     sector_df: pd.DataFrame = self._sector.compute(
@@ -248,9 +241,7 @@ class FeaturePipeline:
             feature_frame = feature_frame.dropna()
             n_dropped: int = n_before - len(feature_frame)
             if n_dropped > 0:
-                logger.info(
-                    "Dropped %d symbols with NaN features on %s", n_dropped, rebalance_date
-                )
+                logger.info("Dropped %d symbols with NaN features on %s", n_dropped, rebalance_date)
             if feature_frame.empty:
                 logger.warning("No valid symbols on %s after NaN drop", rebalance_date)
                 continue
@@ -264,9 +255,7 @@ class FeaturePipeline:
                 winsorised[column] = winsorised[column].clip(lower=lower, upper=upper)
                 std: float = float(winsorised[column].std(ddof=0))
                 mean: float = float(winsorised[column].mean())
-                winsorised[column] = (
-                    0.0 if std == 0.0 else (winsorised[column] - mean) / std
-                )
+                winsorised[column] = 0.0 if std == 0.0 else (winsorised[column] - mean) / std
 
             winsorised = winsorised.astype("float32")
             winsorised["date"] = rebalance_date
@@ -410,9 +399,7 @@ class FeaturePipeline:
             )
 
         # Validate that all panel symbols are present in close_map.
-        panel_symbols: set[object] = set(
-            base_df.index.get_level_values("symbol").unique().tolist()
-        )
+        panel_symbols: set[object] = set(base_df.index.get_level_values("symbol").unique().tolist())
         missing_symbols: set[object] = panel_symbols - set(close_map)
         if missing_symbols:
             raise ValueError(
@@ -451,9 +438,7 @@ class FeaturePipeline:
                 fwd_rows.append(row)
 
         fwd_frame: pd.DataFrame = (
-            pd.DataFrame(fwd_rows)
-            .set_index(["date", "symbol"])[fwd_cols]
-            .astype("float32")
+            pd.DataFrame(fwd_rows).set_index(["date", "symbol"])[fwd_cols].astype("float32")
         )
         return base_df.join(other=fwd_frame, how="left")
 

@@ -145,9 +145,7 @@ class DrawdownCircuitBreaker:
             )
 
         analyzer = DrawdownAnalyzer()
-        rolling_dd: pd.Series = analyzer.rolling_drawdown(
-            equity_curve, config.window_days
-        )
+        rolling_dd: pd.Series = analyzer.rolling_drawdown(equity_curve, config.window_days)
         latest_dd: float = 0.0
         if not rolling_dd.empty:
             val: float = float(rolling_dd.iloc[-1])

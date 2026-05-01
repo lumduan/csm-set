@@ -28,6 +28,7 @@ class _SectorCapResult(TypedDict):
     n_symbols_after_cap: int
     n_holdings_min_relaxed: bool
 
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -125,9 +126,7 @@ class SectorRegimeConstraintEngine:
         # --- sector cap ---
         cap_result: _SectorCapResult
         if config.sector_enabled and not weights.empty:
-            capped, cap_result = self._apply_sector_cap(
-                weights, sector_map, config, rank_scores
-            )
+            capped, cap_result = self._apply_sector_cap(weights, sector_map, config, rank_scores)
         else:
             capped = weights.copy()
             cap_result = {
@@ -140,9 +139,7 @@ class SectorRegimeConstraintEngine:
 
         # --- regime gating ---
         if config.regime_enabled and index_prices is not None:
-            regime, regime_eq = self._compute_regime_equity(
-                index_prices, asof, config
-            )
+            regime, regime_eq = self._compute_regime_equity(index_prices, asof, config)
         else:
             regime = RegimeState.BULL.value
             regime_eq = 1.0

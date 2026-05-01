@@ -29,6 +29,7 @@ dependencies = [
     "scipy>=1.17.1",
     "settfex>=0.1.0",
     "nbconvert>=7.17.1",
+    "python-ulid>=3",
 ]
 
 [dependency-groups]
@@ -39,6 +40,7 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
     "ipykernel>=6",
+    "pytest-cov>=7.1.0",
 ]
 research = [
     "scikit-learn>=1.5",

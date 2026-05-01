@@ -101,9 +101,7 @@ class LiquidityOverlay:
                 total_capped_notional=0.0,
             )
 
-        adtv: pd.Series = self._compute_adtv(
-            prices, volumes, config.adtv_lookback_days
-        )
+        adtv: pd.Series = self._compute_adtv(prices, volumes, config.adtv_lookback_days)
 
         adjusted_weights: list[float] = []
         per_position: dict[str, PositionLiquidityInfo] = {}
@@ -127,9 +125,7 @@ class LiquidityOverlay:
             if sym_adtv <= 0.0 or math.isnan(sym_adtv):
                 n_zero_adtv += 1
                 adjusted_weights.append(0.0)
-                logger.warning(
-                    "Liquidity overlay: zero/NaN ADTV for %s — weight zeroed", sym
-                )
+                logger.warning("Liquidity overlay: zero/NaN ADTV for %s — weight zeroed", sym)
                 per_position[sym] = PositionLiquidityInfo(
                     symbol=sym,
                     adtv_thb=0.0,
@@ -214,9 +210,7 @@ class LiquidityOverlay:
             min_len: int = min(len(close_hist), len(vol_hist))
             if min_len == 0:
                 continue
-            turnover: pd.Series = (
-                close_hist.iloc[-min_len:] * vol_hist.iloc[-min_len:]
-            )
+            turnover: pd.Series = close_hist.iloc[-min_len:] * vol_hist.iloc[-min_len:]
             adtv_values[sym] = float(turnover.mean())
 
         return pd.Series(adtv_values, dtype=float)
@@ -280,9 +274,7 @@ def compute_capacity_curve(
             {
                 "aum_thb": aum,
                 "n_capped": float(result.n_capped),
-                "fraction_capped": (
-                    result.n_capped / result.n_total if result.n_total else 0.0
-                ),
+                "fraction_capped": (result.n_capped / result.n_total if result.n_total else 0.0),
                 "effective_equity_fraction": result.effective_equity_fraction,
                 "max_participation_rate": max_pr,
             }

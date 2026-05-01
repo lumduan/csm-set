@@ -42,9 +42,7 @@ def _make_feature_panel(
     return pd.DataFrame(records).set_index(["date", "symbol"]).sort_index()
 
 
-def _make_prices(
-    symbols: list[str], dates: list[pd.Timestamp], seed: int = 43
-) -> pd.DataFrame:
+def _make_prices(symbols: list[str], dates: list[pd.Timestamp], seed: int = 43) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     px_dates = pd.date_range(dates[0] - pd.Timedelta(days=300), dates[-1], freq="B", tz=TZ)
     data: dict[str, np.ndarray] = {}
@@ -63,9 +61,7 @@ class TestPhase41Parity:
         np.random.seed(42)
         symbols = [f"S{i:03d}" for i in range(100)]
         scores = np.random.randn(100).tolist()
-        cross_section = pd.DataFrame(
-            {"signal": scores}, index=pd.Index(symbols, name="symbol")
-        )
+        cross_section = pd.DataFrame({"signal": scores}, index=pd.Index(symbols, name="symbol"))
         config = BacktestConfig(
             n_holdings_min=40,
             n_holdings_max=60,
@@ -114,9 +110,7 @@ class TestPhase41Parity:
         np.random.seed(42)
         symbols = [f"S{i:03d}" for i in range(50)]
         scores = np.random.randn(50).tolist()
-        cross_section = pd.DataFrame(
-            {"signal": scores}, index=pd.Index(symbols, name="symbol")
-        )
+        cross_section = pd.DataFrame({"signal": scores}, index=pd.Index(symbols, name="symbol"))
 
         # Compute inline ranks (what Phase 3.9 did).
         composite = cross_section.mean(axis=1)

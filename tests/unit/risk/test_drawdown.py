@@ -21,9 +21,7 @@ def analyzer() -> DrawdownAnalyzer:
 
 
 class TestDrawdownAnalyzer:
-    def test_underwater_curve_all_zeros_for_monotonic(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_underwater_curve_all_zeros_for_monotonic(self, analyzer: DrawdownAnalyzer) -> None:
         """A monotonically increasing equity curve produces a flat zero underwater curve."""
         equity = _series([100.0, 110.0, 120.0, 130.0])
         underwater = analyzer.underwater_curve(equity)
@@ -41,17 +39,13 @@ class TestDrawdownAnalyzer:
         equity = _series([100.0, 90.0, 70.0, 85.0])
         assert analyzer.max_drawdown(equity) <= 0.0
 
-    def test_recovery_periods_empty_for_monotonic(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_recovery_periods_empty_for_monotonic(self, analyzer: DrawdownAnalyzer) -> None:
         """A monotonically increasing series produces no drawdown episodes."""
         equity = _series([100.0, 110.0, 120.0])
         result = analyzer.recovery_periods(equity)
         assert result.empty
 
-    def test_recovery_periods_single_known_episode(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_recovery_periods_single_known_episode(self, analyzer: DrawdownAnalyzer) -> None:
         """recovery_periods() returns correct start, trough, recovery, and depth."""
         # t0=100 (peak), t1=90 (drawdown start + trough), t2=80 (deeper trough),
         # t3=100 (recovery back to peak).
@@ -79,25 +73,19 @@ class TestDrawdownAnalyzer:
             expected_days = int((row["recovery"] - row["start"]).days)
             assert row["duration_days"] == expected_days
 
-    def test_recovery_periods_open_episode_not_included(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_recovery_periods_open_episode_not_included(self, analyzer: DrawdownAnalyzer) -> None:
         """An episode that has not recovered by end of series is excluded from the table."""
         equity = _series([100.0, 90.0, 80.0])
         episodes = analyzer.recovery_periods(equity)
         assert episodes.empty
 
-    def test_recovery_periods_multiple_episodes_count(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_recovery_periods_multiple_episodes_count(self, analyzer: DrawdownAnalyzer) -> None:
         """recovery_periods() returns one row per complete episode."""
         equity = _series([100.0, 85.0, 80.0, 100.0, 95.0, 100.0])
         episodes = analyzer.recovery_periods(equity)
         assert len(episodes) == 2
 
-    def test_max_drawdown_single_point_returns_zero(
-        self, analyzer: DrawdownAnalyzer
-    ) -> None:
+    def test_max_drawdown_single_point_returns_zero(self, analyzer: DrawdownAnalyzer) -> None:
         """A single-point equity curve has no drawdown."""
         equity = _series([100.0])
         assert analyzer.max_drawdown(equity) == 0.0

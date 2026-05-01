@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
 import pytest
 
+from csm.config.constants import INDEX_SYMBOL
 from csm.data.exceptions import StoreError
 
 # Load scripts/fetch_history directly from its file path so tests are
@@ -33,7 +34,9 @@ main = _fh_module.main
 _DEFAULT_ADJUSTMENT = "dividends"
 
 
-def _make_settings(*, public_mode: bool = False, adjustment: str = _DEFAULT_ADJUSTMENT) -> MagicMock:
+def _make_settings(
+    *, public_mode: bool = False, adjustment: str = _DEFAULT_ADJUSTMENT
+) -> MagicMock:
     settings = MagicMock()
     settings.public_mode = public_mode
     settings.log_level = "WARNING"
@@ -81,7 +84,7 @@ async def test_skips_already_stored_symbols(
     _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
 
     mock_store = MagicMock()
-    mock_store.exists.side_effect = lambda s: s in {"SET:AOT", "SET:PTT"}
+    mock_store.exists.side_effect = lambda s: s in {"SET:AOT", "SET:PTT", INDEX_SYMBOL}
     mock_store.save = MagicMock()
 
     mock_loader = MagicMock()
@@ -141,7 +144,7 @@ async def test_saves_fetched_symbols_to_store(
     _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
 
     mock_store = MagicMock()
-    mock_store.exists.return_value = False
+    mock_store.exists.side_effect = lambda s: s == INDEX_SYMBOL
     mock_store.save = MagicMock()
 
     mock_loader = MagicMock()
@@ -237,8 +240,8 @@ async def test_writes_fetch_failures_json_on_failure(
     failures_path = tmp_path / "raw" / _DEFAULT_ADJUSTMENT / "fetch_failures.json"
     assert failures_path.exists()
     data = json.loads(failures_path.read_text())
-    assert data["failed_symbols"] == ["SET:PTT"]
-    assert data["count"] == 1
+    assert set(data["failed_symbols"]) == {INDEX_SYMBOL, "SET:PTT"}
+    assert data["count"] == 2
     assert "run_timestamp" in data
     assert data["adjustment"] == _DEFAULT_ADJUSTMENT
 
@@ -255,11 +258,18 @@ async def test_deletes_fetch_failures_json_on_success(
     raw_dir.mkdir(parents=True, exist_ok=True)
     stale = raw_dir / "fetch_failures.json"
     stale.write_text(
-        json.dumps({"run_timestamp": "old", "adjustment": _DEFAULT_ADJUSTMENT, "failed_symbols": ["SET:AOT"], "count": 1})
+        json.dumps(
+            {
+                "run_timestamp": "old",
+                "adjustment": _DEFAULT_ADJUSTMENT,
+                "failed_symbols": ["SET:AOT"],
+                "count": 1,
+            }
+        )
     )
 
     mock_store = MagicMock()
-    mock_store.exists.return_value = False
+    mock_store.exists.side_effect = lambda s: s == INDEX_SYMBOL
     mock_store.save = MagicMock()
 
     mock_loader = MagicMock()
@@ -454,7 +464,7 @@ async def test_adjustment_dividends_stores_in_dividends_subdir(
             captured_paths.append(base_dir)
 
         def exists(self, key: str) -> bool:
-            return False
+            return key == INDEX_SYMBOL
 
         def save(self, key: str, df: Any) -> None:
             pass
@@ -467,7 +477,9 @@ async def test_adjustment_dividends_stores_in_dividends_subdir(
     )
 
     with (
-        patch("scripts.fetch_history.Settings", return_value=_make_settings(adjustment="dividends")),
+        patch(
+            "scripts.fetch_history.Settings", return_value=_make_settings(adjustment="dividends")
+        ),
         patch("scripts.fetch_history.ParquetStore", side_effect=_CapturingParquetStore),
         patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
     ):
@@ -491,7 +503,7 @@ async def test_adjustment_splits_stores_in_splits_subdir(
             captured_paths.append(base_dir)
 
         def exists(self, key: str) -> bool:
-            return False
+            return key == INDEX_SYMBOL
 
         def save(self, key: str, df: Any) -> None:
             pass

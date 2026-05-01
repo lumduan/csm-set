@@ -1,0 +1,1383 @@
+{
+  "components": {
+    "schemas": {
+      "BacktestConfig": {
+        "description": "Configuration for a momentum backtest run.",
+        "properties": {
+          "adtv_63d_min_thb": {
+            "default": 5000000.0,
+            "title": "Adtv 63D Min Thb",
+            "type": "number"
+          },
+          "bear_full_cash": {
+            "default": true,
+            "title": "Bear Full Cash",
+            "type": "boolean"
+          },
+          "buffer_rank_threshold": {
+            "default": 0.25,
+            "title": "Buffer Rank Threshold",
+            "type": "number"
+          },
+          "ema_slope_lookback_days": {
+            "default": 21,
+            "title": "Ema Slope Lookback Days",
+            "type": "integer"
+          },
+          "ema_trend_window": {
+            "default": 200,
+            "title": "Ema Trend Window",
+            "type": "integer"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "exit_ema_window": {
+            "default": 100,
+            "title": "Exit Ema Window",
+            "type": "integer"
+          },
+          "exit_rank_floor": {
+            "default": 0.35,
+            "title": "Exit Rank Floor",
+            "type": "number"
+          },
+          "fast_reentry_ema_window": {
+            "default": 50,
+            "title": "Fast Reentry Ema Window",
+            "type": "integer"
+          },
+          "formation_months": {
+            "default": 12,
+            "title": "Formation Months",
+            "type": "integer"
+          },
+          "n_holdings_max": {
+            "default": 60,
+            "title": "N Holdings Max",
+            "type": "integer"
+          },
+          "n_holdings_min": {
+            "default": 40,
+            "title": "N Holdings Min",
+            "type": "integer"
+          },
+          "rebalance_every_n": {
+            "default": 1,
+            "title": "Rebalance Every N",
+            "type": "integer"
+          },
+          "rs_filter_mode": {
+            "default": "entry_only",
+            "title": "Rs Filter Mode",
+            "type": "string"
+          },
+          "rs_lookback_months": {
+            "default": 12,
+            "title": "Rs Lookback Months",
+            "type": "integer"
+          },
+          "safe_mode_max_equity": {
+            "default": 0.2,
+            "title": "Safe Mode Max Equity",
+            "type": "number"
+          },
+          "sector_max_weight": {
+            "default": 0.35,
+            "title": "Sector Max Weight",
+            "type": "number"
+          },
+          "skip_months": {
+            "default": 1,
+            "title": "Skip Months",
+            "type": "integer"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "top_quantile": {
+            "default": 0.2,
+            "title": "Top Quantile",
+            "type": "number"
+          },
+          "transaction_cost_bps": {
+            "default": 15.0,
+            "title": "Transaction Cost Bps",
+            "type": "number"
+          },
+          "vol_lookback_days": {
+            "default": 63,
+            "title": "Vol Lookback Days",
+            "type": "integer"
+          },
+          "vol_scale_cap": {
+            "default": 1.5,
+            "title": "Vol Scale Cap",
+            "type": "number"
+          },
+          "vol_scaling_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VolScalingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vol_scaling_enabled": {
+            "default": true,
+            "title": "Vol Scaling Enabled",
+            "type": "boolean"
+          },
+          "vol_target_annual": {
+            "default": 0.15,
+            "title": "Vol Target Annual",
+            "type": "number"
+          },
+          "weight_scheme": {
+            "default": "equal",
+            "title": "Weight Scheme",
+            "type": "string"
+          }
+        },
+        "title": "BacktestConfig",
+        "type": "object"
+      },
+      "BacktestRunResponse": {
+        "description": "Response returned immediately after submitting a backtest run.",
+        "properties": {
+          "job_id": {
+            "description": "ULID of the submitted job",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "Initial job status (always 'accepted')"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "BacktestRunResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthStatus": {
+        "description": "Service health information.",
+        "properties": {
+          "jobs_pending": {
+            "default": 0,
+            "description": "Number of jobs in accepted state awaiting execution",
+            "title": "Jobs Pending",
+            "type": "integer"
+          },
+          "last_refresh_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp of the most recent daily refresh (UTC)",
+            "title": "Last Refresh At"
+          },
+          "last_refresh_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "succeeded",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Outcome of the most recent daily refresh",
+            "title": "Last Refresh Status"
+          },
+          "public_mode": {
+            "description": "Whether the API is in public (read-only) mode",
+            "title": "Public Mode",
+            "type": "boolean"
+          },
+          "scheduler_running": {
+            "default": false,
+            "description": "Whether the APScheduler background scheduler is active",
+            "title": "Scheduler Running",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "Service status \u2014 'degraded' when scheduler unavailable or refresh failed",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "examples": [
+              "ok"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "description": "Application version",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "public_mode"
+        ],
+        "title": "HealthStatus",
+        "type": "object"
+      },
+      "Holding": {
+        "description": "A single portfolio holding.",
+        "properties": {
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sector classification code",
+            "title": "Sector"
+          },
+          "symbol": {
+            "description": "Ticker symbol (e.g. SET:AOT)",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "weight": {
+            "description": "Portfolio weight fraction",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "symbol",
+          "weight"
+        ],
+        "title": "Holding",
+        "type": "object"
+      },
+      "JobKind": {
+        "enum": [
+          "data_refresh",
+          "backtest_run"
+        ],
+        "title": "JobKind",
+        "type": "string"
+      },
+      "JobRecord": {
+        "description": "Immutable snapshot of a single job's lifecycle.",
+        "properties": {
+          "accepted_at": {
+            "format": "date-time",
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind",
+          "status"
+        ],
+        "title": "JobRecord",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "accepted",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "NotebookEntry": {
+        "description": "A single published analysis notebook.",
+        "properties": {
+          "last_modified": {
+            "description": "ISO-8601 last-modified timestamp",
+            "title": "Last Modified",
+            "type": "string"
+          },
+          "name": {
+            "description": "Notebook file name",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "URL path component",
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "description": "File size in bytes",
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "size_bytes",
+          "last_modified"
+        ],
+        "title": "NotebookEntry",
+        "type": "object"
+      },
+      "NotebookIndex": {
+        "description": "List of available published notebooks.",
+        "properties": {
+          "items": {
+            "description": "Available notebooks",
+            "items": {
+              "$ref": "#/components/schemas/NotebookEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NotebookIndex",
+        "type": "object"
+      },
+      "PortfolioSnapshot": {
+        "additionalProperties": true,
+        "description": "Current portfolio state with holdings and summary metrics.\n\nIn public mode, holdings may be empty and summary_metrics are populated\nfrom the pre-computed backtest summary JSON.  In private mode, holdings\ncome from the live portfolio state.",
+        "properties": {
+          "as_of": {
+            "description": "Snapshot timestamp (ISO-8601)",
+            "title": "As Of",
+            "type": "string"
+          },
+          "breaker_state": {
+            "default": "NORMAL",
+            "description": "Drawdown circuit breaker state (NORMAL, TRIPPED, RECOVERING)",
+            "title": "Breaker State",
+            "type": "string"
+          },
+          "equity_fraction": {
+            "default": 1.0,
+            "description": "Current equity allocation fraction after overlay adjustments",
+            "maximum": 1.5,
+            "minimum": 0.0,
+            "title": "Equity Fraction",
+            "type": "number"
+          },
+          "holdings": {
+            "description": "Current portfolio holdings",
+            "items": {
+              "$ref": "#/components/schemas/Holding"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "regime": {
+            "default": "NEUTRAL",
+            "description": "Detected market regime (BULL, BEAR, NEUTRAL)",
+            "title": "Regime",
+            "type": "string"
+          },
+          "summary_metrics": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Key performance metrics (CAGR, Sharpe, Sortino, etc.)",
+            "title": "Summary Metrics",
+            "type": "object"
+          }
+        },
+        "required": [
+          "as_of",
+          "holdings"
+        ],
+        "title": "PortfolioSnapshot",
+        "type": "object"
+      },
+      "ProblemDetail": {
+        "description": "RFC 7807 application/problem+json response body.\n\nFields ``type``, ``title``, and ``status`` carry defaults so existing code that\nconstructs ``ProblemDetail(detail=..., request_id=...)`` continues to work.  The\nglobal exception handlers always populate the full RFC 7807 set.",
+        "properties": {
+          "detail": {
+            "description": "Human-readable explanation specific to this occurrence",
+            "title": "Detail",
+            "type": "string"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Request path that triggered the error",
+            "examples": [
+              "/api/v1/universe"
+            ],
+            "title": "Instance"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Unique request identifier for log correlation",
+            "title": "Request Id"
+          },
+          "status": {
+            "default": 0,
+            "description": "HTTP status code echoed in the body",
+            "examples": [
+              404
+            ],
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "description": "Short human-readable problem summary",
+            "examples": [
+              "Universe snapshot not found"
+            ],
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "description": "URI identifying the problem type",
+            "examples": [
+              "tag:csm-set,2026:problem/snapshot-not-found"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ProblemDetail",
+        "type": "object"
+      },
+      "RefreshResult": {
+        "description": "Response returned immediately after submitting a data refresh job.",
+        "properties": {
+          "job_id": {
+            "description": "ULID of the submitted refresh job",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "Initial job status (always 'accepted')"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "RefreshResult",
+        "type": "object"
+      },
+      "SignalRanking": {
+        "description": "Cross-sectional signal ranking for a given as-of date.",
+        "properties": {
+          "as_of": {
+            "description": "Ranking date (YYYY-MM-DD)",
+            "title": "As Of",
+            "type": "string"
+          },
+          "rankings": {
+            "description": "Per-symbol ranking rows",
+            "items": {
+              "$ref": "#/components/schemas/SignalRow"
+            },
+            "title": "Rankings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "rankings"
+        ],
+        "title": "SignalRanking",
+        "type": "object"
+      },
+      "SignalRow": {
+        "additionalProperties": true,
+        "description": "A single ranked security with signal values.\n\nFeature columns (mom_12_1, sharpe_momentum, etc.) and rank/quintile\ncolumns are accepted as extra fields \u2014 the structure varies by signal set.",
+        "properties": {
+          "symbol": {
+            "description": "Ticker symbol (e.g. SET:AOT)",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol"
+        ],
+        "title": "SignalRow",
+        "type": "object"
+      },
+      "UniverseItem": {
+        "additionalProperties": true,
+        "description": "A single security in the stored universe.\n\nExtra DataFrame columns (asof, sector, etc.) are accepted silently.",
+        "properties": {
+          "symbol": {
+            "description": "Ticker symbol (e.g. SET:AOT)",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol"
+        ],
+        "title": "UniverseItem",
+        "type": "object"
+      },
+      "UniverseSnapshot": {
+        "description": "Current stored universe snapshot.",
+        "properties": {
+          "count": {
+            "description": "Number of items in the snapshot",
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "description": "List of universe constituents",
+            "items": {
+              "$ref": "#/components/schemas/UniverseItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "count"
+        ],
+        "title": "UniverseSnapshot",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VolScalingConfig": {
+        "description": "Configuration for the volatility scaling engine.",
+        "properties": {
+          "cap": {
+            "default": 1.5,
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Cap",
+            "type": "number"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fast_blend_weight": {
+            "default": 0.0,
+            "description": "Weight on fast-window vol; 0 = slow only, 0.5 = equal blend",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Fast Blend Weight",
+            "type": "number"
+          },
+          "fast_lookback_days": {
+            "default": 21,
+            "maximum": 126.0,
+            "minimum": 10.0,
+            "title": "Fast Lookback Days",
+            "type": "integer"
+          },
+          "floor": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Floor",
+            "type": "number"
+          },
+          "lookback_days": {
+            "default": 63,
+            "maximum": 504.0,
+            "minimum": 21.0,
+            "title": "Lookback Days",
+            "type": "integer"
+          },
+          "regime_aware": {
+            "default": false,
+            "title": "Regime Aware",
+            "type": "boolean"
+          },
+          "target_annual": {
+            "default": 0.15,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Target Annual",
+            "type": "number"
+          }
+        },
+        "title": "VolScalingConfig",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "CSM-SET API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/backtest/run": {
+      "post": {
+        "description": "Enqueue a private-mode backtest run with the given configuration. Returns a job ID immediately \u2014 poll ``GET /api/v1/jobs/{job_id}`` for completion status. Blocked in public mode.",
+        "operationId": "run_backtest_api_v1_backtest_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "01JQEXAMPLE0000000000000000",
+                  "status": "accepted"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestRunResponse"
+                }
+              }
+            },
+            "description": "Backtest job accepted"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Disabled in public mode"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Feature panel not available for backtest"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run a backtest",
+        "tags": [
+          "backtest"
+        ]
+      }
+    },
+    "/api/v1/data/refresh": {
+      "post": {
+        "description": "Enqueue a data refresh job for the stored universe. Returns a job ID immediately \u2014 poll ``GET /api/v1/jobs/{job_id}`` for completion status. Blocked in public mode.",
+        "operationId": "refresh_data_api_v1_data_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "01JQEXAMPLE0000000000000000",
+                  "status": "accepted"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshResult"
+                }
+              }
+            },
+            "description": "Refresh job accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Universe snapshot is malformed (missing symbol column)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Disabled in public mode"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Universe snapshot not found"
+          }
+        },
+        "summary": "Refresh raw market data",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "description": "Return a filtered list of job records, newest first. Private mode only \u2014 returns 403 in public mode.",
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "parameters": [
+          {
+            "description": "Filter by job kind",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by job kind",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "Filter by job status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by job status",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Maximum number of results",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of results",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobRecord"
+                  },
+                  "title": "Response List Jobs Api V1 Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Filtered list of job records"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Disabled in public mode"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "description": "Return the current state of a submitted job by its ULID. Available in both public and private modes (returns 404 in public mode since no jobs are ever created).",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRecord"
+                }
+              }
+            },
+            "description": "Job record found"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Job ID not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get job status",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/notebooks": {
+      "get": {
+        "description": "Return an index of pre-rendered analysis notebooks available for browsing.",
+        "operationId": "list_notebooks_api_v1_notebooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "last_modified": "2026-04-30T12:00:00Z",
+                      "name": "01_data_exploration.html",
+                      "path": "/static/notebooks/01_data_exploration.html",
+                      "size_bytes": 395264
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/NotebookIndex"
+                }
+              }
+            },
+            "description": "Notebook index returned successfully"
+          },
+          "304": {
+            "description": "Not Modified \u2014 ETag matches client cache"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal error reading notebook directory"
+          }
+        },
+        "summary": "List available notebooks",
+        "tags": [
+          "notebooks"
+        ]
+      }
+    },
+    "/api/v1/portfolio/current": {
+      "get": {
+        "description": "Return the current portfolio snapshot with holdings, summary metrics, market regime, and circuit breaker state. In public mode, reads from a pre-computed backtest summary JSON. In private mode, reads from the live portfolio state.",
+        "operationId": "get_current_portfolio_api_v1_portfolio_current_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "as_of": "2026-04-21T00:00:00+07:00",
+                  "breaker_state": "NORMAL",
+                  "equity_fraction": 1.0,
+                  "holdings": [
+                    {
+                      "sector": "BANK",
+                      "symbol": "SET001",
+                      "weight": 0.02
+                    },
+                    {
+                      "sector": "TECH",
+                      "symbol": "SET002",
+                      "weight": 0.015
+                    }
+                  ],
+                  "regime": "BULL",
+                  "summary_metrics": {
+                    "cagr": 0.15,
+                    "sharpe": 1.2,
+                    "sortino": 1.8
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioSnapshot"
+                }
+              }
+            },
+            "description": "Portfolio snapshot returned successfully"
+          },
+          "304": {
+            "description": "Not Modified \u2014 ETag matches client cache"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "No portfolio data found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Portfolio payload is malformed or store read failed"
+          }
+        },
+        "summary": "Get current portfolio",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/scheduler/run/{job_id}": {
+      "post": {
+        "description": "Manually trigger a scheduler job by its ID. Returns a job ID immediately \u2014 poll ``GET /api/v1/jobs/{job_id}`` for completion status. Blocked in public mode.",
+        "operationId": "trigger_job_api_v1_scheduler_run__job_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshResult"
+                }
+              }
+            },
+            "description": "Job triggered"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Invalid or unknown job_id"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Disabled in public mode"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger a scheduler job manually",
+        "tags": [
+          "scheduler"
+        ]
+      }
+    },
+    "/api/v1/signals/latest": {
+      "get": {
+        "description": "Return the latest cross-sectional signal ranking. In public mode, reads from a pre-computed JSON export. In private mode, computes live from the feature pipeline.",
+        "operationId": "get_latest_signals_api_v1_signals_latest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "as_of": "2026-04-21",
+                  "rankings": [
+                    {
+                      "mom_12_1": 0.15,
+                      "mom_12_1_quintile": 5,
+                      "mom_12_1_rank": 0.95,
+                      "symbol": "SET001"
+                    },
+                    {
+                      "mom_12_1": 0.08,
+                      "mom_12_1_quintile": 4,
+                      "mom_12_1_rank": 0.72,
+                      "symbol": "SET002"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SignalRanking"
+                }
+              }
+            },
+            "description": "Signals ranked successfully"
+          },
+          "304": {
+            "description": "Not Modified \u2014 ETag matches client cache"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "No pre-computed signals file found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Signals payload is malformed or store read failed"
+          }
+        },
+        "summary": "Get latest signal ranking",
+        "tags": [
+          "signals"
+        ]
+      }
+    },
+    "/api/v1/universe": {
+      "get": {
+        "description": "Return the current stored universe with constituent metadata.",
+        "operationId": "get_universe_api_v1_universe_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "count": 2,
+                  "items": [
+                    {
+                      "sector": "BANK",
+                      "symbol": "SET001"
+                    },
+                    {
+                      "sector": "TECH",
+                      "symbol": "SET002"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UniverseSnapshot"
+                }
+              }
+            },
+            "description": "Universe snapshot returned successfully"
+          },
+          "304": {
+            "description": "Not Modified \u2014 ETag matches client cache"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Universe snapshot not found in the parquet store"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal error reading store"
+          }
+        },
+        "summary": "Get current universe",
+        "tags": [
+          "universe"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Return service status, application version, public-mode flag, scheduler status, last-refresh information, and pending job count.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "jobs_pending": 0,
+                  "last_refresh_at": "2026-04-30T10:00:00Z",
+                  "last_refresh_status": "succeeded",
+                  "public_mode": false,
+                  "scheduler_running": true,
+                  "status": "ok",
+                  "version": "0.1.0"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            },
+            "description": "Service health information"
+          }
+        },
+        "summary": "Service health check"
+      }
+    }
+  }
+}

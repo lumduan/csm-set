@@ -86,9 +86,7 @@ class QualityFilter:
         if price_data is not None:
             return self._apply_synthetic_proxy(symbols, config, price_data)
 
-        logger.warning(
-            "QualityFilter: no fundamental or price data — pass-through"
-        )
+        logger.warning("QualityFilter: no fundamental or price data — pass-through")
         return list(symbols), QualityFilterResult(
             n_before=n_before,
             n_after=n_before,

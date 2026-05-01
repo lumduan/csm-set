@@ -133,9 +133,7 @@ class TestMomentumBacktestRun:
                 config=BacktestConfig(),
             )
 
-    def test_raises_on_fewer_than_two_rebalance_dates(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_raises_on_fewer_than_two_rebalance_dates(self, backtest: MomentumBacktest) -> None:
         """BacktestError is raised when the panel has fewer than two distinct dates."""
         dates = _make_dates(1)
         feature_panel = _make_feature_panel(dates, ["A"], [[1.0]])
@@ -143,15 +141,11 @@ class TestMomentumBacktestRun:
         with pytest.raises(BacktestError, match="At least two rebalance dates"):
             backtest.run(feature_panel=feature_panel, prices=prices, config=BacktestConfig())
 
-    def test_raises_when_equity_curve_empty_after_loop(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_raises_when_equity_curve_empty_after_loop(self, backtest: MomentumBacktest) -> None:
         """BacktestError is raised when all periods are skipped due to missing prices."""
         dates = _make_dates(3)
         # Feature panel has symbols A and B; prices only has C.
-        feature_panel = _make_feature_panel(
-            dates[:2], ["A", "B"], [[1.0, -1.0], [1.0, -1.0]]
-        )
+        feature_panel = _make_feature_panel(dates[:2], ["A", "B"], [[1.0, -1.0], [1.0, -1.0]])
         prices = _make_prices(dates, ["C"], [[100.0], [110.0], [120.0]])
         with pytest.raises(BacktestError, match="no output observations"):
             backtest.run(feature_panel=feature_panel, prices=prices, config=BacktestConfig())
@@ -159,12 +153,8 @@ class TestMomentumBacktestRun:
     def test_metrics_dict_contains_no_raw_prices(self, backtest: MomentumBacktest) -> None:
         """metrics_dict() output contains no raw OHLCV field names."""
         dates = _make_dates(3)
-        feature_panel = _make_feature_panel(
-            dates[:2], ["A", "B"], [[1.0, -1.0], [1.0, -1.0]]
-        )
-        prices = _make_prices(
-            dates, ["A", "B"], [[100.0, 100.0], [110.0, 105.0], [120.0, 115.0]]
-        )
+        feature_panel = _make_feature_panel(dates[:2], ["A", "B"], [[1.0, -1.0], [1.0, -1.0]])
+        prices = _make_prices(dates, ["A", "B"], [[100.0, 100.0], [110.0, 105.0], [120.0, 115.0]])
         result = backtest.run(
             feature_panel=feature_panel,
             prices=prices,
@@ -226,9 +216,7 @@ class TestAdtvFilter:
         """All symbols below ADTV threshold → empty cross_section returned."""
         dates = pd.date_range("2023-01-01", periods=70, freq="B", tz="Asia/Bangkok")
         asof = dates[-1]
-        cross_section = pd.DataFrame(
-            {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
-        )
+        cross_section = pd.DataFrame({"signal": [1.0]}, index=pd.Index(["A"], name="symbol"))
         close = pd.DataFrame({"A": np.full(70, 1.0)}, index=dates)
         volume = pd.DataFrame({"A": np.full(70, 1.0)}, index=dates)  # ADTV=1 < 5M
         result = backtest._apply_adtv_filter(
@@ -283,16 +271,12 @@ class TestSelectHoldings:
         np.random.seed(42)
         symbols = [f"S{i:03d}" for i in range(100)]
         scores = np.random.randn(100).tolist()
-        cross_section = pd.DataFrame(
-            {"signal": scores}, index=pd.Index(symbols, name="symbol")
-        )
+        cross_section = pd.DataFrame({"signal": scores}, index=pd.Index(symbols, name="symbol"))
         config = BacktestConfig(n_holdings_min=80, n_holdings_max=100)
         result = backtest._select_holdings(cross_section, config, [])
         assert len(result) == 100  # all 100 fit within max
 
-    def test_returns_all_when_universe_smaller_than_n_min(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_returns_all_when_universe_smaller_than_n_min(self, backtest: MomentumBacktest) -> None:
         """With 5-symbol universe, all symbols are returned (can't fill n_min=80)."""
         cross_section = pd.DataFrame(
             {"signal": [1.0, 0.5, 0.0, -0.5, -1.0]},
@@ -332,9 +316,7 @@ class TestSafeModeScaling:
 
         # index_prices always below EMA → Safe Mode every period
         idx_dates = pd.date_range("2018-01-01", periods=250, freq="B", tz="Asia/Bangkok")
-        idx_arr = np.concatenate(
-            [np.linspace(100.0, 130.0, 230), np.linspace(130.0, 70.0, 20)]
-        )
+        idx_arr = np.concatenate([np.linspace(100.0, 130.0, 230), np.linspace(130.0, 70.0, 20)])
         index_prices = pd.Series(idx_arr, index=idx_dates)
         # Extend to cover rebalance dates (repeat last value)
         for d in dates:
@@ -356,9 +338,7 @@ class TestSafeModeScaling:
             safe_mode_max_equity=0.2,
             rs_filter_mode="off",
         )
-        result_bull = backtest.run(
-            feature_panel=feature_panel, prices=prices, config=config_bull
-        )
+        result_bull = backtest.run(feature_panel=feature_panel, prices=prices, config=config_bull)
         result_safe = backtest.run(
             feature_panel=feature_panel,
             prices=prices,
@@ -383,9 +363,7 @@ class TestSafeModeScaling:
         )
         assert result is not None
 
-    def test_run_with_none_index_prices_stays_bull_mode(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_run_with_none_index_prices_stays_bull_mode(self, backtest: MomentumBacktest) -> None:
         """Passing index_prices=None → all periods logged as BULL."""
         dates = _make_dates(3)
         feature_panel = _make_feature_panel(dates[:2], ["A"], [[1.0], [1.0]])
@@ -414,12 +392,12 @@ def _make_bear_index_and_dates(
     prices_arr = np.concatenate(
         [
             np.linspace(100.0, 130.0, 210),  # warm-up: rising
-            np.linspace(130.0, 40.0, 100),   # crash: sharp 70% drop
+            np.linspace(130.0, 40.0, 100),  # crash: sharp 70% drop
         ]
     )
     index_prices = pd.Series(prices_arr, index=all_dates)
     # Rebalance dates = last n_rebal+1 bars (deep in crash zone).
-    rebal_dates = list(all_dates[-(n_rebal + 1):])
+    rebal_dates = list(all_dates[-(n_rebal + 1) :])
     return rebal_dates, index_prices
 
 
@@ -462,9 +440,7 @@ class TestEntryOnlyRsFilter:
         index_prices = pd.Series(np.linspace(100.0, 110.0, 260), index=hist_dates)
         stock = pd.Series(np.linspace(100.0, 130.0, 260), index=hist_dates)
         prices = pd.DataFrame({"A": stock})
-        cross_section = pd.DataFrame(
-            {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
-        )
+        cross_section = pd.DataFrame({"signal": [1.0]}, index=pd.Index(["A"], name="symbol"))
         result = backtest._apply_relative_strength_filter(
             cross_section, prices, index_prices, hist_dates[-1], lookback_months=12
         )
@@ -475,23 +451,15 @@ class TestEntryOnlyRsFilter:
     ) -> None:
         """Fewer than 2 index bars → empty set (gate open)."""
         asof = pd.Timestamp("2023-06-30", tz=TZ)
-        index_prices = pd.Series(
-            [100.0], index=pd.DatetimeIndex([asof], tz=TZ)
-        )
-        prices = pd.DataFrame(
-            {"A": [100.0]}, index=pd.DatetimeIndex([asof], tz=TZ)
-        )
-        cross_section = pd.DataFrame(
-            {"signal": [1.0]}, index=pd.Index(["A"], name="symbol")
-        )
+        index_prices = pd.Series([100.0], index=pd.DatetimeIndex([asof], tz=TZ))
+        prices = pd.DataFrame({"A": [100.0]}, index=pd.DatetimeIndex([asof], tz=TZ))
+        cross_section = pd.DataFrame({"signal": [1.0]}, index=pd.Index(["A"], name="symbol"))
         result = backtest._apply_relative_strength_filter(
             cross_section, prices, index_prices, asof, lookback_months=12
         )
         assert result == set()  # empty = gate open, all eligible
 
-    def test_entry_only_preserves_holding_not_in_rs_pass(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_entry_only_preserves_holding_not_in_rs_pass(self, backtest: MomentumBacktest) -> None:
         """Existing holding outside RS gate is protected by buffer (entry-only)."""
         symbols = ["A", "B", "C", "D"]
         cross_section = pd.DataFrame(
@@ -508,10 +476,15 @@ class TestEntryOnlyRsFilter:
         # best replacement for A: C (rank 1.0), diff = 0.25
         # with buffer_threshold=0.9, diff 0.25 < 0.9 → A kept
         config = BacktestConfig(
-            n_holdings_min=2, n_holdings_max=3, buffer_rank_threshold=0.9,
+            n_holdings_min=2,
+            n_holdings_max=3,
+            buffer_rank_threshold=0.9,
         )
         result = backtest._select_holdings(
-            cross_section, config, current, entry_mask=entry_mask,
+            cross_section,
+            config,
+            current,
+            entry_mask=entry_mask,
         )
         assert "A" in result  # buffer protects existing holding
 
@@ -544,9 +517,7 @@ class TestDynamicBearMode:
         assert nav_values, "Expected at least one period in equity curve"
         assert all(abs(nav - 100.0) < 1e-9 for nav in nav_values)
 
-    def test_bear_full_cash_false_uses_safe_mode_equity(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_bear_full_cash_false_uses_safe_mode_equity(self, backtest: MomentumBacktest) -> None:
         """When bear_full_cash=False, safe_mode_max_equity is used even in strong bear."""
         rebal_dates, index_prices = _make_bear_index_and_dates(n_rebal=2)
         stock_prices = pd.Series(
@@ -580,25 +551,36 @@ class TestEma50FastReentry:
         n_total = 300
         all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
         # Recovery: long bull → crash → partial bounce above EMA50, below EMA200.
-        prices_arr = np.concatenate([
-            np.linspace(100.0, 200.0, 200),   # long bull
-            np.linspace(200.0, 100.0, 80),    # sharp crash
-            np.linspace(100.0, 125.0, 20),    # recovery: SET > EMA50, SET < EMA200
-        ])
+        prices_arr = np.concatenate(
+            [
+                np.linspace(100.0, 200.0, 200),  # long bull
+                np.linspace(200.0, 100.0, 80),  # sharp crash
+                np.linspace(100.0, 125.0, 20),  # recovery: SET > EMA50, SET < EMA200
+            ]
+        )
         index_prices = pd.Series(prices_arr, index=all_dates)
         rebal_dates = list(all_dates[-3:])
         # Stock at index 297=100, index 298=110 → 10% gain in the rebalance period.
-        stock_arr = np.concatenate([
-            np.full(298, 100.0), [110.0, 110.0],
-        ])
+        stock_arr = np.concatenate(
+            [
+                np.full(298, 100.0),
+                [110.0, 110.0],
+            ]
+        )
         prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
         feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
         config = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
-            bear_full_cash=True, rs_filter_mode="off", fast_reentry_ema_window=50,
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            bear_full_cash=True,
+            rs_filter_mode="off",
+            fast_reentry_ema_window=50,
         )
         result = backtest.run(
-            feature_panel=feature_panel, prices=prices, config=config,
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
             index_prices=index_prices,
         )
         nav_values = list(result.equity_curve.values())
@@ -618,11 +600,13 @@ class TestFastExitOverlay:
         n_flat, n_rise, n_dip = 300, 60, 40
         n_total = n_flat + n_rise + n_dip
         all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
-        prices_arr = np.concatenate([
-            np.full(n_flat, 100.0),
-            np.linspace(100.0, 250.0, n_rise),
-            np.linspace(250.0, 175.0, n_dip),
-        ])
+        prices_arr = np.concatenate(
+            [
+                np.full(n_flat, 100.0),
+                np.linspace(100.0, 250.0, n_rise),
+                np.linspace(250.0, 175.0, n_dip),
+            ]
+        )
         index_prices = pd.Series(prices_arr, index=all_dates)
         asof = all_dates[-1]
         assert backtest._compute_mode(index_prices, asof, 200) is RegimeState.BULL
@@ -634,12 +618,18 @@ class TestFastExitOverlay:
         prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
         feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
         config = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
-            safe_mode_max_equity=0.2, rs_filter_mode="off",
-            exit_ema_window=100, fast_reentry_ema_window=50,
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            safe_mode_max_equity=0.2,
+            rs_filter_mode="off",
+            exit_ema_window=100,
+            fast_reentry_ema_window=50,
         )
         result = backtest.run(
-            feature_panel=feature_panel, prices=prices, config=config,
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
             index_prices=index_prices,
         )
         nav_values = list(result.equity_curve.values())
@@ -647,9 +637,7 @@ class TestFastExitOverlay:
         # Stock gained 10% but equity scaled to 0.2 → NAV = 100 * (1 + 0.2 * 0.10) = 102.0.
         assert pytest.approx(nav_values[0], rel=1e-4) == 102.0
 
-    def test_fast_exit_dormant_when_set_above_both_emas(
-        self, backtest: MomentumBacktest
-    ) -> None:
+    def test_fast_exit_dormant_when_set_above_both_emas(self, backtest: MomentumBacktest) -> None:
         """Pure trending-up SET → fast-exit never fires; equity stays at 1.0 (regression guard)."""
         n_total = 300
         all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
@@ -665,11 +653,16 @@ class TestFastExitOverlay:
         prices = pd.DataFrame({"A": pd.Series(stock_arr, index=all_dates)})
         feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
         config = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
-            rs_filter_mode="off", exit_ema_window=100,
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            rs_filter_mode="off",
+            exit_ema_window=100,
         )
         result = backtest.run(
-            feature_panel=feature_panel, prices=prices, config=config,
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
             index_prices=index_prices,
         )
         nav_values = list(result.equity_curve.values())
@@ -689,11 +682,13 @@ class TestFastExitOverlay:
         n_flat, n_rise, n_dip = 300, 60, 40
         n_total = n_flat + n_rise + n_dip
         all_dates = pd.date_range("2020-01-01", periods=n_total, freq="B", tz=TZ)
-        prices_arr = np.concatenate([
-            np.full(n_flat, 100.0),
-            np.linspace(100.0, 250.0, n_rise),
-            np.linspace(250.0, 175.0, n_dip),
-        ])
+        prices_arr = np.concatenate(
+            [
+                np.full(n_flat, 100.0),
+                np.linspace(100.0, 250.0, n_rise),
+                np.linspace(250.0, 175.0, n_dip),
+            ]
+        )
         index_prices = pd.Series(prices_arr, index=all_dates)
         rebal_dates = list(all_dates[-3:])
         stock_arr = np.concatenate([np.full(n_total - 3, 100.0), [100.0, 110.0, 110.0]])
@@ -701,11 +696,16 @@ class TestFastExitOverlay:
         feature_panel = _make_feature_panel(rebal_dates[:2], ["A"], [[1.0], [1.0]])
         # Span > history → EMA is empty → fast-exit returns False → equity = 1.0.
         config = BacktestConfig(
-            transaction_cost_bps=0.0, n_holdings_min=1, n_holdings_max=1,
-            rs_filter_mode="off", exit_ema_window=10_000,
+            transaction_cost_bps=0.0,
+            n_holdings_min=1,
+            n_holdings_max=1,
+            rs_filter_mode="off",
+            exit_ema_window=10_000,
         )
         result = backtest.run(
-            feature_panel=feature_panel, prices=prices, config=config,
+            feature_panel=feature_panel,
+            prices=prices,
+            config=config,
             index_prices=index_prices,
         )
         nav_values = list(result.equity_curve.values())
@@ -915,7 +915,9 @@ class TestVolScaling:
             index=dates,
         )
 
-    def _trending_prices(self, symbols: list[str], daily_ret: float = 0.01, n: int = 100) -> pd.DataFrame:
+    def _trending_prices(
+        self, symbols: list[str], daily_ret: float = 0.01, n: int = 100
+    ) -> pd.DataFrame:
         """Return a price DataFrame with constant daily returns."""
         dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
         price = 100.0
@@ -937,6 +939,7 @@ class TestVolScaling:
         prices = self._trending_prices(symbols, daily_ret=0.01 + 0.005 * float("nan" != "nan"))
         # Use random prices to get non-zero vol
         import numpy as np
+
         rng = np.random.default_rng(42)
         n = 100
         dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
@@ -946,8 +949,13 @@ class TestVolScaling:
         realized_vol = backtest._compute_portfolio_vol(prices, symbols, asof, lookback_days=63)
         assert realized_vol > 0.0
         scaled = backtest._apply_vol_scaling(
-            prices, symbols, asof, equity_fraction=1.0,
-            lookback_days=63, vol_target=realized_vol / 2.0, vol_scale_cap=1.5,
+            prices,
+            symbols,
+            asof,
+            equity_fraction=1.0,
+            lookback_days=63,
+            vol_target=realized_vol / 2.0,
+            vol_scale_cap=1.5,
         )
         assert pytest.approx(scaled, rel=0.05) == 0.5
 
@@ -962,8 +970,13 @@ class TestVolScaling:
         prices = pd.DataFrame({"A": raw}, index=dates)
         asof = dates[-1]
         scaled = backtest._apply_vol_scaling(
-            prices, symbols, asof, equity_fraction=0.5,
-            lookback_days=63, vol_target=0.15, vol_scale_cap=1.5,
+            prices,
+            symbols,
+            asof,
+            equity_fraction=0.5,
+            lookback_days=63,
+            vol_target=0.15,
+            vol_scale_cap=1.5,
         )
         # min(0.5 * 1.5, 1.0) = min(0.75, 1.0) = 0.75
         assert scaled <= 1.0
@@ -976,8 +989,13 @@ class TestVolScaling:
         prices = pd.DataFrame({"A": [100.0] * 10}, index=dates)
         asof = dates[-1]
         scaled = backtest._apply_vol_scaling(
-            prices, symbols, asof, equity_fraction=0.8,
-            lookback_days=63, vol_target=0.15, vol_scale_cap=1.5,
+            prices,
+            symbols,
+            asof,
+            equity_fraction=0.8,
+            lookback_days=63,
+            vol_target=0.15,
+            vol_scale_cap=1.5,
         )
         assert scaled == pytest.approx(0.8)
 

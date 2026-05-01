@@ -132,9 +132,7 @@ def test_compute_rank_ic_differs_from_pearson_on_nonlinear_data() -> None:
 
 
 def test_compute_icir_matches_manual_formula() -> None:
-    ic_vals = pd.Series(
-        [0.05, 0.10, -0.02, 0.08, 0.12, 0.03, 0.07, 0.09, -0.01, 0.06, 0.11, 0.04]
-    )
+    ic_vals = pd.Series([0.05, 0.10, -0.02, 0.08, 0.12, 0.03, 0.07, 0.09, -0.01, 0.06, 0.11, 0.04])
     expected = float(ic_vals.mean() / ic_vals.std(ddof=1))
     result = analyzer.compute_icir(ic_vals)
     assert abs(result - expected) < 1e-10, f"ICIR={result} != expected={expected}"
@@ -152,9 +150,7 @@ def test_compute_icir_nan_for_short_series() -> None:
 
 
 def test_compute_icir_valid_at_exactly_12_periods() -> None:
-    ic_vals = pd.Series(
-        [0.05, 0.10, -0.02, 0.08, 0.12, 0.03, 0.07, 0.09, -0.01, 0.06, 0.11, 0.04]
-    )
+    ic_vals = pd.Series([0.05, 0.10, -0.02, 0.08, 0.12, 0.03, 0.07, 0.09, -0.01, 0.06, 0.11, 0.04])
     assert len(ic_vals) == 12
     result = analyzer.compute_icir(ic_vals)
     assert not math.isnan(result), "ICIR should be valid at exactly 12 periods"

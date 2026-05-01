@@ -415,9 +415,7 @@ class TestExecutionSimulator:
         """Shares should be rounded down to lot size (100)."""
         cfg = ExecutionConfig(aum_thb=1_000_000, lot_size=100)
         # No current positions — all should be BUYs
-        executed, result = simulator.simulate(
-            skewed_weights, {}, price_data, volume_data, cfg
-        )
+        executed, result = simulator.simulate(skewed_weights, {}, price_data, volume_data, cfg)
         for t in result.trade_list.trades:
             if t.side != TradeSide.HOLD:
                 assert t.target_shares % 100 == 0, (
@@ -439,9 +437,7 @@ class TestExecutionSimulator:
             aum_thb=200_000_000,  # Large AUM vs small volume
             max_participation_rate=0.10,
         )
-        executed, result = simulator.simulate(
-            skewed_weights, {}, price_data, low_volume_data, cfg
-        )
+        executed, result = simulator.simulate(skewed_weights, {}, price_data, low_volume_data, cfg)
         assert result.trade_list.n_capacity_violations > 0
 
     def test_hold_detection_when_zero_delta(
@@ -459,9 +455,7 @@ class TestExecutionSimulator:
         cfg = ExecutionConfig(aum_thb=aum, lot_size=1, min_trade_weight=1e-8)
         w_a: float = 0.501 if abs(price_a - price_b) < 1e-6 else (price_a * 1000) / aum
         w_b: float = 1.0 - w_a
-        target_weights: pd.Series = pd.Series(
-            [w_a, w_b], index=["A", "B"], dtype=float
-        )
+        target_weights: pd.Series = pd.Series([w_a, w_b], index=["A", "B"], dtype=float)
         positions: dict[str, int] = {"A": 1000, "B": 1000}
         executed, result = simulator.simulate(
             target_weights, positions, price_data, volume_data, cfg
@@ -481,9 +475,7 @@ class TestExecutionSimulator:
     ) -> None:
         """No current positions → all should be BUYs."""
         cfg = ExecutionConfig(aum_thb=10_000_000)
-        executed, result = simulator.simulate(
-            uniform_weights, {}, price_data, volume_data, cfg
-        )
+        executed, result = simulator.simulate(uniform_weights, {}, price_data, volume_data, cfg)
         for t in result.trade_list.trades:
             assert t.current_weight == 0.0
             assert t.current_weight == pytest.approx(0.0)
@@ -496,13 +488,9 @@ class TestExecutionSimulator:
     ) -> None:
         """All zero target weights → all SELLs."""
         cfg = ExecutionConfig(aum_thb=10_000_000)
-        zero_weights: pd.Series = pd.Series(
-            [0.0, 0.0, 0.0], index=["A", "B", "C"], dtype=float
-        )
+        zero_weights: pd.Series = pd.Series([0.0, 0.0, 0.0], index=["A", "B", "C"], dtype=float)
         positions: dict[str, int] = {"A": 1000, "B": 500, "C": 300}
-        executed, result = simulator.simulate(
-            zero_weights, positions, price_data, volume_data, cfg
-        )
+        executed, result = simulator.simulate(zero_weights, positions, price_data, volume_data, cfg)
         for t in result.trade_list.trades:
             assert t.target_weight == 0.0
             if t.current_weight > 0.001:
@@ -525,9 +513,7 @@ class TestExecutionSimulator:
         _, result2 = simulator.simulate(
             uniform_weights, current_positions, price_data, volume_data, cfg
         )
-        assert result1.trade_list.total_turnover == pytest.approx(
-            result2.trade_list.total_turnover
-        )
+        assert result1.trade_list.total_turnover == pytest.approx(result2.trade_list.total_turnover)
         assert result1.trade_list.n_buys == result2.trade_list.n_buys
         assert result1.trade_list.n_sells == result2.trade_list.n_sells
         assert result1.trade_list.n_holds == result2.trade_list.n_holds
@@ -553,9 +539,7 @@ class TestExecutionSimulator:
         vol_zero: pd.DataFrame = volume_data.copy()
         vol_zero.loc[:, "E"] = 0.0
         cfg = ExecutionConfig(aum_thb=10_000_000)
-        executed, result = simulator.simulate(
-            uniform_weights, {}, price_data, vol_zero, cfg
-        )
+        executed, result = simulator.simulate(uniform_weights, {}, price_data, vol_zero, cfg)
         # E should have zero notional or low executed weight
         e_trades = [t for t in result.trade_list.trades if t.symbol == "E"]
         assert len(e_trades) == 1
@@ -571,7 +555,5 @@ class TestExecutionSimulator:
         """Lot rounding causes cash drag → equity fraction < 1.0."""
         cfg = ExecutionConfig(aum_thb=500_000, lot_size=100)
         # Each symbol gets 100K THB, but share price may not divide evenly
-        executed, result = simulator.simulate(
-            uniform_weights, {}, price_data, volume_data, cfg
-        )
+        executed, result = simulator.simulate(uniform_weights, {}, price_data, volume_data, cfg)
         assert 0.0 < result.post_execution_equity_fraction <= 1.0

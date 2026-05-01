@@ -79,7 +79,7 @@ def test_sharpe_nan_on_zero_vol() -> None:
 
 
 def test_nan_when_history_too_short() -> None:
-    close = _make_close(200)   # only 200 days, need 274
+    close = _make_close(200)  # only 200 days, need 274
     index = _make_index(200)
     t = close.index[-1]
     result = RiskAdjustedFeatures().compute(close, index, pd.DatetimeIndex([t]))
@@ -103,8 +103,8 @@ def test_residual_momentum_known_alpha() -> None:
     true_alpha_daily = 0.0003
     true_beta = 0.7
     idx_rets = rng.normal(0.0, 0.012, n)
-    idx_rets[127:379] -= idx_rets[127:379].mean()   # force zero mean in regression window
-    noise = rng.normal(0.0, 0.001, n)               # low noise for tight estimate
+    idx_rets[127:379] -= idx_rets[127:379].mean()  # force zero mean in regression window
+    noise = rng.normal(0.0, 0.001, n)  # low noise for tight estimate
     sym_rets = true_alpha_daily + true_beta * idx_rets + noise
     index_close = pd.Series(1000.0 * np.exp(np.cumsum(idx_rets)), index=dates, name="SET")
     close = pd.Series(100.0 * np.exp(np.cumsum(sym_rets)), index=dates, name="SYM")
@@ -124,10 +124,10 @@ def test_residual_momentum_known_alpha() -> None:
 
 def test_residual_nan_when_index_too_short() -> None:
     close = _make_close(400)
-    index_short = _make_index(200)   # only 200 days, need 274
+    index_short = _make_index(200)  # only 200 days, need 274
     t = close.index[-1]
     result = RiskAdjustedFeatures().compute(close, index_short, pd.DatetimeIndex([t]))
-    assert np.isfinite(float(result.at[t, "sharpe_momentum"]))   # unaffected
+    assert np.isfinite(float(result.at[t, "sharpe_momentum"]))  # unaffected
     assert np.isnan(float(result.at[t, "residual_momentum"]))
 
 
@@ -158,11 +158,13 @@ def test_no_lookahead_skip_region() -> None:
 
     t_pos = close.index.get_loc(t)
     close_mutated = close.copy()
-    close_mutated.iloc[t_pos - 20 : t_pos + 1] = 999.0   # t-20 through t
+    close_mutated.iloc[t_pos - 20 : t_pos + 1] = 999.0  # t-20 through t
 
     result = RiskAdjustedFeatures().compute(close_mutated, index, pd.DatetimeIndex([t]))
     assert abs(float(ref.at[t, "sharpe_momentum"]) - float(result.at[t, "sharpe_momentum"])) < 1e-5
-    assert abs(float(ref.at[t, "residual_momentum"]) - float(result.at[t, "residual_momentum"])) < 1e-5
+    assert (
+        abs(float(ref.at[t, "residual_momentum"]) - float(result.at[t, "residual_momentum"])) < 1e-5
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +183,9 @@ def test_no_lookahead_index_skip_region() -> None:
     index_mutated.iloc[t_pos - 20 : t_pos + 1] = 9999.0  # t-20 through t
 
     result = RiskAdjustedFeatures().compute(close, index_mutated, pd.DatetimeIndex([t]))
-    assert abs(float(ref.at[t, "residual_momentum"]) - float(result.at[t, "residual_momentum"])) < 1e-5
+    assert (
+        abs(float(ref.at[t, "residual_momentum"]) - float(result.at[t, "residual_momentum"])) < 1e-5
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,14 +200,20 @@ def test_non_trading_rebalance_date() -> None:
     saturday = last_friday + pd.Timedelta(days=1)
     ref = RiskAdjustedFeatures().compute(close, index, pd.DatetimeIndex([last_friday]))
     result = RiskAdjustedFeatures().compute(close, index, pd.DatetimeIndex([saturday]))
-    assert abs(
-        float(ref.at[last_friday, "sharpe_momentum"])
-        - float(result.at[saturday, "sharpe_momentum"])
-    ) < 1e-5
-    assert abs(
-        float(ref.at[last_friday, "residual_momentum"])
-        - float(result.at[saturday, "residual_momentum"])
-    ) < 1e-5
+    assert (
+        abs(
+            float(ref.at[last_friday, "sharpe_momentum"])
+            - float(result.at[saturday, "sharpe_momentum"])
+        )
+        < 1e-5
+    )
+    assert (
+        abs(
+            float(ref.at[last_friday, "residual_momentum"])
+            - float(result.at[saturday, "residual_momentum"])
+        )
+        < 1e-5
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +276,9 @@ def test_raises_on_non_datetime_index_close() -> None:
 def test_raises_on_non_datetime_rebalance_dates() -> None:
     with pytest.raises(TypeError):
         RiskAdjustedFeatures().compute(
-            _make_close(), _make_index(), [_make_close().index[-1]]  # type: ignore
+            _make_close(),
+            _make_index(),
+            [_make_close().index[-1]],  # type: ignore
         )
 
 
@@ -329,11 +341,9 @@ def test_multiple_dates_nan_pattern() -> None:
     """Dates before _MIN_HIST (274) must produce NaN; later ones must be finite."""
     close = _make_close(400)
     index = _make_index(400)
-    early_t = close.index[200]   # positional index 200 < 274
-    late_t = close.index[-1]     # positional index 399 >= 274
-    result = RiskAdjustedFeatures().compute(
-        close, index, pd.DatetimeIndex([early_t, late_t])
-    )
+    early_t = close.index[200]  # positional index 200 < 274
+    late_t = close.index[-1]  # positional index 399 >= 274
+    result = RiskAdjustedFeatures().compute(close, index, pd.DatetimeIndex([early_t, late_t]))
     assert np.isnan(float(result.at[early_t, "sharpe_momentum"]))
     assert np.isnan(float(result.at[early_t, "residual_momentum"]))
     assert np.isfinite(float(result.at[late_t, "sharpe_momentum"]))

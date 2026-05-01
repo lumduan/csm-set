@@ -100,9 +100,7 @@ class ExecutionSimulator:
             total_current_notional = aum
 
         # ADTV per symbol
-        adtv: pd.Series = self._compute_adtv(
-            prices, volumes, config.adtv_lookback_days
-        )
+        adtv: pd.Series = self._compute_adtv(prices, volumes, config.adtv_lookback_days)
 
         trades: list[Trade] = []
         executed_weights: dict[str, float] = {}
@@ -148,20 +146,14 @@ class ExecutionSimulator:
                 part_rate: float = 0.0
             else:
                 part_rate = notional_for_slip / sym_adtv
-                slip_bps = self._slippage_model.estimate(
-                    notional_for_slip, sym_adtv
-                )
+                slip_bps = self._slippage_model.estimate(notional_for_slip, sym_adtv)
 
-            capacity_violation: bool = (
-                sym_adtv > 0.0 and part_rate > config.max_participation_rate
-            )
+            capacity_violation: bool = sym_adtv > 0.0 and part_rate > config.max_participation_rate
 
             # Execute notional (what we actually deploy after lot rounding)
             executed_notional: float = float(target_shares) * current_price
 
-            executed_weights[sym] = (
-                executed_notional / aum if aum > 0.0 else 0.0
-            )
+            executed_weights[sym] = executed_notional / aum if aum > 0.0 else 0.0
 
             trades.append(
                 Trade(
@@ -183,17 +175,11 @@ class ExecutionSimulator:
         n_buys: int = sum(1 for t in trades if t.side == TradeSide.BUY)
         n_sells: int = sum(1 for t in trades if t.side == TradeSide.SELL)
         n_holds: int = sum(1 for t in trades if t.side == TradeSide.HOLD)
-        n_capacity_violations: int = sum(
-            1 for t in trades if t.capacity_violation
-        )
+        n_capacity_violations: int = sum(1 for t in trades if t.capacity_violation)
 
         # Turnover: sum of abs(delta_notional) / (2 × AUM)
-        total_delta_notional: float = sum(
-            abs(t.delta_weight) * aum for t in trades
-        )
-        total_turnover: float = (
-            total_delta_notional / (2.0 * aum) if aum > 0.0 else 0.0
-        )
+        total_delta_notional: float = sum(abs(t.delta_weight) * aum for t in trades)
+        total_turnover: float = total_delta_notional / (2.0 * aum) if aum > 0.0 else 0.0
 
         # Turnover-weighted average slippage cost
         total_slip_cost: float = 0.0
@@ -203,17 +189,11 @@ class ExecutionSimulator:
                 slip_weight: float = abs(t.delta_weight)
                 total_slip_cost += t.expected_slippage_bps * slip_weight
                 slip_weight_sum += slip_weight
-        weighted_slip: float = (
-            total_slip_cost / slip_weight_sum if slip_weight_sum > 0.0 else 0.0
-        )
+        weighted_slip: float = total_slip_cost / slip_weight_sum if slip_weight_sum > 0.0 else 0.0
 
-        post_equity_fraction: float = (
-            sum(executed_weights.values()) if executed_weights else 0.0
-        )
+        post_equity_fraction: float = sum(executed_weights.values()) if executed_weights else 0.0
 
-        executed_series: pd.Series = pd.Series(
-            executed_weights, dtype=float
-        )
+        executed_series: pd.Series = pd.Series(executed_weights, dtype=float)
 
         trade_list: TradeList = TradeList(
             trades=trades,
@@ -251,9 +231,7 @@ class ExecutionSimulator:
             min_len: int = min(len(close_hist), len(vol_hist))
             if min_len == 0:
                 continue
-            turnover: pd.Series = (
-                close_hist.iloc[-min_len:] * vol_hist.iloc[-min_len:]
-            )
+            turnover: pd.Series = close_hist.iloc[-min_len:] * vol_hist.iloc[-min_len:]
             adtv_values[sym] = float(turnover.mean())
 
         return pd.Series(adtv_values, dtype=float)

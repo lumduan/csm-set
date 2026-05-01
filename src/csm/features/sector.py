@@ -83,9 +83,7 @@ class SectorFeatures:
 
         sector_close: pd.Series = sector_closes[symbol_sector]
         if not isinstance(sector_close.index, pd.DatetimeIndex):
-            raise TypeError(
-                f"sector_closes['{symbol_sector}'] must have a DatetimeIndex"
-            )
+            raise TypeError(f"sector_closes['{symbol_sector}'] must have a DatetimeIndex")
         if sector_close.index.duplicated().any():
             raise ValueError(
                 f"sector_closes['{symbol_sector}'] index contains duplicate timestamps; "

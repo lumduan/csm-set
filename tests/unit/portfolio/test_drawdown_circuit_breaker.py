@@ -296,7 +296,9 @@ class TestDrawdownCircuitBreaker:
         """DD at -5% (above -10% trigger) does not trip."""
         equity = _make_equity_with_dd(-0.05)
         adj, result = breaker.apply(
-            uniform_weights, equity, DrawdownCircuitBreakerConfig(window_days=60),
+            uniform_weights,
+            equity,
+            DrawdownCircuitBreakerConfig(window_days=60),
         )
         assert result.current_state == "NORMAL"
         assert result.triggered is False

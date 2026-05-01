@@ -246,9 +246,7 @@ class TestSectorCap:
         assert result_w["D"] == pytest.approx(0.10)
         assert result_w["E"] == pytest.approx(0.05)
         # Sum check: 0.2333+0.1167+0.10+0.10+0.05 = 0.60
-        assert result.sector_cap_equity_fraction == pytest.approx(
-            0.35 + 0.20 + 0.05
-        )
+        assert result.sector_cap_equity_fraction == pytest.approx(0.35 + 0.20 + 0.05)
 
     def test_cap_binds_multiple_sectors(
         self,
@@ -311,9 +309,7 @@ class TestSectorCap:
         w = pd.Series([0.60, 0.40], index=["X", "Y"], dtype=float)
         cfg = SectorRegimeConstraintConfig(sector_max_weight=0.50, n_holdings_min=1)
         # Both X and Y share '__unknown__' sector. Total = 1.0 > 0.50 → scaled.
-        result_w, result = engine.apply(
-            w, {}, None, pd.Timestamp("2024-01-01"), cfg
-        )
+        result_w, result = engine.apply(w, {}, None, pd.Timestamp("2024-01-01"), cfg)
         # Scale factor = 0.50/1.0 = 0.5; X=0.30, Y=0.20
         assert result.sector_cap_applied is True
         assert "__unknown__" in result.sectors_capped
@@ -328,9 +324,7 @@ class TestSectorCap:
         w = pd.Series([0.90, 0.10], index=["A", "B"], dtype=float)
         sector = {"A": "FIN", "B": "TECH"}
         cfg = SectorRegimeConstraintConfig(sector_max_weight=0.30, n_holdings_min=2)
-        result_w, result = engine.apply(
-            w, sector, None, pd.Timestamp("2024-01-01"), cfg
-        )
+        result_w, result = engine.apply(w, sector, None, pd.Timestamp("2024-01-01"), cfg)
         # A=0.90 > 0.30, but capping would leave only 2 symbols (both nonzero).
         # Actually both still nonzero after cap: A=0.30*0.90/0.90=0.30, B=0.10
         # n_nonzero = 2 >= n_holdings_min=2, so no relaxation needed.
@@ -339,18 +333,14 @@ class TestSectorCap:
         w2 = pd.Series([0.80, 0.10, 0.10], index=["A1", "B1", "C1"], dtype=float)
         sector2 = {"A1": "FIN", "B1": "FIN", "C1": "TECH"}
         cfg2 = SectorRegimeConstraintConfig(sector_max_weight=0.15, n_holdings_min=3)
-        result_w2, result2 = engine.apply(
-            w2, sector2, None, pd.Timestamp("2024-01-01"), cfg2
-        )
+        result_w2, result2 = engine.apply(w2, sector2, None, pd.Timestamp("2024-01-01"), cfg2)
         # FIN: A1+B1=0.90 > 0.15, would scale both → A1=0.1333, B1=0.0167
         # n_nonzero=3, still ≥ 3, no relaxation.
         # We need a case with n_holdings_min > available. Let's use 4.
         w3 = pd.Series([0.90, 0.05, 0.03, 0.02], index=["a", "b", "c", "d"], dtype=float)
         sector3 = {"a": "FIN", "b": "FIN", "c": "FIN", "d": "TECH"}
         cfg3 = SectorRegimeConstraintConfig(sector_max_weight=0.10, n_holdings_min=4)
-        result_w3, result3 = engine.apply(
-            w3, sector3, None, pd.Timestamp("2024-01-01"), cfg3
-        )
+        result_w3, result3 = engine.apply(w3, sector3, None, pd.Timestamp("2024-01-01"), cfg3)
         # FIN=0.98 > 0.10, scaling factor=0.10/0.98≈0.102 → b=0.0051, c=0.0031, d=0.0020
         # These are all nonzero though, just tiny. The cap doesn't zero anything...
         # Relaxation only triggers if n_nonzero actually drops below n_holdings_min.
@@ -395,9 +385,7 @@ class TestRegimeGating:
         prices = _make_bull_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig(sector_enabled=False)
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         assert result.regime == "BULL"
         assert result.regime_equity_fraction == pytest.approx(1.0)
         pd.testing.assert_series_equal(result_w, uniform_weights)
@@ -411,12 +399,8 @@ class TestRegimeGating:
         """BULL but SET < EMA100 → safe_mode_max_equity (fast exit)."""
         prices = _make_bull_fast_exit_prices()
         asof = prices.index[-1]
-        cfg = SectorRegimeConstraintConfig(
-            sector_enabled=False, safe_mode_max_equity=0.20
-        )
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        cfg = SectorRegimeConstraintConfig(sector_enabled=False, safe_mode_max_equity=0.20)
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         # Regime depends on exact price path (may be BULL or BEAR).
         # When BULL with fast exit triggered → equity = 0.20.
         if result.regime == "BULL" and result.regime_equity_fraction < 1.0:
@@ -437,9 +421,7 @@ class TestRegimeGating:
         prices = _make_bear_fast_reentry_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig()
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         # Check regime — may be BULL or BEAR depending on exact path
         # If BEAR and fast reentry triggered, equity should be 1.0
         if result.regime == "BEAR":
@@ -456,9 +438,7 @@ class TestRegimeGating:
         prices = _make_bear_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig(safe_mode_max_equity=0.20)
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         if result.regime == "BEAR":
             # Either fast_reentry (1.0) or weak bear (0.20) or full cash (0.0)
             assert result.regime_equity_fraction in (0.0, 0.20, 1.0)
@@ -473,9 +453,7 @@ class TestRegimeGating:
         prices = _make_bear_neg_slope_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig(bear_full_cash=True)
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         if result.regime == "BEAR" and result.regime_equity_fraction == 0.0:
             # All weights zeroed
             assert result_w.sum() == pytest.approx(0.0)
@@ -491,9 +469,7 @@ class TestRegimeGating:
         prices = _make_bear_neg_slope_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig(bear_full_cash=False, safe_mode_max_equity=0.20)
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         if result.regime == "BEAR":
             # Should never be 0.0 when bear_full_cash is False
             assert result.regime_equity_fraction > 0.0
@@ -510,9 +486,7 @@ class TestRegimeGating:
         cfg = SectorRegimeConstraintConfig(
             sector_enabled=False, regime_enabled=False, bear_full_cash=True
         )
-        result_w, result = engine.apply(
-            uniform_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(uniform_weights, sector_map, prices, asof, cfg)
         assert result.regime == "BULL"  # default when disabled
         assert result.regime_equity_fraction == pytest.approx(1.0)
         pd.testing.assert_series_equal(result_w, uniform_weights)
@@ -550,9 +524,7 @@ class TestCombinedAndEdgeCases:
         prices = _make_bull_prices()
         asof = prices.index[-1]
         cfg = SectorRegimeConstraintConfig(sector_max_weight=0.35)
-        result_w, result = engine.apply(
-            skewed_weights, sector_map, prices, asof, cfg
-        )
+        result_w, result = engine.apply(skewed_weights, sector_map, prices, asof, cfg)
         # Sector cap: FIN (0.75→0.35), ENERGY (0.20 unchanged), TECH (0.05 unchanged)
         # Total after cap: 0.35+0.20+0.05 = 0.60
         assert result.sector_cap_equity_fraction == pytest.approx(0.60)
@@ -569,9 +541,7 @@ class TestCombinedAndEdgeCases:
     ) -> None:
         """Empty weights → empty result, no crash."""
         empty = pd.Series(dtype=float)
-        result_w, result = engine.apply(
-            empty, {}, None, pd.Timestamp("2024-01-01"), default_config
-        )
+        result_w, result = engine.apply(empty, {}, None, pd.Timestamp("2024-01-01"), default_config)
         assert len(result_w) == 0
         assert result.sector_cap_applied is False
         assert result.sectors_capped == []
@@ -600,9 +570,7 @@ class TestCombinedAndEdgeCases:
         sector_map: dict[str, str],
     ) -> None:
         """Both sector and regime disabled → full pass-through."""
-        cfg = SectorRegimeConstraintConfig(
-            sector_enabled=False, regime_enabled=False
-        )
+        cfg = SectorRegimeConstraintConfig(sector_enabled=False, regime_enabled=False)
         result_w, result = engine.apply(
             skewed_weights, sector_map, None, pd.Timestamp("2024-01-01"), cfg
         )
@@ -617,9 +585,7 @@ class TestCombinedAndEdgeCases:
         """Single symbol with sector cap works correctly."""
         w = pd.Series([1.0], index=["X"], dtype=float)
         cfg = SectorRegimeConstraintConfig(sector_max_weight=0.35)
-        result_w, result = engine.apply(
-            w, {"X": "FIN"}, None, pd.Timestamp("2024-01-01"), cfg
-        )
+        result_w, result = engine.apply(w, {"X": "FIN"}, None, pd.Timestamp("2024-01-01"), cfg)
         # 1.0 > 0.35 → scaled to 0.35
         assert result.sector_cap_applied is True
         assert result_w["X"] == pytest.approx(0.35)
@@ -633,9 +599,7 @@ class TestCombinedAndEdgeCases:
         """Negative weights are treated as zero in sector grouping."""
         w = pd.Series([0.80, -0.10, 0.30], index=["A", "B", "C"], dtype=float)
         sector = {"A": "FIN", "B": "FIN", "C": "TECH"}
-        result_w, result = engine.apply(
-            w, sector, None, pd.Timestamp("2024-01-01"), default_config
-        )
+        result_w, result = engine.apply(w, sector, None, pd.Timestamp("2024-01-01"), default_config)
         # FIN total = 0.80 (B is negative, treated as zero)
         # 0.80 > 0.35 → scaled: 0.35/0.80 = 0.4375
         assert result_w["A"] == pytest.approx(0.80 * 0.35 / 0.80)

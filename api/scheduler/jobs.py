@@ -1,10 +1,16 @@
 """Owner-side APScheduler jobs for csm-set."""
 
+from __future__ import annotations
+
+import json
 import logging
 import time
+from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from csm.config.settings import Settings
 from csm.data.loader import OHLCVLoader
@@ -14,8 +20,12 @@ from csm.features.pipeline import FeaturePipeline
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def daily_refresh(settings: Settings, store: ParquetStore) -> None:
-    """Refresh OHLCV data and rebuild the latest feature panel."""
+async def daily_refresh(settings: Settings, store: ParquetStore) -> dict[str, Any]:
+    """Refresh OHLCV data and rebuild the latest feature panel.
+
+    Returns a summary dict stored on ``JobRecord.summary`` when submitted
+    via :class:`JobRegistry`.
+    """
 
     started_at: float = time.perf_counter()
     universe: pd.DataFrame = store.load("universe_latest")
@@ -35,14 +45,34 @@ async def daily_refresh(settings: Settings, store: ParquetStore) -> None:
     )
     FeaturePipeline(store=store).build(prices=fetched, rebalance_dates=rebalance_dates)
     duration: float = time.perf_counter() - started_at
+    failures: int = len(symbols) - len(fetched)
     logger.info(
         "Completed daily refresh",
         extra={
             "duration_seconds": duration,
             "symbol_count": len(symbols),
-            "failures": len(symbols) - len(fetched),
+            "failures": failures,
         },
     )
+
+    marker = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "symbols_fetched": len(fetched),
+        "duration_seconds": round(duration, 3),
+        "failures": failures,
+    }
+    marker_dir = settings.results_dir / ".tmp"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = marker_dir / "last_refresh.json"
+    tmp_marker = marker_path.with_suffix(".tmp")
+    tmp_marker.write_text(json.dumps(marker, indent=2), encoding="utf-8")
+    tmp_marker.rename(marker_path)
+
+    return {
+        "symbols_fetched": len(fetched),
+        "failures": failures,
+        "duration_seconds": round(duration, 3),
+    }
 
 
 def create_scheduler(settings: Settings, store: ParquetStore) -> AsyncIOScheduler | None:
@@ -53,7 +83,19 @@ def create_scheduler(settings: Settings, store: ParquetStore) -> AsyncIOSchedule
     scheduler: AsyncIOScheduler = AsyncIOScheduler(timezone="Asia/Bangkok")
 
     async def _job_wrapper() -> None:
-        await daily_refresh(settings=settings, store=store)
+        try:
+            summary = await daily_refresh(settings=settings, store=store)
+            logger.info("Scheduled daily_refresh completed", extra={"summary": summary})
+        except Exception:
+            logger.exception("Scheduled daily_refresh failed")
 
-    scheduler.add_job(_job_wrapper, trigger="cron", id="daily_refresh", replace_existing=True)
+    scheduler.add_job(
+        _job_wrapper,
+        trigger=CronTrigger.from_crontab(settings.refresh_cron, timezone="Asia/Bangkok"),
+        id="daily_refresh",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
+    )
     return scheduler
