@@ -123,6 +123,27 @@ class TestJobListEndpoint:
         assert resp.status_code == 404
 
 
+class TestJobListFilters:
+    """Exercise kind and status filter branches in JobRegistry.list()."""
+
+    def test_list_with_status_filter(self, private_client: TestClient) -> None:
+        """Filtering by status only returns matching jobs."""
+        private_client.post("/api/v1/data/refresh")
+        resp = private_client.get("/api/v1/jobs?status=accepted")
+        assert resp.status_code == 200
+        for job in resp.json():
+            assert job["status"] == "accepted"
+
+    def test_list_with_kind_and_status_filter(self, private_client: TestClient) -> None:
+        """Combined kind+status filter returns intersection."""
+        private_client.post("/api/v1/data/refresh")
+        resp = private_client.get("/api/v1/jobs?kind=data_refresh&status=accepted")
+        assert resp.status_code == 200
+        for job in resp.json():
+            assert job["kind"] == "data_refresh"
+            assert job["status"] == "accepted"
+
+
 class TestRestartSafety:
     """Verify completed jobs survive registry re-instantiation."""
 

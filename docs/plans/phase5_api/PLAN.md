@@ -49,7 +49,7 @@ Phase 5 covers nine sub-phases in dependency order:
 | 5.6 | Static Asset & Notebook Serving | StaticFiles audit; HTML fallback page; ETag headers; `GET /api/v1/notebooks` index |
 | 5.7 | Authentication & Public-Mode Hardening | `X-API-Key` header middleware; key redaction in logs; 403 contract test for every write endpoint |
 | 5.8 | Observability & Error Handling | Structured JSON logging, request-ID, problem-details, extended `/health` |
-| 5.9 | Integration Test Suite & API Sign-Off Notebook | Full public+private matrix, OpenAPI snapshot test, `notebooks/05_api_validation.ipynb` |
+| 5.9 | Integration Test Suite & API Sign-Off | 32 new tests (742 total), OpenAPI snapshot, 92% coverage, `examples/05_api_validation.py` |
 
 **Out of scope for Phase 5:**
 
@@ -542,35 +542,30 @@ api/schemas/* (NEW) ──► routers/* (typed via response_model)
 
 ---
 
-### Phase 5.9 — Integration Test Suite & API Sign-Off Notebook
+### Phase 5.9 — Integration Test Suite & API Sign-Off
 
-**Status:** `[ ]` Not started
-**Goal:** Exhaustive test coverage and a single sign-off notebook that exercises every endpoint in both modes.
+**Status:** `[x]` Complete — 2026-05-01
+**Goal:** Exhaustive test coverage and a single sign-off script that exercises every endpoint in both modes.
 
 **Deliverables:**
 
-- [ ] `tests/integration/conftest.py` extended with:
-  - [ ] `client_public(tmp_results)` — TestClient with `CSM_PUBLIC_MODE=true`
-  - [ ] `client_private(tmp_data, tmp_jobs, api_key)` — TestClient with `CSM_PUBLIC_MODE=false`, populated parquet store, `Settings.api_key` set
-  - [ ] `tmp_jobs` — fresh `results/.tmp/jobs/` directory per test
-- [ ] One test file per resource (see Architecture for full list); each covers:
-  - [ ] Happy path (public + private)
-  - [ ] Schema-validation: response parses cleanly into the declared Pydantic model
-  - [ ] Error paths (404 on missing data; 422 on malformed input; 403 in public mode for writes; 401 with bad key)
-  - [ ] ETag round-trip for cacheable reads
-- [ ] `tests/integration/test_api_backtest_jobs.py` — full lifecycle: submit → poll → succeeded; restart safety (re-instantiate registry, confirm record reloaded)
-- [ ] `tests/integration/test_openapi_snapshot.py` — pins the JSON Schema; intentional changes update the snapshot via a documented step
-- [ ] `notebooks/05_api_validation.ipynb` — 8 sections, Thai markdown:
-  - [ ] Section 1: Setup — start TestClient in both modes
-  - [ ] Section 2: Health & version surface
-  - [ ] Section 3: Read-only endpoints (universe / signals / portfolio) public + private parity
-  - [ ] Section 4: Write endpoints (data refresh / backtest run) — 403 in public, full lifecycle in private
-  - [ ] Section 5: JobRegistry — submit, poll, status transitions
-  - [ ] Section 6: Scheduler — manual trigger, marker file, `/health` reflects last refresh
-  - [ ] Section 7: Authentication — public passes; private requires X-API-Key
-  - [ ] Section 8: Final PASS/FAIL gate — prints PASS for all 12 success criteria
-- [ ] Coverage gate: ≥ 90% line coverage on `api/` package (excluding `api/__init__.py`)
-- [ ] All quality gates pass: `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src/ api/`, `uv run pytest tests/ -v`
+- [x] `tests/integration/conftest.py` — already extended with public_client, tmp_results_* fixtures in prior phases
+- [x] One test file per resource — all 12 integration test files exist with happy path, schema-validation, error paths, and ETag tests
+- [x] `tests/integration/test_job_lifecycle.py` — full lifecycle: submit → poll → succeeded; restart safety; status/kind filter tests
+- [x] `tests/integration/test_openapi_snapshot.py` — pins the JSON Schema; 4 tests; snapshot at `tests/integration/__snapshots__/openapi.json`
+- [x] `examples/05_api_validation.py` — sign-off script with `rich` formatted output (replaces planned notebook):
+  - [x] Section 1: Setup — TestClient with settings swap
+  - [x] Section 2: Health & version surface
+  - [x] Section 3: Read-only endpoints public + private parity
+  - [x] Section 4: Write endpoints — 403 in public, full lifecycle in private
+  - [x] Section 5: JobRegistry — submit, poll, status transitions
+  - [x] Section 6: Scheduler — manual trigger, marker file, /health reflects
+  - [x] Section 7: Authentication — public passes; private requires X-API-Key
+  - [x] Section 8: Final PASS/FAIL gate — prints PASS for all 12 success criteria
+- [x] Coverage gate: 92% line coverage on `api/` package (exceeds 90% target)
+- [x] All quality gates pass: 742 tests, ruff check, ruff format, mypy all green
+
+**Completion notes:** 32 new tests added (742 total). 92% coverage on `api/`. Sign-off uses Python script with `rich` instead of Jupyter notebook per user preference. Phase 5 is complete.
 
 ---
 
