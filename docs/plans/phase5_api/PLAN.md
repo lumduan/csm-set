@@ -3,7 +3,7 @@
 **Feature:** Production-grade REST API and daily scheduler for the SET Cross-Sectional Momentum Strategy
 **Branch:** `feature/phase-5-api`
 **Created:** 2026-04-30
-**Status:** In progress
+**Status:** Complete
 **Depends on:** Phase 1 (Data Pipeline — complete), Phase 2 (Signal Research — complete), Phase 3 (Backtesting — complete), Phase 4 (Portfolio Construction & Risk — complete through 4.9)
 **Positioning:** Production layer — promotes the existing API scaffolding under `api/` into a typed, observable, dual-mode (public / private) FastAPI surface that exposes the validated Phase 4 portfolio engine and runs the daily refresh job. This is the prerequisite for Phase 6 (Docker & Public Distribution) and the future multi-strategy dashboard.
 
