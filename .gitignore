@@ -42,6 +42,21 @@ Thumbs.db
 uv.lock
 
 
+# ---------------------------------------------------------------------------
+# Data boundary — public distribution must never include raw OHLCV.
+#
+# Strategy:
+#   /data/              — ignored: raw, processed, and universe Parquet files.
+#                         All raw OHLCV (open/high/low/close/volume) lives here.
+#   results/            — COMMITTED: pre-computed JSON, HTML, and schema sidecars.
+#                         Enforced by test_public_data_boundary_files.py.
+#   results/.tmp/        — ignored: ephemeral job state and export intermediates.
+#   .env / .env.*        — ignored: credentials must never enter the image.
+#   !.env.example        — whitelisted: safe reference for contributors.
+#
+# Violations of these rules are caught in CI by the Phase 6.4 boundary audit.
+# ---------------------------------------------------------------------------
+
 # Market data — never commit raw or processed OHLCV (TradingView copyright)
 # Leading slash anchors to repo root — does not affect src/csm/data/
 /data/

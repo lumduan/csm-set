@@ -339,31 +339,43 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
 
 ### Phase 6.4 — Data Boundary Audit (File + API)
 
-**Status:** `[ ]` Pending
+**Status:** `[x]` Complete (2026-05-01)
 **Goal:** Two complementary checks so OHLCV leaks are caught regardless of which frontend (today's FastUI, tomorrow's React, third-party clients) calls the API. The static-file walk catches owner mistakes at commit time; the API-response walk catches runtime regressions in handler code.
 
 **Deliverables:**
 
-- [ ] `tests/integration/test_public_data_boundary_files.py` (NEW):
-  - Walks `results/static/**/*.json`; fails if any object key matches `^(open|high|low|close|volume|adj_close|adjusted_close)$` (case-insensitive)
-  - Fails if any value array has > 400 numeric entries (heuristic: ~16 years of daily prices ≈ 4000 rows; 400 = 1.5 years which we'd never emit in a "summary")
-  - Walks `results/static/**/*.html`; fails if any `<table>` contains > 5 numeric columns (heuristic for raw price tables; rendering charts have 0 numeric columns)
-  - Per-file actionable failure messages (e.g. `"results/static/signals/latest_ranking.json: forbidden key 'close' at rankings[3].close"`)
-- [ ] `tests/integration/test_public_data_boundary_api.py` (NEW):
+- [x] `tests/integration/test_public_data_boundary_files.py` (NEW):
+  - Walks `results/**/*.json` (excluding `.tmp/`); fails if any object key matches `^(open|high|low|close|volume|adj_close|adjusted_close)$` (case-insensitive)
+  - Fails if any value array has > 400 numeric entries (heuristic for raw price series)
+  - Walks `results/**/*.html`; fails if any `<table>` contains > 4 numeric columns (header row excluded; 5-data-column OHLCV table triggers this)
+  - Per-file actionable failure messages (e.g. `"results/signals/latest_ranking.json: forbidden key 'close' at rankings[3].close"`)
+  - 3 deliberate-leak negative tests verify the scanners catch violations
+- [x] `tests/integration/test_public_data_boundary_api.py` (NEW):
   - Boots `TestClient(app)` with `CSM_PUBLIC_MODE=true`
-  - Hits `/api/v1/signals/latest`, `/api/v1/backtest/summary`, `/api/v1/backtest/equity_curve`, `/api/v1/portfolio/holdings`, `/api/v1/portfolio/regime`
+  - Hits 4 read endpoints: `/api/v1/signals/latest`, `/api/v1/portfolio/current`, `/api/v1/notebooks`, `/health`
   - Recursively scans each response JSON for the same forbidden-key set
-  - Asserts write endpoints (`/api/v1/data/refresh`, `/api/v1/backtest/run`) return **403** with the canonical "Disabled in public mode" body
-- [ ] `.gitignore` extension:
-  - Add: `data/raw/`, `data/processed/`, `data/universe/`, `.env`, `.env.*`, `results/.tmp/`
-  - Whitelist: `!.env.example`, `!docs/plans/` (preserve plan tracking per project convention)
+  - Asserts 4 write endpoints (`/api/v1/backtest/run`, `/api/v1/data/refresh`, `/api/v1/scheduler/run/daily_refresh`, `/api/v1/jobs`) return **403** with the canonical "Disabled in public mode" body
+  - 4 deliberate-leak/negative tests verify scanner behavior
+  - `/api/v1/universe` excluded — no public JSON fallback (reads from ParquetStore)
+- [x] `.gitignore` extension:
+  - Added data boundary strategy comment block documenting the three-layer approach (data/ ignored, results/ committed, results/.tmp/ ignored)
+  - Existing patterns already satisfied all PLAN requirements (`/data/`, `.env*`, `results/.tmp/`, `!.env.example`)
 
 **Acceptance Criteria:**
 
-- Both audit tests pass on the committed `results/static/` produced by 6.3
-- Adding a deliberate OHLCV leak (e.g. an `"close": 1.23` field in `summary.json`) makes the file audit fail with the offending path
-- Adding a deliberate leak in an API handler makes the API audit fail
-- `git status` shows no unintended files; `data/` is never staged
+- [x] Both audit tests pass on the committed `results/` tree (27/27 tests green)
+- [x] Deliberate OHLCV leak (e.g. `"close": 1.23` in JSON) makes the file audit fail with offending path
+- [x] Deliberate leak in API response makes the API audit fail
+- [x] Write endpoints return 403 with canonical "Disabled in public mode" body
+- [x] `git status` shows no unintended files; `data/` is never staged
+- [x] Quality gate green: ruff check (changed files), ruff format, mypy (changed files), all new tests pass
+- [x] 27 new tests (15 file audit + 12 API audit); no regressions in existing test suite
+
+**Deviation Notes:**
+
+- **Walk scope:** PLAN specified `results/static/**/*.json` but `results/static/` does not exist yet (Phase 6.3 defaults to it but export hasn't been run). The file audit walks `results/**/*.json` and `results/**/*.html` instead, covering the current API-serving tree. The test is parametrized over `results/` root, making it trivially extendable to `results/static/` when populated.
+- **API endpoints:** PLAN listed `/api/v1/backtest/summary`, `/api/v1/backtest/equity_curve`, `/api/v1/portfolio/holdings`, and `/api/v1/portfolio/regime` — none of these endpoints exist in the current API. The audit tests the 4 read endpoints that actually exist and the 4 write endpoints configured in the public mode guard.
+- **HTML threshold:** PLAN specified `> 5 numeric columns`. Changed to `> 4` (threshold=4) to catch a standard 5-column OHLCV table (O, H, L, C, V). Header row is now excluded from the numeric ratio calculation so column labels like "Open" don't dilute the detection.
 
 ---
 
