@@ -1,12 +1,51 @@
+# =============================================================================
+# CSM-SET — Public Docker Compose Configuration
+# =============================================================================
+#
+# Purpose:
+#   One-command zero-credential boot for public users.  No .env file, no
+#   TradingView account, no market-data fetch required.  The API serves
+#   pre-computed research artefacts from results/static/ (read-only).
+#
+# Usage:
+#   docker compose up               # Start the public API on port 8000
+#   docker compose up -d            # Detached mode
+#   docker compose down             # Stop and remove the container
+#
+# Smoke test:
+#   docker compose up -d --wait && \
+#     curl -f http://localhost:8000/health && \
+#     curl -f http://localhost:8000/api/v1/signals/latest && \
+#     docker compose down
+#
+# Owner / private mode:
+#   See docker-compose.private.yml for the override file that enables
+#   data fetching, writes, and tvkit browser authentication.
+#   Invoke with:
+#     docker compose -f docker-compose.yml -f docker-compose.private.yml up
+#
+# Environment variables (all optional — sensible defaults baked into image):
+#   CSM_PUBLIC_MODE           true → read-only API, write endpoints return 403
+#   CSM_LOG_LEVEL             INFO | DEBUG | WARNING | ERROR
+#   CSM_CORS_ALLOW_ORIGINS    comma-separated origins; "*" for public mode
+# =============================================================================
+
 services:
   csm:
     build: .
     ports:
-      - "8080:8080"
       - "8000:8000"
     environment:
       CSM_PUBLIC_MODE: "true"
       CSM_LOG_LEVEL: "INFO"
+      CSM_CORS_ALLOW_ORIGINS: "*"
     volumes:
       - ./results:/app/results:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 2g
     restart: unless-stopped
