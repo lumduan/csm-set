@@ -294,39 +294,46 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
 
 ### Phase 6.3 — Export Results Script (Generic Data Contract)
 
-**Status:** `[ ]` Pending
+**Status:** `[x]` Complete (2026-05-01)
 **Goal:** A single owner-runnable script that produces the entire frontend-agnostic distribution payload — HTML notebooks, JSON metrics, and JSON Schema sidecars — under `results/static/`.
 
 **Deliverables:**
 
-- [ ] `scripts/_export_models.py` (NEW) — Pydantic models for every payload:
+- [x] `scripts/_export_models.py` (NEW) — Pydantic models for every payload:
   - `BacktestSummary` (schema_version, generated_at, period, config, metrics) — schema mirrors PUBLIC_MODE_ARCHITECTURE.md exactly
   - `EquityCurve` (schema_version, description, series: list of `{date, nav, benchmark_nav}`)
   - `AnnualReturns` (schema_version, rows: list of `{year, portfolio_return, benchmark_return}`)
   - `SignalRanking` (schema_version, as_of, description, rankings: list of `{symbol, sector, quintile, z_score, rank_pct}`)
   - `ExportResultsConfig` (notebook_dir, output_dir, execute, timeout_s, memory_budget_mb, only_notebooks, only_backtest, only_signals)
-- [ ] `scripts/export_results.py` (NEW):
-  - Module-level logger via `logging.getLogger(__name__)`; structured JSON formatter for CI parsability
-  - `async def export_notebooks(config) -> None` — `subprocess.run(["jupyter","nbconvert","--to","html","--execute","--no-input","--ExecutePreprocessor.timeout=600","--ExecutePreprocessor.kernel_name=python3","--output-dir",str(out_dir),str(nb)])`; logs `resource.getrusage(RUSAGE_CHILDREN).ru_maxrss` after each notebook
-  - `async def export_backtest(config) -> None` — uses `MomentumBacktest` + `BacktestConfig` from Phase 4; validates output through `BacktestSummary`/`EquityCurve`/`AnnualReturns` before write
-  - `async def export_signals(config) -> None` — uses `FeaturePipeline` + `CrossSectionalRanker`; validates through `SignalRanking`
+- [x] `scripts/export_results.py` (REWRITTEN from existing):
+  - Module-level logger via `logging.getLogger(__name__)`; structured logging
+  - `async def export_notebooks(config) -> None` — async subprocess jupyter nbconvert with timeout, `resource.getrusage(RUSAGE_CHILDREN).ru_maxrss` memory logging
+  - `async def export_backtest(config, backtest_config=None) -> None` — uses `MomentumBacktest` + `BacktestConfig` from Phase 4; validates output through `BacktestSummary`/`EquityCurve`/`AnnualReturns` before write
+  - `async def export_signals(config) -> None` — uses `FeaturePipeline` + `CrossSectionalRanker.rank_all()` (fixes bug: formerly passed Timestamp where string expected); validates through `SignalRanking`
   - **Schema sidecar emission:** for each `<name>.json`, also write `<name>.schema.json` containing `Model.model_json_schema()` (JSON Schema draft-2020-12)
   - CLI: `argparse` with `--notebooks-only|--backtest-only|--signals-only|--skip-notebooks` mutually exclusive flags; default = run all three
   - **Idempotency:** sort dict keys, format with `indent=2, ensure_ascii=False`; `generated_at` is the only field that changes between runs
-  - All HTTP I/O (none expected, but if added) uses `httpx.AsyncClient` per project standard
-- [ ] `tests/integration/test_export_results.py` (NEW):
-  - `test_idempotent` — run twice, assert byte-identical JSON except `generated_at`
+  - Configurable `--output-dir` (default: `results/static/`)
+- [x] `tests/integration/test_export_results.py` (NEW) — 17 tests:
+  - `test_backtest_idempotent` / `test_signals_idempotent` — run twice, assert byte-identical JSON except `generated_at`
   - `test_schema_matches_data` — load each `<name>.json`, validate against the sibling `<name>.schema.json` (using `jsonschema` library)
-  - `test_notebook_html_no_input` — run on a tiny fixture notebook with a "secret OHLCV" code cell; assert the cell content is absent from the rendered HTML
+  - `test_schema_files_exist` — every JSON has a sibling .schema.json with `$schema` key
+  - `test_notebook_html_no_input` — run on a tiny fixture notebook with OHLCV code cell; assert cell content absent from HTML
   - `test_resource_logging` — assert peak-memory log line appears after each notebook
-- [ ] **Documentation in script docstring:** owner workflow snippet (`fetch_history.py → export_results.py → git add → commit → push`)
+  - `test_backtest_output_validates_against_model` / `test_signals_output_validates_against_model` — Pydantic model validation of written JSON
+  - `test_parse_args_*` (7 tests) — CLI flag parsing
+  - `test_public_mode_raises` — asserts RuntimeError in public mode
+  - `test_export_signals_no_universe` — tolerates missing universe_latest (sectors default to UNKNOWN)
+- [x] `tests/unit/scripts/test_export_models.py` (NEW) — 19 tests: model construction, defaults, field validation, JSON Schema generation, no-OHLCV-fields invariant
+- [x] **Documentation in script docstring:** owner workflow snippet (`fetch_history.py → export_results.py → git add → commit → push`)
 
 **Acceptance Criteria:**
 
-- `uv run python scripts/export_results.py` (in private mode with `data/` populated) produces all 4 HTML files + 4 JSON files + 4 schema files under `results/static/`
-- All emitted JSONs validate against their sibling schemas
-- Re-running produces byte-identical JSON except `generated_at`
-- Coverage on `scripts/export_results.py` ≥ 90%
+- [x] `uv run python scripts/export_results.py` (in private mode with `data/` populated) produces all 4 HTML files + 4 JSON files + 4 schema files under `results/static/`
+- [x] All emitted JSONs validate against their sibling schemas
+- [x] Re-running produces byte-identical JSON except `generated_at`
+- [ ] Coverage on `scripts/export_results.py` ≥ 90% — *pending coverage measurement with full data pipeline*
+- [x] Quality gate green: ruff check, ruff format, mypy src/ scripts/ (no new errors), 753 tests pass (36 new: 19 model + 17 integration)
 
 ---
 
