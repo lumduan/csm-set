@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install only production dependencies into /opt/venv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev
 
 # === Runtime stage ===
