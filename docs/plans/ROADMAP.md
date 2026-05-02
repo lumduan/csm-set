@@ -20,16 +20,16 @@ Development phases ordered by dependency — each phase must be complete and val
 
 > Goal: working repo, clean tooling, everyone can `uv sync` and run quality gates.
 
-- [ ] Initialise git repo and push to GitHub
-- [ ] `uv init` and configure `pyproject.toml` (all dependency groups)
-- [ ] Install pre-commit hooks (`ruff`, `mypy`)
-- [ ] Verify quality gates pass on empty project
-  - [ ] `uv run ruff check .`
-  - [ ] `uv run ruff format --check .`
-  - [ ] `uv run mypy src/`
-  - [ ] `uv run pytest tests/ -v`
-- [ ] Create `.env` from `.env.example`
-- [ ] Commit: `chore: initial project scaffold`
+- [x] Initialise git repo and push to GitHub
+- [x] `uv init` and configure `pyproject.toml` (all dependency groups)
+- [x] Install pre-commit hooks (`ruff`, `mypy`)
+- [x] Verify quality gates pass on empty project
+  - [x] `uv run ruff check .`
+  - [x] `uv run ruff format --check .`
+  - [x] `uv run mypy src/`
+  - [x] `uv run pytest tests/ -v`
+- [x] Create `.env` from `.env.example`
+- [x] Commit: `chore: initial project scaffold`
 
 **Exit criteria:** `uv sync --all-groups` completes, all quality gates green, CI passes.
 
@@ -346,68 +346,57 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 6.1 Dockerfile
 
-- [ ] `Dockerfile` — single image: python:3.11-slim + uv + source + `results/`
-- [ ] Default `ENV CSM_PUBLIC_MODE=true`
-- [ ] Expose port 8000 (API)
-- [ ] Docker HEALTHCHECK using `/health` endpoint for container monitoring
+- [x] `Dockerfile` — multi-stage: builder (`python:3.11-slim` + `uv`) + slim runtime
+- [x] Default `ENV CSM_PUBLIC_MODE=true`
+- [x] Expose port 8000 (API)
+- [x] Docker HEALTHCHECK using `/health` endpoint for container monitoring
 
 ### 6.2 Docker Compose
 
-- [ ] `docker-compose.yml` — public mode, `results/` mounted read-only
-  ```yaml
-  volumes:
-    - ./results:/app/results:ro
-  ```
-- [ ] `docker-compose.private.yml` — owner override
-  ```yaml
-  # docker compose -f docker-compose.yml -f docker-compose.private.yml up
-  environment:
-    CSM_PUBLIC_MODE: "false"
-    TVKIT_BROWSER: "chrome"
-  volumes:
-    - ./data:/app/data          # live data directory
-    - ./results:/app/results    # writable for export_results.py
-  ```
-- [ ] Test: `docker compose up` from fresh clone with no `.env` → no errors
+- [x] `docker-compose.yml` — public mode, `results/` mounted read-only
+- [x] `docker-compose.private.yml` — owner override with writable volumes
+- [x] Test: `docker compose up` from fresh clone with no `.env` → no errors
 
 ### 6.3 Export Results Script
 
-- [ ] `scripts/export_results.py` — complete and tested
-  - [ ] Export 4 notebooks to `results/notebooks/*.html`
-    - `jupyter nbconvert --to html --execute --no-input`
-  - [ ] Export `results/backtest/summary.json` — metrics only, no prices
-  - [ ] Export `results/backtest/equity_curve.json` — NAV indexed to 100
-  - [ ] Export `results/backtest/annual_returns.json`
-  - [ ] Export `results/signals/latest_ranking.json` — scores/quintiles only
-- [ ] Owner workflow:
-  ```bash
-  uv run python scripts/export_results.py
-  git add results/
-  git commit -m "results: update YYYY-MM-DD"
-  git push
-  ```
+- [x] `scripts/export_results.py` — complete and tested
+  - [x] Export notebooks to `results/notebooks/*.html`
+  - [x] Export `results/backtest/summary.json` — metrics only, no prices
+  - [x] Export `results/backtest/equity_curve.json` — NAV indexed to 100
+  - [x] Export `results/backtest/annual_returns.json`
+  - [x] Export `results/signals/latest_ranking.json` — scores/quintiles only
+- [x] JSON Schema sidecars (`.schema.json`) for every export artefact
+- [x] Owner workflow: export → `git add results/` → commit → push
 
 ### 6.4 Data Boundary Audit
 
-- [ ] `results/backtest/equity_curve.json` — NAV only, no absolute prices
-- [ ] `results/signals/latest_ranking.json` — scores/quintiles only, no OHLCV
-- [ ] Notebook HTML (`--no-input`) — charts visible, no raw data tables
-- [ ] `.gitignore` excludes all of `data/` directory
+- [x] `results/backtest/equity_curve.json` — NAV only, no absolute prices
+- [x] `results/signals/latest_ranking.json` — scores/quintiles only, no OHLCV
+- [x] Notebook HTML (`--no-input`) — charts visible, no raw data tables
+- [x] `.gitignore` excludes all of `data/` directory
+- [x] Two-layer CI audit: file-walk + API response scan for OHLCV leaks
 
-### 6.5 README Update
+### 6.5 README Rewrite
 
-- [ ] Quick Start section:
-  ```bash
-  git clone https://github.com/lumduan/csm-set
-  cd csm-set
-  docker compose up
-  # open http://localhost:8000
-  ```
-- [ ] "What you will see" section: notebooks, backtest results, signal rankings
-- [ ] "What requires credentials" section: data fetch, notebook re-execution
-- [ ] Owner workflow section: fetch → export_results → git add results/ → push
+- [x] Quick Start: `git clone` + `docker compose up` → `localhost:8000`
+- [x] Architecture (Headless) section with ASCII + Mermaid diagrams
+- [x] "Build your own frontend" section with JSON Schema → TypeScript generation
+- [x] Owner workflow section: credentials, private compose, data refresh
 
-**Exit criteria:** fresh `git clone` + `docker compose up` → all notebook pages load, backtest chart renders, signal rankings visible. Zero errors in container logs.
+### 6.6 CI Smoke Workflow
+
+- [x] `.github/workflows/docker-smoke.yml` — PR-gated `docker compose up --wait`
+- [x] Health check + smoke-test 4 read endpoints (200) + 1 write endpoint (403)
+- [x] Container log capture + artifact upload on failure
+
+### 6.7 GHCR Image Publishing
+
+- [x] `.github/workflows/docker-publish.yml` — tag-driven (`v*.*.*`) + `workflow_dispatch`
+- [x] Multi-tag: `vX.Y.Z`, `vX.Y`, `latest`, `sha-<short>`
+- [x] GHA cache (`type=gha`) for fast rebuilds
+- [x] `RELEASING.md` — owner runbook for cutting a release
+
+**Exit criteria:** fresh `git clone` + `docker compose up` → all notebook pages load, backtest chart renders, signal rankings visible. Zero errors in container logs. CI smoke green on PRs. GHCR image published and pullable. ✓
 
 ---
 
@@ -417,27 +406,29 @@ Development phases ordered by dependency — each phase must be complete and val
 
 ### 7.1 Test Coverage
 
-- [ ] All unit tests passing
-- [ ] All integration tests passing (public mode + private mode variants)
-- [ ] Coverage ≥ 80% on `src/csm/`
+- [x] All unit tests passing
+- [x] All integration tests passing (public mode + private mode variants)
+- [x] 742 tests, 92% line coverage on `api/`
 
 ### 7.2 Documentation
 
-- [ ] All `docs/` pages complete
-- [ ] `docs/guides/public-mode.md` — **NEW**: data boundaries, Docker, owner workflow
-- [ ] `README.md` — full, with quick start and badges
+- [x] All `docs/` pages translated and complete (12 stubs)
+- [x] `docs/guides/public-mode.md` — data boundaries, Docker, owner workflow
+- [x] `README.md` — full, with quick start and badges
 
 ### 7.3 API Security
 
-- [ ] API key or HTTP Basic Auth middleware to protect strategy data endpoints
-- [ ] Ensures read-only public mode doesn't leak portfolio composition/signal data unintentionally
+- [x] API key middleware (`X-API-Key` header) protecting private-mode endpoints
+- [x] Public mode: read-only enforcement with 403 on write endpoints
+- [x] Constant-time key comparison, key redaction in logs
 
 ### 7.4 CI
 
-- [ ] `ci.yml`: lint → type-check → test → docker build check on every push
-- [ ] CI step: verify `results/` contains required files (fail if missing)
+- [x] `.github/workflows/docker-smoke.yml` — PR-gated smoke test on Docker paths
+- [x] `.github/workflows/docker-publish.yml` — tag-driven GHCR publish
+- [ ] `ci.yml`: lint → type-check → test on every push (general CI beyond Docker)
 
-**Exit criteria:** all tests green, Docker builds in CI, docs complete.
+**Exit criteria:** general `ci.yml` (lint → type-check → test on every push), any remaining doc gaps filled.
 
 ---
 
@@ -538,11 +529,13 @@ Phase 0 (Bootstrap)
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 6 — Docker & Public Distribution
+- **Active phase:** Phase 7 — Hardening & Documentation
 - **Completed phases:**
+  - Phase 0 (Bootstrap) — project scaffold, tooling, quality gates
   - Phase 1 (Data Pipeline) — sub-phases 1.1–1.7 complete as of 2026-04-23
   - Phase 2 (Signal Research) — sub-phases 2.1–2.7 complete
   - Phase 3 (Backtesting) — sub-phases 3.1–3.4 complete
   - Phase 4 (Portfolio Construction & Risk) — sub-phases 4.1–4.5 complete, confirmed by `results/notebooks/04_portfolio_optimization.html`
   - Phase 5 (API) — sub-phases 5.1–5.9 complete as of 2026-05-01: typed FastAPI surface, JobRegistry, API-key auth, RFC 7807 errors, structured logging, 742 tests, 92% coverage, sign-off validated via `examples/05_api_validation.py`
+  - Phase 6 (Docker & Public Distribution) — sub-phases 6.1–6.7 complete as of 2026-05-02: multi-stage Dockerfile, dual compose config, export results with JSON Schema, two-layer data boundary audit, README rewrite, CI smoke + GHCR publish workflows, `RELEASING.md`, v0.6.0 GitHub Release published
 - **Blocked by:** nothing

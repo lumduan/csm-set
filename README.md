@@ -38,11 +38,9 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 | 3 | Backtesting | `[x]` Completed |
 | 4 | Portfolio & Risk | `[x]` Completed |
 | 5 | API + FastUI | `[x]` Completed |
-| **6** | **Docker & Public Distribution** | **`[~]` In progress** |
-| 7 | CI/CD & Hardening | `[ ]` Pending |
-| 8 | Documentation & Polish | `[ ]` Pending |
-
-**Phase 6 sub-progress:** Multi-stage Dockerfile (6.1 ✓), Docker Compose dual config (6.2 ✓), Export results script with JSON Schema sidecars (6.3 ✓), Data boundary audit — file + API (6.4 ✓), README rewrite (6.5 ✓), CI smoke workflow (6.6 ✓), GHCR image publishing (6.7 ✓).
+| **6** | **Docker & Public Distribution** | **`[x]` Completed** |
+| 7 | Hardening & Documentation | `[~]` In progress |
+| 8 | Enhancement (Post-MVP) | `[ ]` Pending |
 
 See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 
