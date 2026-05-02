@@ -1,93 +1,80 @@
-# Risk Layer — Module Reference
+# Risk Module Reference
 
-The `csm.risk` subpackage computes portfolio performance metrics (CAGR, Sharpe, Sortino, drawdowns), detects market regimes (bull/bear via 200-day SMA), and analyses drawdown characteristics.
+Reference for `src/csm/risk/` — the risk metrics and market regime detection layer. This subpackage computes risk-adjusted performance statistics, drawdown analytics, and identifies bull/bear market regimes to inform portfolio positioning.
 
 ## Module index
 
 | Module | Purpose |
 |--------|---------|
-| `src/csm/risk/metrics.py` | Portfolio performance metrics; `PerformanceMetrics` |
-| `src/csm/risk/regime.py` | Market regime detection via 200-day SMA; `RegimeDetector`, `RegimeState` |
-| `src/csm/risk/drawdown.py` | Drawdown computation and recovery analysis; `DrawdownAnalyzer` |
-| `src/csm/risk/exceptions.py` | Risk-layer exceptions: `RiskError` |
+| `src/csm/risk/metrics.py` | Performance metrics — summary statistics (CAGR, Sharpe, Sortino, max DD, win rate) and rolling CAGR |
+| `src/csm/risk/drawdown.py` | Drawdown analytics — max drawdown, underwater curve, rolling drawdown, recovery periods |
+| `src/csm/risk/regime.py` | Market regime detection — 200-day SMA rule, bull/bear classification, position scaling by regime |
+| `src/csm/risk/exceptions.py` | Risk-layer exception classes |
 
 ## Public callables
 
-### `class PerformanceMetrics`
+### `PerformanceMetrics`
 
 - **Defined in:** `src/csm/risk/metrics.py`
-- **Purpose:** Computes standard portfolio performance metrics from an equity curve.
-- **Key methods:**
-  - `summary(self, equity_curve: pd.Series, risk_free_rate: float = 0.0) -> dict[str, float]` — returns a dict with: `cagr`, `annual_volatility`, `sharpe_ratio`, `sortino_ratio`, `max_drawdown`, `calmar_ratio`, `win_rate`, `avg_monthly_return`, `best_month`, `worst_month`, `positive_months`, `negative_months`.
-  - `rolling_cagr(equity_curve: pd.Series, window_months: int) -> pd.Series` — static method. Returns a Series of rolling CAGR values.
+- **Purpose:** Computes standard portfolio performance statistics from an equity curve.
 - **Behaviour:**
-  - CAGR = `(final / initial)^(12/n_months) - 1`.
-  - Sharpe = `(CAGR - rf) / annual_volatility`.
-  - Sortino = `(CAGR - rf) / downside_deviation` (downside defined as returns below 0).
-  - Max drawdown = largest peak-to-trough decline.
-  - Calmar = `CAGR / abs(max_drawdown)`.
-  - Expects monthly equity curve data.
-  - Handles edge cases: < 12 months of data (warns, returns NaN for annualised metrics), zero-variance returns (Sharpe = 0).
+  - `summary(equity_curve, benchmark, rf_annual)` → `pd.DataFrame` — one-row summary with: CAGR, annualised volatility, Sharpe ratio, Sortino ratio, maximum drawdown, Calmar ratio, win rate (monthly), best/worst month, positive months %, VaR 95%, CVaR 95%
+  - `rolling_cagr(equity_curve, window_months)` → `pd.Series` (static method) — trailing CAGR over a rolling window
+  - All metrics are annualised assuming 252 trading days
+  - The Sortino ratio uses downside deviation (returns below rf_annual); Sharpe uses total standard deviation
 - **Example:**
   ```python
-  from csm.risk import PerformanceMetrics
+  from csm.risk.metrics import PerformanceMetrics
 
-  metrics = PerformanceMetrics()
-  summary = metrics.summary(equity_curve, risk_free_rate=0.02)
-  # summary: {"cagr": 0.152, "sharpe_ratio": 0.95, ...}
+  pm = PerformanceMetrics()
+  stats = pm.summary(equity_curve, benchmark=None, rf_annual=0.02)
+  # stats columns: cagr, vol_annual, sharpe_ratio, sortino_ratio, max_drawdown, ...
   ```
 
-### `class DrawdownAnalyzer`
+### `DrawdownAnalyzer`
 
 - **Defined in:** `src/csm/risk/drawdown.py`
-- **Purpose:** Analyses drawdown characteristics of an equity curve.
-- **Key methods:**
-  - `max_drawdown(self, equity_curve: pd.Series) -> float` — returns the maximum peak-to-trough decline as a negative fraction (e.g., -0.25 = 25% drawdown).
-  - `underwater_curve(self, equity_curve: pd.Series) -> pd.Series` — returns the drawdown from peak at each point in time.
-  - `rolling_drawdown(self, equity: pd.Series, window: int) -> pd.Series` — returns the maximum drawdown within each rolling window.
-  - `recovery_periods(self, equity_curve: pd.Series) -> pd.DataFrame` — returns a DataFrame of drawdown events with start date, trough date, recovery date, depth, and duration in months.
+- **Purpose:** Computes drawdown metrics from an equity curve.
+- **Behaviour:**
+  - `max_drawdown(equity_curve)` → `float` — maximum peak-to-trough decline as a negative fraction (e.g., -0.25 = 25% drawdown)
+  - `underwater_curve(equity_curve)` → `pd.Series` — time series of current drawdown from the all-time high; 0 when at a new peak
+  - `rolling_drawdown(equity, window)` → `pd.Series` — maximum drawdown within a rolling window
+  - `recovery_periods(equity_curve)` → `pd.DataFrame` — start date, end date, depth, and duration (in days) of each drawdown recovery period
 - **Example:**
   ```python
-  from csm.risk import DrawdownAnalyzer
+  from csm.risk.drawdown import DrawdownAnalyzer
 
-  analyzer = DrawdownAnalyzer()
-  max_dd = analyzer.max_drawdown(equity_curve)
-  underwater = analyzer.underwater_curve(equity_curve)
-  recoveries = analyzer.recovery_periods(equity_curve)
+  da = DrawdownAnalyzer()
+  max_dd = da.max_drawdown(equity_curve)  # -0.28
+  underwater = da.underwater_curve(equity_curve)
+  recoveries = da.recovery_periods(equity_curve)
   ```
 
-### `class RegimeDetector`
+### `RegimeDetector`
 
 - **Defined in:** `src/csm/risk/regime.py`
-- **Purpose:** Detects the current market regime (BULL or BEAR) based on the SET Index's position relative to its 200-day simple moving average.
-- **Key methods:**
-  - `detect(self, index_prices: pd.Series, as_of: pd.Timestamp) -> RegimeState` — returns `RegimeState.BULL` if the index is above its 200-day SMA, `RegimeState.BEAR` otherwise.
-  - `position_scale(self, regime: RegimeState) -> float` — returns 1.0 for BULL, 0.0 for BEAR (full cash-out).
-  - `compute_ema(prices: pd.Series, window: int) -> pd.Series` — static method. Computes exponential moving average.
-  - `is_bull_market(index_prices: pd.Series, as_of: pd.Timestamp, window: int = 200) -> bool` — static method. Convenience wrapper returning True if the index is above its SMA.
-  - `has_negative_ema_slope(index_prices: pd.Series, as_of: pd.Timestamp, window: int = 200, lookback: int = 20) -> bool` — static method. Returns True if the 200-day EMA slope over the past 20 days is negative (early warning).
+- **Purpose:** Classifies the current market regime based on the SET index relative to its 200-day simple moving average. Used by the backtest engine and portfolio overlays to adjust exposure.
 - **Behaviour:**
-  - SMA lookback is configurable (default 200 trading days).
-  - Requires at least `window` days of index price history; returns `RegimeState.UNKNOWN` if insufficient data.
-  - `has_negative_ema_slope` provides a secondary signal: even if above the SMA, a flattening/declining EMA slope can signal regime transition.
+  - `detect(index_prices, as_of)` → `RegimeState` — returns `RegimeState.BULL` if index > 200d SMA, `RegimeState.BEAR` otherwise
+  - `position_scale(regime)` → `float` — returns 1.0 (fully invested) for BULL, 0.0 (cash) for BEAR
+  - `compute_ema(prices, window)` → `pd.Series` (static method) — exponentially-weighted moving average for a given window
+  - `is_bull_market(index_prices, as_of, window)` → `bool` (static method) — convenience: True if price > `window`-day SMA
+  - `has_negative_ema_slope(prices, window, slope_window)` → `bool` (static method) — True if the EMA slope over `slope_window` days is negative (early warning of regime shift)
 - **Example:**
   ```python
-  from csm.risk import RegimeDetector, RegimeState
+  from csm.risk.regime import RegimeDetector, RegimeState
 
   detector = RegimeDetector()
-  regime = detector.detect(set_index_prices, pd.Timestamp("2025-01-31"))
-  scale = detector.position_scale(regime)
-  # scale = 1.0 in BULL → full allocation; 0.0 in BEAR → cash
+  regime = detector.detect(set_index_prices, pd.Timestamp("2024-06-30"))
+  scale = detector.position_scale(regime)  # 1.0 or 0.0
+
+  if regime == RegimeState.BEAR:
+      print("Market below 200d SMA — moving to cash")
   ```
-
-### `class RegimeState(StrEnum)`
-
-- **Defined in:** `src/csm/risk/regime.py`
-- **Values:** `BULL`, `BEAR`, `UNKNOWN`
 
 ## Cross-references
 
-- Used by: `src/csm/portfolio/drawdown_circuit_breaker.py` (triggers on drawdown thresholds), `src/csm/portfolio/sector_regime_constraint_engine.py` (adjusts allocations per regime), `src/csm/research/backtest.py` (filters months by regime)
-- Tested in: `tests/unit/risk/test_metrics.py`, `tests/unit/risk/test_regime.py`, `tests/unit/risk/test_drawdown.py`
-- Concept: [Architecture Overview](../../architecture/overview.md) § Runtime data flow
-- Related: [Portfolio Module Reference](../portfolio/overview.md) — circuit breakers and vol scaling consume risk outputs
+- Used by: `src/csm/research/backtest.py`, `src/csm/portfolio/drawdown_circuit_breaker.py`, `src/csm/portfolio/sector_regime_constraint_engine.py`
+- Tested in: `tests/unit/risk/`
+- Concept: `docs/concepts/momentum.md` § SET universe constraints
+- Architecture: `docs/architecture/overview.md` § Runtime data flow

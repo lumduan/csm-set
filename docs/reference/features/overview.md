@@ -1,103 +1,82 @@
-# Features Layer — Module Reference
+# Features Module Reference
 
-The `csm.features` subpackage computes momentum, risk-adjusted momentum, and sector-relative features from cleaned price data, and orchestrates them through a configurable pipeline.
+Reference for `src/csm/features/` — the signal computation layer. This subpackage computes momentum signals, risk-adjusted variants, sector aggregates, and orchestrates the full feature computation pipeline that produces the panel DataFrames consumed by the research and portfolio layers.
 
 ## Module index
 
 | Module | Purpose |
 |--------|---------|
-| `src/csm/features/momentum.py` | Raw momentum signal computation (12-1M, 6-1M, 3-1M); `MomentumFeatures` |
-| `src/csm/features/risk_adjusted.py` | Volatility-scaled and alpha-based momentum; `RiskAdjustedFeatures` |
-| `src/csm/features/sector.py` | Sector-relative momentum features; `SectorFeatures` |
-| `src/csm/features/pipeline.py` | Feature orchestration, panel construction, forward returns; `FeaturePipeline` |
-| `src/csm/features/exceptions.py` | Feature-layer exceptions: `FeatureError`, `InsufficientDataError` |
+| `src/csm/features/momentum.py` | Classic cross-sectional momentum signals (12-1M, 6-1M, 3-1M, 1-0M) using trading-day offsets |
+| `src/csm/features/risk_adjusted.py` | Risk-adjusted momentum: volatility-scaled, market-beta-neutral, and residual (OLS) momentum |
+| `src/csm/features/sector.py` | Sector-level features: sector median momentum and within-sector z-score |
+| `src/csm/features/pipeline.py` | Feature computation orchestrator — builds the (date × symbol) panel of all signals + forward returns |
+| `src/csm/features/exceptions.py` | Feature-layer exception classes |
 
 ## Public callables
 
-### `class MomentumFeatures`
+### `MomentumFeatures.compute(close: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
 
 - **Defined in:** `src/csm/features/momentum.py`
-- **Purpose:** Computes raw momentum signals using the Jegadeesh–Titman formation/skip methodology. Supports multiple lookback windows simultaneously.
-- **Key methods:**
-  - `compute(self, prices: dict[str, pd.DataFrame], rebalance_dates: list[pd.Timestamp]) -> pd.DataFrame` — returns a DataFrame indexed by `(date, symbol)` with momentum columns for each configured window.
+- **Purpose:** Compute four momentum signals for a single symbol using trading-day offsets (not calendar-day), correctly handling SET public holidays. Returns `float32` DataFrame with columns `[mom_12_1, mom_6_1, mom_3_1, mom_1_0]` indexed by `rebalance_dates`.
 - **Behaviour:**
-  - Computes 12-1M, 6-1M, and 3-1M momentum by default.
-  - The most recent month (t-1) is always skipped to avoid short-term reversal.
-  - Returns `NaN` for symbols with insufficient history (< formation window + skip).
-  - Prices dict keys are symbols, values are DataFrames with at minimum an `adj_close` column.
+  - Signals are log returns: `ln(close_{t − end_offset} / close_{t − start_offset})`
+  - NaN when insufficient history or a boundary price is invalid
+  - `mom_1_0` uses a 0-day skip (captures short-term reversal; distinct from the 12/6/3-month signals which skip 1 month)
+  - `close` index must be a `DatetimeIndex`; duplicate timestamps raise `ValueError`
 - **Example:**
   ```python
-  from csm.features import MomentumFeatures
+  from csm.features.momentum import MomentumFeatures
 
-  momentum = MomentumFeatures()
-  panel = momentum.compute(prices_dict, rebalance_dates)
-  # panel columns: date, symbol, mom_12_1, mom_6_1, mom_3_1
+  mf = MomentumFeatures()
+  signals = mf.compute(close, rebalance_dates)
+  # signals.columns → ['mom_12_1', 'mom_6_1', 'mom_3_1', 'mom_1_0']
   ```
 
-### `class RiskAdjustedFeatures`
+### `RiskAdjustedFeatures.compute(prices: dict[str, pd.DataFrame], market_prices: pd.Series, rebalance_dates: pd.DatetimeIndex) -> pd.DataFrame`
 
 - **Defined in:** `src/csm/features/risk_adjusted.py`
-- **Purpose:** Computes risk-adjusted momentum variants: volatility-scaled momentum and alpha (residual return after market beta adjustment).
-- **Key methods:**
-  - `compute(self, prices: dict[str, pd.DataFrame], market_prices: pd.DataFrame, rebalance_dates: list[pd.Timestamp]) -> pd.DataFrame` — returns a DataFrame with `vol_scaled_mom` and `alpha` columns.
-- **Behaviour:**
-  - Vol-scaled momentum = raw momentum / annualised trailing volatility.
-  - Alpha = intercept from OLS of stock returns on market (SET index) returns, annualised.
-  - Requires >= 60 trading days of price history per symbol.
+- **Purpose:** Compute risk-adjusted momentum variants: volatility-scaled momentum, CAPM-beta-neutral momentum, and residual (OLS alpha) momentum. Each variant adjusts the raw 12-1M signal for a different risk dimension.
 - **Example:**
   ```python
-  from csm.features import RiskAdjustedFeatures
+  from csm.features.risk_adjusted import RiskAdjustedFeatures
 
-  radj = RiskAdjustedFeatures()
-  panel = radj.compute(prices_dict, set_index_prices, rebalance_dates)
+  raf = RiskAdjustedFeatures()
+  ra_signals = raf.compute(prices, market_prices, rebalance_dates)
   ```
 
-### `class SectorFeatures`
+### `SectorFeatures.compute(panel_df: pd.DataFrame, sector_map: dict[str, str]) -> pd.DataFrame`
 
 - **Defined in:** `src/csm/features/sector.py`
-- **Purpose:** Computes sector-relative momentum features: each stock's momentum relative to its sector median.
-- **Key methods:**
-  - `compute(self, panel_df: pd.DataFrame) -> pd.DataFrame` — adds `sector_relative_mom` column to the panel by subtracting the sector median from each stock's momentum.
-- **Behaviour:**
-  - Requires the panel to already have a `sector` column (joined from symbol metadata).
-  - Sector median is computed within each rebalance date.
-  - If fewer than 3 stocks in a sector, the sector median is `NaN` and no sector-relative feature is computed.
+- **Purpose:** Compute sector-level features from a signal panel: sector median momentum and each stock's within-sector z-score. These serve as conditioning variables for sector-aware portfolio constraints.
 - **Example:**
   ```python
-  from csm.features import SectorFeatures
+  from csm.features.sector import SectorFeatures
 
-  sector = SectorFeatures()
-  panel = sector.compute(panel_with_momentum)
+  sf = SectorFeatures()
+  sector_signals = sf.compute(panel_df, sector_map)
   ```
 
-### `class FeaturePipeline`
+### `FeaturePipeline(store: ParquetStore, settings: Settings)`
 
 - **Defined in:** `src/csm/features/pipeline.py`
-- **Purpose:** Orchestrates feature computation end-to-end: loads prices, builds the panel, computes all registered features, and optionally builds forward returns for model training.
-- **Constructor:** `__init__(self, store: ParquetStore, features: list[str] | None = None) -> None`
-- **Key methods:**
-  - `build(self, prices: dict[str, pd.DataFrame], rebalance_dates: list[pd.Timestamp], symbols: list[str]) -> pd.DataFrame` — runs all registered feature computations and returns the combined panel.
-  - `build_forward_returns(self, prices: dict[str, pd.DataFrame], rebalance_dates: list[pd.Timestamp], horizon_months: list[int] = [1, 3, 6, 12]) -> pd.DataFrame` — adds forward return columns (fwd_1m, fwd_3m, etc.) for signal validation.
-  - `load_latest(self) -> pd.DataFrame` — loads the most recent feature panel from the store.
-  - `build_volume_matrix(self, exclude: tuple[str, ...] = (_INDEX_SYMBOL,)) -> pd.DataFrame` — builds a date × symbol matrix of trading volumes for liquidity analysis.
+- **Purpose:** Orchestrates the full feature computation pipeline. Loads price data from the store, computes all signals for all symbols, builds a (date × symbol) MultiIndex panel, and attaches forward returns for IC/backtest evaluation.
 - **Behaviour:**
-  - Default features list: `["momentum", "risk_adjusted", "sector"]`.
-  - Validates inputs: prices dict must not be empty, rebalance dates must be sorted, all symbols must be present in prices.
-  - Panel output is a `pd.DataFrame` with a `(date, symbol)` MultiIndex.
+  - `build(prices, rebalance_dates)` — compute all signals (momentum + risk-adjusted + sector) for a dict of per-symbol DataFrames, returning a `pd.DataFrame` with `MultiIndex(date, symbol)`
+  - `build_forward_returns(prices, rebalance_dates, horizon_days)` — compute forward returns for each rebalance date and specified horizon, for IC analysis and backtest evaluation
+  - `load_latest()` — load the most recently persisted feature panel from the store
+  - `build_volume_matrix(exclude)` — build a (date × symbol) matrix of average daily volume for liquidity overlays
 - **Example:**
   ```python
-  from csm.features import FeaturePipeline
-  from csm.data.store import ParquetStore
+  from csm.features.pipeline import FeaturePipeline
 
-  store = ParquetStore(Path("./data/processed"))
-  pipeline = FeaturePipeline(store)
-  panel = pipeline.build(prices_dict, rebalance_dates, symbols)
-  forward_returns = pipeline.build_forward_returns(prices_dict, rebalance_dates)
+  pipeline = FeaturePipeline(store, settings)
+  panel = pipeline.build(prices, rebalance_dates)
+  panel_with_fwd = pipeline.build_forward_returns(prices, rebalance_dates, horizon_days=21)
   ```
 
 ## Cross-references
 
-- Used by: `src/csm/research/ranking.py` (ranks stocks on momentum features), `src/csm/research/backtest.py` (builds panels for backtest)
-- Tested in: `tests/unit/features/test_momentum.py`, `tests/unit/features/test_pipeline.py`
-- Concepts: [Momentum Concept](../../concepts/momentum.md) — theory and academic references
-- Architecture: [Architecture Overview](../../architecture/overview.md) § Runtime data flow
+- Used by: `src/csm/research/ranking.py`, `src/csm/research/backtest.py`, `api/routers/signals.py`
+- Tested in: `tests/unit/features/`
+- Concept: `docs/concepts/momentum.md`
+- Architecture: `docs/architecture/overview.md` § Runtime data flow

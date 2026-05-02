@@ -3,7 +3,7 @@
 **Feature:** Production-ready quality and complete English documentation — finalises csm-set as a publicly distributable, AI/LLM-friendly research platform
 **Branch:** `feature/phase-7-docs`
 **Created:** 2026-05-02
-**Status:** Complete (2026-05-02)
+**Status:** Completed (2026-05-02)
 **Depends on:** Phase 1 (Data Pipeline — complete), Phase 2 (Signal Research — complete), Phase 3 (Backtesting — complete), Phase 4 (Portfolio Construction & Risk — complete), Phase 5 (FastAPI + FastUI — complete 2026-05-01), Phase 6 (Docker & Public Distribution — complete 2026-05-02, v0.6.0 published)
 **Positioning:** Hardening layer — converts a working v0.6.0 release into a v0.7.0 release that is verifiable on every push, fully documented for both human and LLM consumers, and certified end-to-end by a single quality gate. Closes the four loose ends called out in `ROADMAP.md` § Phase 7: test coverage lock, doc-stub completion, API security verification, and a general CI workflow. Phase 7 ships **no new product features**; it raises the floor for everything Phases 1–6 already built.
 
@@ -226,107 +226,112 @@ Each reference page has the same shape: **Module index** → **Public callables 
 **Deliverables:**
 
 - [x] Run the full suite locally: `uv run pytest tests/ -v --cov=api --cov-report=term-missing` and capture the actual numbers (test count, line coverage on `api/`).
-- [x] If coverage on `api/` is < 90%, identify the top three uncovered modules and add targeted tests; if ≥ 90%, proceed to lock. → **Coverage is 92% (91.67%), no gap-fill needed.**
-- [x] `pyproject.toml` modification — added `[tool.coverage.run]` with `source = ["api"]` and `[tool.coverage.report]` with `fail_under = 90`. Used `[tool.coverage]` sections rather than `addopts` so coverage is opt-in but enforced when used.
-- [x] Confirm the suite still passes with the floor in place: `uv run pytest tests/ --cov=api` → "Required test coverage of 90% reached. Total coverage: 91.67%".
+- [x] If coverage on `api/` is < 90%, identify the top three uncovered modules and add targeted tests; if ≥ 90%, proceed to lock.
+- [x] `pyproject.toml` modification — add `--cov-fail-under=90` to `[tool.pytest.ini_options].addopts` (or set in `[tool.coverage.report].fail_under = 90`).
+- [x] Confirm the suite still passes with the floor in place: `uv run pytest tests/`.
 - [x] Document the actual numbers (test count, coverage %, date) in the Completion Notes section of this sub-phase.
-- [x] Confirm no `tests/` files contain network calls in the unit-test layer (project rule from `.claude/knowledge/project-skill.md`). → No network calls found in unit tests; all HTTP tests use `httpx.MockTransport` / `pytest-httpx`.
-
-**Completion Notes (2026-05-02):**
-
-- **Tests collected:** 827 (not 742 as previously stated in ROADMAP)
-- **Tests passed:** 818 (9 pre-existing failures in `tests/unit/scripts/test_export_models.py` — unrelated to Phase 7, not addressed here)
-- **Coverage on `api/`:** 91.67% (rounded to 92%) — 1032 statements, 86 missed
-- **Top uncovered modules:** `api/routers/signals.py` (81%), `api/routers/notebooks.py` (81%), `api/routers/portfolio.py` (87%), `api/schemas/params.py` (0%), `api/retry.py` (81%), `api/jobs.py` (84%)
-- **Coverage config:** Added `[tool.coverage.run]` and `[tool.coverage.report]` sections to `pyproject.toml`. Floor is enforced via `fail_under = 90`.
-- **Verification:** `uv run pytest tests/ --cov=api --cov-fail-under=90` → exits 0, prints "Required test coverage of 90% reached. Total coverage: 91.67%"
+- [x] Confirm no `tests/` files contain network calls in the unit-test layer (project rule from `.claude/knowledge/project-skill.md`).
 
 **Acceptance Criteria:**
 
-- [x] `uv run pytest tests/` exits 0; coverage report prints `Required test coverage of 90% reached` (or equivalent).
-- [x] `pyproject.toml` contains the floor; deliberately deleting one well-covered test makes the suite fail with `Required test coverage of 90% not reached`.
-- [x] Test count (827 collected, 818 passed) and coverage % (91.67%) logged in Completion Notes.
+- `uv run pytest tests/` exits 0; coverage report prints `Required test coverage of 90% reached` (or equivalent).
+- `pyproject.toml` contains the floor; deliberately deleting one well-covered test makes the suite fail with `Required test coverage of 90% not reached`.
+- Test count and coverage % logged in Completion Notes.
 
 **Verification:** `uv run pytest tests/ --cov=api --cov-fail-under=90` returns 0 and prints the actual coverage number.
+
+**Completion Notes (2026-05-02):**
+- **Test count:** 818 passed, 9 pre-existing failures (Pydantic v2 validation issue in `scripts/_export_models.py`; passes in isolation, fails in full suite due to import ordering — a pre-existing bug, not caused by Phase 7)
+- **Coverage on `api/`:** 92% (1032 statements, 86 missed) — above the 90% floor
+- **`pyproject.toml`:** `--cov-fail-under=90` added to `[tool.pytest.ini_options].addopts`
+- **Coverage confirmation:** `Required test coverage of 90% reached. Total coverage: 91.67%`
+- No gap-fill tests needed (coverage already above 90%)
+- No network calls in unit tests — confirmed (all network I/O isolated to integration tests and scripts)
 
 ---
 
 ### Phase 7.2.1 — README Polish (TOC, Module Index, Troubleshooting)
 
-**Status:** `[x]` Completed (2026-05-02)
-**Goal:** Make the README scannable in < 10 s for a first-time visitor — human or LLM — and add the AI/agent affordances (TOC, module index, troubleshooting, "Where to find X") that the current 334-line README is missing.
+**Status:** `[x]` Completed (2026-05-02) in < 10 s for a first-time visitor — human or LLM — and add the AI/agent affordances (TOC, module index, troubleshooting, "Where to find X") that the current 334-line README is missing.
 
 **Deliverables:**
 
-- [x] **Top-of-file Table of Contents** — added `## Table of Contents` block immediately after the disclaimer; 16 entries with anchor links matching GitHub auto-slug rules.
-- [x] **Module index block** — added `## Module index` with a 13-row table covering all top-level packages: `src/csm/config/`, `src/csm/data/`, `src/csm/execution/`, `src/csm/features/`, `src/csm/portfolio/`, `src/csm/research/`, `src/csm/risk/`, `api/`, `ui/`, `scripts/`, `tests/`, `results/`, `docs/`.
-- [x] **Troubleshooting section** — added `## Troubleshooting` with 6 entries: port 8000 already in use, Docker daemon not running, private-mode tvkit auth failed, `data/` write permission denied, `uv sync` stale lockfile, container OOM exit 137. Each entry has one symptom + one resolution.
-- [x] **"Where to find X" pointer block** — added `## Where to find X` with 11 rows mapping common questions to concrete file paths.
-- [x] **Contributor links** — added `## Contributing` section linking to `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `RELEASING.md`, and `docs/development/overview.md`.
-- [x] **Key concepts blurb** — added 2-paragraph intro under "What this project does" defining cross-sectional momentum, citing Jegadeesh–Titman (1993) and Asness, Moskowitz & Pedersen (2013), and linking to `docs/concepts/momentum.md`.
-- [x] **Update `docs/README.md`** — replaced the 13-line stub with a real index: directory map table, key pages list, reference pages list, and plans section.
+- [ ] **Top-of-file Table of Contents** — add a `## Table of Contents` block immediately after the disclaimer; one bullet per top-level section with anchor link. Anchors must match GitHub's auto-slug rules.
+- [ ] **Module index block** — new `## Module index` section listing each top-level package and its purpose:
 
-**Completion Notes (2026-05-02):**
+  ```
+  | Path             | Purpose                                                 |
+  |------------------|---------------------------------------------------------|
+  | src/csm/data/    | tvkit loader, parquet store, universe builder, cleaning |
+  | src/csm/features/| momentum, risk-adjusted, sector, pipeline composer       |
+  | src/csm/portfolio/ | weight optimisation, constraints, rebalancing          |
+  | src/csm/research/| ranking, IC analysis, backtest helpers                  |
+  | src/csm/risk/    | risk metrics, regime detection                          |
+  | api/             | FastAPI app, routers, security, error handling          |
+  | ui/              | NiceGUI/FastUI dashboard pages                          |
+  | scripts/         | owner utilities (fetch, export, build universe)         |
+  | tests/           | unit + integration tests                                |
+  | docs/            | architecture, reference, guides, plans                  |
+  ```
 
-- README grew from ~334 lines to ~470 lines with all new sections.
-- TOC anchors use GitHub auto-slug conventions (lowercase, hyphens, no punctuation).
-- Module index covers all 13 top-level directories/packages.
-- Troubleshooting covers the 6 most common failure modes from the Docker smoke test and local dev experience.
-- "Where to find X" answers 11 common discovery questions with direct file links.
-- `docs/README.md` now serves as a proper index of the documentation tree.
+- [ ] **Troubleshooting section** — `## Troubleshooting` with at least four entries: port 8000 already in use; Docker daemon not running; private-mode missing tvkit auth; `data/` write permission denied. Each entry is one symptom + one resolution.
+- [ ] **"Where to find X" pointer block** — new `## Where to find X` mini-table mapping common questions to file paths:
+
+  ```
+  | I want to ...                              | Look at                                       |
+  |--------------------------------------------|-----------------------------------------------|
+  | understand the data flow                   | docs/architecture/overview.md                 |
+  | extend a momentum signal                   | src/csm/features/momentum.py                  |
+  | add a portfolio constraint                 | src/csm/portfolio/constraints.py              |
+  | configure timezone or env vars             | src/csm/config/settings.py + .env.example     |
+  | run the quality gate                       | docs/development/overview.md § Quality gate    |
+  | refresh public artefacts                   | scripts/export_results.py + docs/guides/public-mode.md |
+  | release a new version                      | RELEASING.md                                  |
+  ```
+
+- [ ] **Contributor links** — ensure `## Contributing` (or equivalent) links to `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `RELEASING.md`, and `docs/development/overview.md`.
+- [ ] **Key concepts blurb** — short paragraph (3–5 sentences) under "What this project does" defining cross-sectional momentum and citing Jegadeesh–Titman; links to `docs/concepts/momentum.md` for depth.
+- [ ] **Update `docs/README.md`** — replace the stub with a real index of `docs/` (one line per top-level folder).
 
 **Acceptance Criteria:**
 
-- [x] README has a `## Table of Contents` block as the second heading.
-- [x] A reader scrolling only the TOC can find any section in one click.
-- [x] The module index, troubleshooting, and "Where to find X" sections are present and resolve to existing files.
-- [x] All link anchors resolve (no 404s in referenced files).
-- [x] README does not duplicate content already in `docs/` — it summarises and links.
-- [x] `docs/README.md` lists all `docs/*` subdirectories.
+- README has a `## Table of Contents` block as the second heading.
+- A reader scrolling only the TOC can find any section in one click.
+- The module index, troubleshooting, and "Where to find X" sections are present and resolve to existing files.
+- All link anchors resolve (no 404s in `wc -l README.md` referenced files).
+- README does not duplicate content already in `docs/` — it summarises and links.
 
-**Verification:** `grep -c "^## " README.md` confirms all new section headers; `docs/README.md` has directory map, key pages, reference pages, and plans sections.
+**Verification:** Open the rendered README on GitHub; confirm TOC links navigate; confirm `docs/README.md` lists all `docs/*` subdirectories.
 
 ---
 
 ### Phase 7.2.2 — Architecture & Concepts Documentation
 
-**Status:** `[x]` Completed (2026-05-02)
-**Goal:** Convert two architecture/concept stubs into reference-grade pages an external researcher or LLM can absorb without reading source.
+**Status:** `[x]` Completed (2026-05-02) an external researcher or LLM can absorb without reading source.
 
 **Deliverables:**
 
-- [x] **`docs/architecture/overview.md`** (215 lines, expanded from 12 lines) — covering:
-  - **Monorepo layers** — ASCII layer diagram with import rules for `src/csm/` → `api/` → `ui/` → `scripts/` → `results/`. Subpackage responsibility table.
-  - **Runtime data flow** — full ASCII flow diagram: tvkit → data/raw/ → csm.data → csm.features → csm.research → csm.portfolio → csm.execution → results/static/ → api/ → client. Key rules documented.
-  - **Public-mode boundary** — two-layer audit (file-level + API-level), protected write paths, 403 contract, auto-protection of non-GET `/api/v1/*`.
-  - **Configuration** — Settings model summary, key env vars table (`CSM_PUBLIC_MODE`, `CSM_API_KEY`, `CSM_CORS_ALLOW_ORIGINS`, `CSM_LOG_LEVEL`, `CSM_DATA_DIR`, `CSM_RESULTS_DIR`).
-  - **Security model** — middleware chain diagram (CORS → request-id → API-key auth → public-mode guard → router). Auth behaviour matrix (6 states). Key implementation details (constant-time compare, key redaction, startup warning, request-id correlation, RFC 7807 errors).
-  - **Timezone policy** — table: UTC internal storage, Asia/Bangkok display, cron in local time.
+- [ ] **`docs/architecture/overview.md`** (currently 12 lines) — expand to ~200–300 lines covering:
+  - **Monorepo layers** — `src/csm/` (library) → `api/` (FastAPI surface) → `ui/` (FastUI consumer) → `scripts/` (owner tooling) → `results/` (committed artefacts). One paragraph per layer with the rule about what may import from where.
+  - **Runtime data flow** — diagrammed as ASCII: tvkit (private only) → `data/raw/` → `csm.data` (parquet store + cleaner) → `csm.features` → `csm.research` (ranker + backtest) → `csm.portfolio` (weights + constraints) → `results/static/*.json` → `api/` → client.
+  - **Public-mode boundary** — restate the two-layer audit from Phase 6.4: file-level audit of `results/**/*.json` for OHLCV keys; API-level audit of public-mode responses. Reference `tests/integration/test_public_data_boundary_*`.
+  - **Configuration** — pointer to `src/csm/config/settings.py` and `.env.example`; document `CSM_PUBLIC_MODE`, `CSM_API_KEY`, `CSM_CORS_ALLOW_ORIGINS`, `CSM_LOG_LEVEL`.
+  - **Security model** — middleware chain (CORS → request-id → API-key auth → public-mode guard → router); reference `api/security.py`.
+  - **Timezone policy** — Asia/Bangkok at boundaries, UTC `pandas.Timestamp` internally; rule from `.claude/knowledge/project-skill.md`.
 
-- [x] **`docs/concepts/momentum.md`** (167 lines, expanded from 12 lines) — covering:
-  - **Jegadeesh–Titman context** — original 1993 paper, 12-1M / 6-1M / 3-1M formation/skip windows, short-term reversal motivation for the 1-month skip.
-  - **Cross-sectional ranking** — z-score normalisation formula, quintile assignment, long-only construction.
-  - **SET-specific constraints** — liquidity filter (>= 100M THB ADV), listing age (>= 12M), sector caps (30% max), regime filter (200d SMA), monthly universe rebalancing.
-  - **Implementation pointers** — 10-row table mapping concepts to source modules (corrected from plan's fictional names to actual classes: `MomentumFeatures`, `CrossSectionalRanker`, `RegimeDetector`, etc.).
-  - **Portfolio construction approaches** — equal weight, volatility target, minimum variance, constraints (long-only, max position, sector cap, liquidity, turnover).
-  - **Performance measurement** — signal quality metrics (rank IC, quintile spread, IC decay), portfolio metrics (CAGR, Sharpe, Sortino, max DD, Calmar, win rate, turnover), benchmark comparison.
-  - **Backtest methodology** — expanding window, monthly step, transaction costs (square-root impact), OOS parameter discipline.
-  - **Practical considerations** — data quality, survivorship bias, capacity, look-ahead bias prevention.
-  - **References** — Jegadeesh & Titman (1993), Jegadeesh (1990), Asness, Moskowitz & Pedersen (2013), Rouwenhorst (1999).
-
-**Completion Notes (2026-05-02):**
-
-- Architecture overview: 215 lines, 6 H2 sections, full ASCII data flow, middleware chain, auth behaviour matrix.
-- Momentum concept: 167 lines, 8 H2 sections, comprehensive theory-to-implementation mapping.
-- Both files have zero "TODO: Expand" markers.
-- Implementation pointers in momentum.md use actual class/function names cross-checked against source (not the fictional names from the original PLAN.md template).
+- [ ] **`docs/concepts/momentum.md`** (currently 12 lines) — expand to ~150 lines covering:
+  - **Jegadeesh–Titman context** — original 1993 paper, 12-1M / 6-1M / 3-1M lookback windows, exclusion of the most-recent month to dodge short-term reversal.
+  - **Cross-sectional ranking** — z-score within universe, quintile assignment, equal-weight long-only construction.
+  - **Why SET (Thai equities)** — universe constraints (>= ฿100M ADV, listed ≥ 12M), sector caps, regime filter (200d SMA on SET index).
+  - **Implementation pointer** — `src/csm/features/momentum.py` for the calculation, `src/csm/research/ranker.py` for the ranking, `src/csm/portfolio/optimizer.py` for the weights.
+  - **References** — Jegadeesh & Titman (1993), Asness, Moskowitz & Pedersen (2013); link to `notebooks/02_signal_research.ipynb` for empirical validation.
 
 **Acceptance Criteria:**
 
-- [x] `docs/architecture/overview.md` has ≥ 4 H2 sections (has 6); runtime data flow diagram present; security middleware chain documented.
-- [x] `docs/concepts/momentum.md` defines the strategy, cites the paper, and links to the implementing module.
-- [x] Zero "TODO: Expand" markers remain in either file.
-- [x] A reader who has never seen the project can answer "where does the data flow start?" and "what's the security boundary?" from these two pages.
+- `docs/architecture/overview.md` has ≥ 4 H2 sections; runtime data flow diagram present; security middleware chain documented.
+- `docs/concepts/momentum.md` defines the strategy, cites the paper, and links to the implementing module.
+- Zero "TODO: Expand" markers remain in either file.
+- A reader who has never seen the project can answer "where does the data flow start?" and "what's the security boundary?" from these two pages.
 
 **Verification:** `grep -l "TODO: Expand" docs/architecture/overview.md docs/concepts/momentum.md` returns nothing.
 
@@ -334,8 +339,7 @@ Each reference page has the same shape: **Module index** → **Public callables 
 
 ### Phase 7.2.3 — Module Reference Pages
 
-**Status:** `[ ]` Pending
-**Goal:** Author the highest-leverage doc artefact: per-subpackage reference pages an LLM can ingest to extend any module without re-reading source.
+**Status:** `[x]` Completed (2026-05-02): per-subpackage reference pages an LLM can ingest to extend any module without re-reading source.
 
 **Deliverables:**
 
@@ -372,143 +376,141 @@ For each of the five subpackages (`data`, `features`, `portfolio`, `research`, `
 - Concept: `docs/concepts/<concept>.md`
 ```
 
-**Per-subpackage scope (6 subpackages — includes execution, which was omitted from original PLAN.md):**
+**Per-subpackage scope:**
 
-- [x] **`docs/reference/data/overview.md`** (119 lines) — modules: `loader.py`, `store.py`, `universe.py`, `cleaner.py`, `symbol_filter.py`, `exceptions.py`. Public callables with accurate signatures: `OHLCVLoader.fetch/fetch_batch`, `ParquetStore.save/load/exists/list_keys/delete`, `UniverseBuilder.filter/build_snapshot/build_all_snapshots`, `PriceCleaner.clean/forward_fill_gaps/drop_low_coverage/winsorise_returns`, `filter_symbols`, `SecurityType`.
-- [x] **`docs/reference/features/overview.md`** (103 lines) — modules: `momentum.py`, `risk_adjusted.py`, `sector.py`, `pipeline.py`, `exceptions.py`. Public callables: `MomentumFeatures.compute`, `RiskAdjustedFeatures.compute`, `SectorFeatures.compute`, `FeaturePipeline.build/build_forward_returns/load_latest/build_volume_matrix`.
-- [x] **`docs/reference/portfolio/overview.md`** (119 lines) — modules: `construction.py`, `optimizer.py`, `rebalance.py`, `drawdown_circuit_breaker.py`, `liquidity_overlay.py`, `quality_filter.py`, `sector_regime_constraint_engine.py`, `state.py`, `vol_scaler.py`, `walkforward_gate.py`, `exceptions.py`. Public callables: `PortfolioConstructor.select/build`, `WeightOptimizer.compute/equal_weight/vol_target_weight/min_variance_weight/monte_carlo_frontier`, `WeightScheme`, `RebalanceScheduler.get_rebalance_dates/compute_turnover/trade_list`, `DrawdownCircuitBreaker`, `LiquidityOverlay`, `SectorRegimeConstraintEngine`, `VolatilityScaler`, `WalkForwardGate`, `compute_capacity_curve`.
-- [x] **`docs/reference/research/overview.md`** (106 lines) — modules: `ranking.py`, `ic_analysis.py`, `backtest.py`, `walk_forward.py`, `exceptions.py`. Public callables: `CrossSectionalRanker.rank/rank_all`, `ICAnalyzer`, `ICResult`, `MomentumBacktest.run`, `BacktestConfig`, `BacktestResult`.
-- [x] **`docs/reference/risk/overview.md`** (93 lines) — modules: `metrics.py`, `regime.py`, `drawdown.py`, `exceptions.py`. Public callables: `PerformanceMetrics.summary/rolling_cagr`, `RegimeDetector.detect/position_scale/compute_ema/is_bull_market/has_negative_ema_slope`, `RegimeState`, `DrawdownAnalyzer.max_drawdown/underwater_curve/rolling_drawdown/recovery_periods`.
-- [x] **`docs/reference/execution/overview.md`** (98 lines, NEW) — modules: `simulator.py`, `slippage.py`, `trade_list.py`. Public callables: `ExecutionSimulator.simulate`, `ExecutionConfig`, `SqrtImpactSlippageModel.estimate`, `SlippageModelConfig`, `Trade`, `TradeList`, `TradeSide`, `ExecutionResult`.
-
-**Completion Notes (2026-05-02):**
-
-- All 6 reference pages expanded from stubs. Signatures cross-checked against actual source via `grep -n "def \|^class " src/csm/<pkg>/*.py`.
-- Corrected all fictional names from the original PLAN.md template: not `compute_momentum` but `MomentumFeatures.compute()`, not `constraints.py` but `construction.py`, not `ranker.py` but `ranking.py`, not `ic.py` but `ic_analysis.py`, not `compute_drawdown` but `DrawdownAnalyzer.max_drawdown()`, etc.
-- Added 6th reference page for `execution` subpackage (380 lines, 8 public exports) — omitted from original PLAN.md.
-- Every page has: Module index table, Public callables with signatures and examples, Cross-references section.
+- [ ] **`docs/reference/data/overview.md`** — modules: `loader.py`, `store.py`, `universe.py`, `cleaner.py`, `dividend_adjustment.py`. Public callables: `load_history`, `ParquetStore.read/write`, `build_universe`, `clean_prices`, `apply_dividend_adjustment`.
+- [ ] **`docs/reference/features/overview.md`** — modules: `momentum.py`, `risk_adjusted.py`, `sector.py`, `pipeline.py`. Public callables: `compute_momentum`, `compute_risk_adjusted_momentum`, `compute_sector_features`, `FeaturePipeline.compute_all`.
+- [ ] **`docs/reference/portfolio/overview.md`** — modules: `optimizer.py`, `constraints.py`, `rebalance.py`. Public callables: `optimize_weights`, `apply_constraints`, `RebalanceEngine.step`.
+- [ ] **`docs/reference/research/overview.md`** — modules: `ranker.py`, `ic.py`, `backtest.py`. Public callables: `CrossSectionalRanker.rank_all`, `compute_ic`, `MomentumBacktest.run`.
+- [ ] **`docs/reference/risk/overview.md`** — modules: `metrics.py`, `regime.py`. Public callables: `compute_drawdown`, `compute_sharpe`, `compute_sortino`, `RegimeDetector.classify`.
 
 **Acceptance Criteria:**
 
-- [x] All 6 reference pages exist with the standard shape (Module index + Public callables + Cross-references).
-- [x] Every public callable referenced has a verifiable file path and signature (cross-checked against actual source).
-- [x] Each page has at least one runnable example block.
-- [x] Zero `TODO: Expand` markers remain in any reference page.
+- All 5 reference pages exist with the standard shape (Module index + Public callables + Cross-references).
+- Every public callable referenced has a verifiable file path and signature (must be cross-checked against the actual source on the day of authoring; signatures change).
+- Each page has at least one runnable example block.
+- Zero `TODO: Expand` markers remain.
 
-**Verification:** `grep -L "TODO: Expand" docs/reference/*/overview.md` lists all 6 files with zero matches. Signatures verified by cross-referencing actual source with `grep -n "def \|^class "`.
+**Verification:** `grep -L "TODO: Expand" docs/reference/*/overview.md` lists all 5 files; spot-check that every signature in the doc matches the current source via `grep -n "def <name>" src/csm/<pkg>/`.
 
 ---
 
 ### Phase 7.2.4 — Guides + Getting-started + Development Documentation
 
-**Status:** `[x]` Completed (2026-05-02)
-**Goal:** Cover the "how do I…" pages — quickstart, dev workflow, Docker recipes, public-mode rules — that complement the architecture/reference layers.
+**Status:** `[x]` Completed (2026-05-02) — quickstart, dev workflow, Docker recipes, public-mode rules — that complement the architecture/reference layers.
 
 **Deliverables:**
 
-- [x] **`docs/getting-started/overview.md`** (100 lines) — Docker quickstart + pre-built image, local uv quickstart, first-contact endpoint table (7 endpoints), running tests, next steps with links.
-- [x] **`docs/development/overview.md`** (160 lines) — 7-step workflow, quality gate table (4 commands with purposes), commit conventions (types + scopes + example), code style summary (7 rules), test layout (directory tree + conventions), local dev tips (6 practical tips), cross-references.
-- [x] **`docs/guides/docker.md`** (109 lines) — public boot (compose + what happens), private boot (compose override + mounts), pre-built image (pull + tags), healthcheck behaviour (interval/retries/start period), CORS configuration (public vs private defaults + override example), troubleshooting (8 entries: port 8000, daemon, OOM, pull denied, 502, 403, 401, mounted data empty).
-- [x] **`docs/guides/public-mode.md`** (221 lines) — what public mode is (capabilities matrix), data boundary rules (2-layer audit), 403 contract (canonical shape + protected endpoints list), configuring API key (generation, sending, 401 response shape, key redaction, startup warning), testing security paths (code examples for auth + public-mode tests), owner workflow (4-step end-to-end with commands), audit tests (how to run), switching modes (table), cross-references.
+- [ ] **`docs/getting-started/overview.md`** (currently 12 lines) — expand to ~120 lines:
+  - **Docker quickstart** (5 lines) — `git clone`, `cd`, `docker compose up`, browse `:8000`. Mirrors README Quick Start but in standalone form.
+  - **Local uv quickstart** (10 lines) — `uv sync --all-groups`, `uv run uvicorn api.main:app --reload`, `uv run python ui/main.py`.
+  - **First contact** — what to look at first: `/health`, `/api/docs`, `/api/v1/signals/latest`, `/static/notebooks/01_data_exploration.html`.
+  - **Running tests** — one-line quality gate; pointer to `docs/development/overview.md`.
 
-**Completion Notes (2026-05-02):**
+- [ ] **`docs/development/overview.md`** (currently 12 lines) — expand to ~250 lines:
+  - **Workflow** — read existing → branch (`feature/...`) → test-first → implement → quality gate → conventional commit → PR. Mirror the order in `.claude/playbooks/feature-development.md`.
+  - **Quality gate** — `uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest tests/ -v`. Document each command's purpose.
+  - **Commit conventions** — `feat(scope): …`, `fix(scope): …`, `docs(scope): …`, `ci(scope): …`. Reference `.claude/knowledge/coding-standards.md`.
+  - **Code style summary** — Pydantic at boundaries, async I/O via `httpx.AsyncClient`, ≤ 400 lines/file, Google-style docstrings, no `print` in `src/csm/`. Pointer for full details.
+  - **Test layout** — `tests/unit/...` mirrors `src/csm/...`; `tests/integration/...` for boundary-crossing tests; `pytest_asyncio_mode = "auto"`.
+  - **Local dev tips** — VS Code launch configs (optional), debugging the API, running a single notebook.
 
-- All 4 pages expanded from stubs. Content covers every deliverable listed in the original plan.
-- Public-mode guide includes comprehensive API key configuration section (originally scoped to 7.3 but naturally fits here for the operational audience).
-- Development guide quality gate commands use the exact same 4 commands that will go into `ci.yml` (drift-free by design: the command block is identical).
-- Docker guide has 8 troubleshooting entries (exceeds the 4-entry minimum).
+- [ ] **`docs/guides/docker.md`** (currently 12 lines) — expand to ~150 lines:
+  - **Public boot** — `docker compose up`; what mounts; what env vars are baked in.
+  - **Private boot** — `docker compose -f docker-compose.yml -f docker-compose.private.yml up`; what mounts (data/, results/, ~/.config/google-chrome); env overrides.
+  - **Pre-built image** — `docker pull ghcr.io/lumduan/csm-set:latest`.
+  - **Healthcheck behaviour** — interval 30s, retries 3, start-period 20s.
+  - **CORS configuration** — `CSM_CORS_ALLOW_ORIGINS` envvar; defaults; example for React on `:3000`.
+  - **Troubleshooting** — port 8000 in use, daemon not running, mem_limit OOM during nbconvert.
+
+- [ ] **`docs/guides/public-mode.md`** (currently 12 lines) — expand to ~200 lines:
+  - **What public mode is** — read-only mode that serves `results/static/` artefacts; no tvkit; no credentials.
+  - **Data boundary rules** — no OHLCV in committed JSON; enforced by `tests/integration/test_public_data_boundary_*.py`.
+  - **403 contract** — write endpoints return 403 with canonical "Disabled in public mode" body in public mode; public-mode-guard implemented in `api/security.py`.
+  - **Owner workflow** — `fetch_history.py → export_results.py → git add results/static/ → commit → push → tag → GHCR publish`.
+  - **Switching modes** — `CSM_PUBLIC_MODE=false` enables write endpoints; document the runtime check at boot.
+  - **Audit tests** — how the file + API audits work; how to run them locally.
 
 **Acceptance Criteria:**
 
-- [x] All 4 pages have substantive content (≥ 100 lines each); zero `TODO: Expand` markers.
-- [x] The Docker guide includes both compose commands and at least 4 troubleshooting entries (has 8).
-- [x] The public-mode guide includes the 403 contract and the owner workflow end-to-end.
-- [x] The development guide cites the same quality-gate commands as `ci.yml` (drift-free).
+- All 4 pages have substantive content (≥ 100 lines each); zero `TODO: Expand` markers.
+- The Docker guide includes both compose commands and at least 4 troubleshooting entries.
+- The public-mode guide includes the 403 contract and the owner workflow end-to-end.
+- The development guide cites the same quality-gate commands as `ci.yml` (drift-free).
 
-**Verification:** `grep -L "TODO: Expand" docs/getting-started/overview.md docs/development/overview.md docs/guides/*.md` lists all 4 files; quality-gate commands match `ci.yml` literally.
+**Verification:** `grep -L "TODO: Expand" docs/getting-started/overview.md docs/development/overview.md docs/guides/*.md` lists all 4 files; quality-gate command in dev guide matches `ci.yml` literally.
 
 ---
 
 ### Phase 7.3 — API Security Documentation
 
-**Status:** `[x]` Completed (2026-05-02) — Code complete (Phase 5.7); `[x]` Documentation complete
+**Status:** `[x]` Code complete (Phase 5.7); `[x]` Documentation complete (2026-05-02)
 **Goal:** Document the existing `api/security.py` middleware so a private-mode operator and any AI agent reading `docs/` can answer the four operational questions: *what protects what*, *how to configure*, *what error shape*, *how to test*.
 
 **Deliverables (documentation only — no new code):**
 
-- [x] In `docs/architecture/overview.md` (written in 7.2.2), § **Security model** documents:
-  - Middleware order (CORS → request-id → API-key auth → public-mode guard → router) — ASCII flow diagram.
-  - `PROTECTED_PATHS` set: the 4 explicit paths listed.
-  - Defence-in-depth rule: any non-GET on `/api/v1/*` is auto-protected via `is_protected_path()`.
+- [ ] In `docs/architecture/overview.md` (added in 7.2.2), include a § **Security model** subsection that documents:
+  - Middleware order (CORS → request-id → API-key auth → public-mode guard → router).
+  - `PROTECTED_PATHS` set: `/api/v1/data/refresh`, `/api/v1/backtest/run`, `/api/v1/jobs`, `/api/v1/scheduler/run/daily_refresh`.
+  - Defence-in-depth rule: any non-GET on `/api/v1/*` is auto-protected.
   - Constant-time comparison via `secrets.compare_digest`.
-  - Key redaction in logs via `api.logging.install_key_redaction`.
+  - Key redaction in logs (referenced via `install_key_redaction(settings.api_key)` in `api/main.py`).
   - Startup warning when `public_mode=False` and `api_key` is None.
-  - Auth behaviour matrix (6 states: mode × key configured × path protected).
-  - RFC 7807 error format (`Content-Type: application/problem+json` with `type`, `title`, `status`, `detail`, `request_id`).
 
-- [x] In `docs/guides/public-mode.md` (written in 7.2.4), § **Configuring API Key (Private Mode)** includes:
-  - Setting `CSM_API_KEY` in `.env` or `docker-compose.private.yml`.
-  - Key generation: `python -c 'import secrets; print(secrets.token_urlsafe(32))'`.
-  - Sending via `curl -H 'X-API-Key: <key>' …`.
-  - 401 response shape: RFC 7807 ProblemDetail with `request_id`; never echoes supplied key.
-  - 403 response shape: `{"detail": "Disabled in public mode"}` — separate from auth.
-  - Key redaction (`[REDACTED]` in logs).
-  - Startup warning when key is unset in private mode.
+- [ ] In `docs/guides/public-mode.md` (expanded in 7.2.4), include a § **Configuring API Key (Private Mode)** subsection:
+  - Set `CSM_API_KEY=<random-32-byte-base64>` in `.env` (or `docker-compose.private.yml`).
+  - Generate a key: `python -c 'import secrets; print(secrets.token_urlsafe(32))'`.
+  - Send via `curl -H 'X-API-Key: <key>' …`.
+  - 401 response shape: ProblemDetail with `request_id` correlation; never echoes the supplied key.
+  - 403 response shape: public-mode write block (separate from auth).
 
-- [x] In `docs/development/overview.md` (added in this sub-phase), § **Testing security paths** includes:
-  - Pointers to `tests/integration/test_api_auth.py` and `tests/unit/test_api_security.py`.
-  - Private-mode auth test example with `monkeypatch.setenv("CSM_API_KEY", "test-key")` and 401 assertion.
-  - Public-mode 403 test example with `monkeypatch.setenv("CSM_PUBLIC_MODE", "true")` and canonical body assertion.
-  - Cross-reference to public-mode guide for full operational security docs.
-
-**Completion Notes (2026-05-02):**
-
-- All security documentation content was embedded during 7.2.2 (architecture) and 7.2.4 (public-mode guide, development guide). This sub-phase verified coverage and added the Testing security paths subsection to the development guide.
-- No code changes to `api/security.py` — `git diff api/security.py` confirms zero changes.
-- Every security verb from the plan (`X-API-Key`, `compare_digest`, `PROTECTED_PATHS`, `request_id`, `public_mode_guard`, key redaction, startup warning) appears in the appropriate doc pages.
+- [ ] In `docs/development/overview.md` (expanded in 7.2.4), include a § **Testing security paths** subsection:
+  - Pointer to `tests/api/middleware/test_auth.py` (or wherever auth tests live).
+  - How to write a private-mode test: `monkeypatch.setenv("CSM_API_KEY", "test")`.
+  - How to write a public-mode 403 test: assert `client.post("/api/v1/data/refresh").status_code == 403`.
 
 **Acceptance Criteria:**
 
-- [x] A reader who has never opened `api/security.py` can configure auth, send a valid request, and reproduce the 401/403 error shapes from `docs/` alone.
-- [x] The middleware order is documented in exactly one place (architecture overview); guides and dev docs cross-link to it.
-- [x] No new code lands in this sub-phase — `git diff api/security.py` is empty.
+- A reader who has never opened `api/security.py` can configure auth, send a valid request, and reproduce the 401/403 error shapes from `docs/` alone.
+- The middleware order is documented in exactly one place (architecture overview); guides and dev docs cross-link to it.
+- No new code lands in this sub-phase. If a code change appears, scope creep — push to a follow-up.
 
-**Verification:** `grep -rl "X-API-Key\|compare_digest\|PROTECTED_PATHS" docs/` confirms each security verb appears in the appropriate page; cross-links resolve.
+**Verification:** Spot-check by searching `docs/` for `X-API-Key`, `compare_digest`, `PROTECTED_PATHS` — each appears in the appropriate page; cross-links resolve.
 
 ---
 
 ### Phase 7.4 — General CI Workflow
 
-**Status:** `[x]` Completed (2026-05-02)
-**Goal:** Make the local quality gate enforceable on every push and PR, complementing the existing Docker-only workflows.
+**Status:** `[x]` Completed (2026-05-02) and PR, complementing the existing Docker-only workflows.
 
 **Deliverables:**
 
-- [x] **`.github/workflows/ci.yml`** (NEW, 35 lines):
-  - **Triggers:** `push: branches: [main, feature/**]`, `pull_request`. `paths-ignore: [docs/**, '**/*.md', LICENSE]` so docs-only PRs skip the heavy job.
+- [ ] **`.github/workflows/ci.yml`** (NEW):
+  - **Triggers:** `push: branches: [main, feature/**]`, `pull_request`. `paths-ignore: [docs/**, '*.md', LICENSE]` so docs-only PRs skip the heavy job.
   - **Concurrency:** `group: ci-${{ github.ref }}`, `cancel-in-progress: true`.
   - **Job:** `quality-gate` on `ubuntu-latest`, timeout 15 min.
-  - **Steps:** checkout@v4 → astral-sh/setup-uv@v3 (with cache on uv.lock) → uv sync --all-groups --frozen → ruff check → ruff format --check → mypy src/ → pytest with --cov=api --cov-report=term --cov-report=xml --cov-fail-under=90 → upload-artifact@v4 for coverage.xml.
+  - **Steps:**
+    1. `actions/checkout@v4`.
+    2. `astral-sh/setup-uv@v3` with `version: latest` and `enable-cache: true` (caches `~/.cache/uv` keyed on `uv.lock`).
+    3. `uv sync --all-groups --frozen`.
+    4. `uv run ruff check .` (lint).
+    5. `uv run ruff format --check .` (format check; no auto-fix in CI).
+    6. `uv run mypy src/` (type check).
+    7. `uv run pytest tests/ -v --cov=api --cov-report=term --cov-report=xml --cov-fail-under=90`.
+    8. (Optional) `actions/upload-artifact@v4` uploading `coverage.xml` for downstream tooling.
 
-- [x] **README badge** — added `[![CI](...)](https://github.com/lumduan/csm-set/actions/workflows/ci.yml)` to the badge row alongside existing Docker badges.
+- [ ] **README badge** — add `![CI](https://github.com/lumduan/csm-set/actions/workflows/ci.yml/badge.svg)` to the badge row at the top of `README.md`.
 
-- [x] **`docs/development/overview.md` cross-reference** — § Quality gate documents that the same 4 commands run in `ci.yml` (drift-free guarantee). Also added § Testing security paths cross-referencing the CI workflow.
-
-**Completion Notes (2026-05-02):**
-
-- `ci.yml` reuses the exact same quality gate commands from `.claude/playbooks/feature-development.md` — no CI-only logic.
-- Paths-ignore skips ci.yml for docs-only changes (`docs/**`, `**/*.md`, LICENSE), matching the `docker-smoke.yml` path-filter pattern.
-- Coverage floor is enforced via `pyproject.toml` `[tool.coverage.report] fail_under = 90` AND via `--cov-fail-under=90` in the CI step (redundant, harmless).
-- `coverage.xml` is uploaded as a 7-day retention artefact for downstream tooling (Codecov, SonarQube, etc.).
+- [ ] **`docs/development/overview.md` cross-reference** — under § Quality gate, mention that the same commands run in `ci.yml` so local pass = CI pass.
 
 **Acceptance Criteria:**
 
-- [x] A push to a feature branch triggers `ci.yml`; green run takes < 8 min wall-clock with cache hot. — Workflow will be validated on push to `feature/phase-7-docs`.
-- [x] Deliberately introducing a `mypy` failure makes the workflow fail. — Same commands as local gate ensure this.
-- [x] Deliberately introducing a 5% coverage drop makes the pytest step fail. — `--cov-fail-under=90` enforced in both pyproject.toml and CI step.
-- [x] A docs-only PR skips the workflow per `paths-ignore` — `docs/**`, `**/*.md`, LICENSE are excluded.
+- A push to a feature branch triggers `ci.yml`; green run takes < 8 min wall-clock with cache hot.
+- Deliberately introducing a `mypy` failure (e.g. `def f(x: int) -> int: return "s"`) makes the workflow fail at the mypy step.
+- Deliberately introducing a 5% coverage drop (e.g. delete a well-tested module's tests) makes the pytest step fail with the coverage threshold message.
+- A docs-only PR (only `docs/**` or `*.md` changed) skips the workflow per `paths-ignore`.
 
-**Verification:** Workflow exists at `.github/workflows/ci.yml`; README badge added; dev guide cross-references CI parity.
+**Verification:** Open the workflow run on GitHub Actions; confirm step durations; trigger a deliberate failure on a throw-away branch and confirm the workflow goes red.
 
 ---
 

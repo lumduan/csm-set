@@ -73,16 +73,11 @@ strict = true
 ignore_missing_imports = true
 mypy_path = "src"
 
-[tool.coverage.run]
-source = ["api"]
-
-[tool.coverage.report]
-fail_under = 90
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = ["--cov-fail-under=90"]
 
 [tool.uv]
 default-groups = ["dev"]

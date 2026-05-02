@@ -1,199 +1,225 @@
 # Development Guide
 
-This page covers the complete development workflow for csm-set: environment setup, the quality gate, commit conventions, code style, test layout, and local dev tips.
+This page covers the development workflow, quality gate, commit conventions, code style, test layout, and local dev tips for csm-set contributors.
+
+## Table of Contents
+
+- [Workflow](#workflow)
+- [Quality gate](#quality-gate)
+- [Commit conventions](#commit-conventions)
+- [Code style summary](#code-style-summary)
+- [Test layout](#test-layout)
+- [Testing security paths](#testing-security-paths)
+- [Local dev tips](#local-dev-tips)
+
+---
 
 ## Workflow
 
-Follow this sequence for every change:
+The standard development loop follows the process in `.claude/playbooks/feature-development.md`:
 
-1. **Read** — understand the relevant modules under `src/csm/` and the corresponding tests under `tests/`. Check `docs/architecture/overview.md` if you're unsure which layer your change belongs in. Search for existing helpers — don't reinvent.
-2. **Branch** — create a feature branch: `git checkout -b feature/your-feature-name`.
-3. **Test-first** — add a failing test in `tests/` mirroring the source path. Test the behaviour, not the implementation. Use real small DataFrames and `httpx.MockTransport` for HTTP.
-4. **Implement** — write the smallest code that makes the test pass. Full type annotations. Pydantic for boundary I/O. Async at I/O boundaries.
-5. **Quality gate** — run all four checks (see below). All must pass before committing.
-6. **Commit** — conventional commit format (see below). One feature per commit.
-7. **PR** — push your branch and open a pull request. CI will run the same quality gate.
+1. **Read** — study the related modules under `src/csm/` and their tests under `tests/`. Search existing helpers before writing new ones.
+2. **Branch** — create a feature branch from `main`: `feature/<short-description>` or `fix/<short-description>`.
+3. **Test first** — add a failing test in `tests/` that mirrors the source path. Test behaviour, not implementation.
+4. **Implement** — write the smallest change that makes the test pass. Full type annotations. Pydantic at boundaries. ≤ 400 lines per file.
+5. **Quality gate** — run the full gate locally (see below). All four commands must pass.
+6. **Document** — docstring on every new public function (Google style). Update `docs/` if behaviour changes.
+7. **Commit** — conventional commit message. One feature per commit.
+8. **PR** — open a PR against `main` with a clear description. CI runs the same quality gate on push.
 
 ---
 
 ## Quality gate
 
-Run before every commit. These four commands are the single source of truth for "is this code good enough to merge":
+Run before every commit. These are the exact same commands that `.github/workflows/ci.yml` runs on every push and PR:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src/
-uv run pytest tests/ -v
+uv run ruff check . \
+  && uv run ruff format --check . \
+  && uv run mypy src/ \
+  && uv run pytest tests/ -v --cov=api --cov-fail-under=90
 ```
 
-### What each command checks
+### What each command does
 
 | Command | Purpose |
 |---------|---------|
-| `ruff check .` | Lint: catches unused imports, undefined names, style violations (E, F, I, UP, B, SIM rules) |
-| `ruff format --check .` | Format: verifies code is consistently formatted (100-char line length). No auto-fix in CI — run `uv run ruff format .` locally to fix. |
-| `mypy src/` | Type-check: strict mode, catches type errors across the entire `src/` tree |
-| `pytest tests/ -v` | Test: runs all 827 tests. With `--cov=api --cov-fail-under=90`, enforces the coverage floor on the API layer |
+| `ruff check .` | Linting: catches unused imports, undefined names, style violations (E, F, I, UP, B, SIM rules) |
+| `ruff format --check .` | Format check: verifies code is formatted with ruff (line length 100); use `ruff format .` to auto-fix |
+| `mypy src/` | Static type checking: `strict` mode, all of `src/`; configuration in `[tool.mypy]` in `pyproject.toml` |
+| `pytest tests/ -v --cov=api --cov-fail-under=90` | Test suite with coverage floor on `api/`; floor is configured in `pyproject.toml` so it applies locally and in CI |
 
-These exact same commands run in `.github/workflows/ci.yml` on every push and PR. If it passes locally, it passes in CI. No CI-only logic.
+The coverage floor (`--cov-fail-under=90`) is set in `[tool.pytest.ini_options].addopts` in `pyproject.toml`. This is the single source of truth — CI does not set a separate threshold. A developer running `uv run pytest` locally gets the same fail-fast behaviour as CI.
+
+### Pre-commit hooks
+
+If you have pre-commit installed, run:
+
+```bash
+uv run pre-commit install
+```
+
+This runs ruff and format checks automatically before each commit.
 
 ---
 
 ## Commit conventions
 
-Use [Conventional Commits](https://www.conventionalcommits.org/) with scopes:
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-type(scope): summary
-
-- Bullet details if needed
+feat(scope): add sector-relative momentum feature
+fix(scope): handle missing data in universe builder
+docs(scope): expand public mode guide
+test(scope): add IC analysis unit tests
+ci(scope): add general lint/type/test workflow
+refactor(scope): extract volume filtering into standalone module
 ```
 
-| Type | When to use |
-|------|-------------|
-| `feat(scope)` | New feature or capability |
-| `fix(scope)` | Bug fix |
-| `docs(scope)` | Documentation changes |
-| `test(scope)` | Test-only changes |
-| `ci(scope)` | CI/CD changes |
-| `refactor(scope)` | Code restructuring without behaviour change |
-| `chore(scope)` | Tooling, dependency bumps |
+Scopes align with the top-level module or concern: `data`, `features`, `portfolio`, `research`, `risk`, `api`, `ui`, `scripts`, `docker`, `docs`, `ci`, `config`.
 
-Common scopes: `data`, `features`, `portfolio`, `research`, `risk`, `execution`, `api`, `ui`, `docker`, `docs`, `ci`, `config`.
-
-Example:
-```
-docs(readme): add TOC, module index, troubleshooting
-
-- Top-of-file Table of Contents
-- Module index mapping src/csm/* to purpose
-- Troubleshooting section with 6 common failure modes
-```
+Each commit should address one logical change. Separate cleanup/refactoring into its own commit.
 
 ---
 
 ## Code style summary
 
-- **Pydantic at boundaries** — function I/O between modules (especially across `src/csm/`, `api/`, `ui/`) goes through Pydantic models, never raw dicts.
-- **Async I/O** — all HTTP via `httpx.AsyncClient`. `requests` is forbidden in `src/csm/`.
-- **File size** — target ≤ 400 lines per Python file. Split if exceeded.
-- **Docstrings** — Google-style on every public function: `Args`, `Returns`, `Raises`, `Example`.
-- **No `print` in `src/csm/`** — use `logging.getLogger(__name__)`.
-- **Full type annotations** — all public functions must have complete type annotations.
-- **No secrets in repo** — all config via env + `pydantic-settings`.
+- **File size:** ≤ 400 lines per Python file. Split if exceeded.
+- **Type annotations:** full annotations on all public functions. `mypy strict` mode is enabled project-wide.
+- **Docstrings:** Google-style (`Args:`, `Returns:`, `Raises:`, `Example:`) on every public function. One-liner summary line.
+- **Pydantic at boundaries:** function I/O crossing module boundaries goes through Pydantic models. No raw dicts passed between `src/csm/`, `api/`, and `ui/`.
+- **Async I/O:** all HTTP uses `httpx.AsyncClient`. `requests` is forbidden in `src/csm/`. The `ParquetStore` is a documented exception (synchronous pyarrow I/O, which is CPU-bound local file operations, not network I/O).
+- **No `print`:** use `logging.getLogger(__name__)` in `src/csm/`.
+- **Logging:** structured logging with extra context dicts; never log secrets. The `install_key_redaction` filter in `api/logging.py` automatically redacts the configured API key.
+- **Timezone:** `pandas.Timestamp` stored as UTC internally; `Asia/Bangkok` at I/O boundaries.
 
-See `.claude/knowledge/project-skill.md` for the full rules.
+For the full standard, see `.claude/knowledge/project-skill.md` and `.claude/knowledge/coding-standards.md`.
 
 ---
 
 ## Test layout
 
-Tests mirror the source layout:
-
 ```
 tests/
-├── unit/
-│   ├── data/          → tests for src/csm/data/
-│   ├── features/      → tests for src/csm/features/
-│   ├── portfolio/     → tests for src/csm/portfolio/
-│   ├── research/      → tests for src/csm/research/
-│   ├── risk/          → tests for src/csm/risk/
-│   ├── execution/     → tests for src/csm/execution/
-│   └── scripts/       → tests for scripts/
-├── integration/
-│   ├── test_api_auth.py
-│   ├── test_public_data_boundary_*.py
+├── unit/                          # Mirrors src/csm/ layout
+│   ├── data/                      #   tests for src/csm/data/
+│   ├── features/                  #   tests for src/csm/features/
+│   ├── portfolio/                 #   tests for src/csm/portfolio/
+│   ├── research/                  #   tests for src/csm/research/
+│   ├── risk/                      #   tests for src/csm/risk/
+│   └── scripts/                   #   tests for scripts/_export_models.py
+├── integration/                   # Boundary-crossing tests
+│   ├── test_public_data_boundary_files.py
+│   ├── test_public_data_boundary_api.py
 │   └── ...
-└── conftest.py        → shared fixtures
+└── api/                           # API-level tests
+    ├── middleware/
+    │   └── test_auth.py           # X-API-Key auth tests
+    └── routers/
+        └── ...
 ```
 
-- `tests/unit/` — tests a single module in isolation. No network, no filesystem outside temp dirs.
-- `tests/integration/` — tests across module boundaries. May use temp directories for Parquet store.
-- Async tests use `@pytest.mark.asyncio` (or auto-detected via `asyncio_mode = "auto"` in `pyproject.toml`).
-
----
-
-## Local dev tips
-
-### Running a single test
-```bash
-uv run pytest tests/unit/data/test_loader.py::test_fetch_single_symbol -v
-```
-
-### Debugging the API
-```bash
-uv run uvicorn api.main:app --reload --port 8000 --log-level debug
-```
-
-### Running a notebook
-```bash
-uv run jupyter lab notebooks/01_data_exploration.ipynb
-```
-
-### Regenerating the lockfile
-After changing dependencies in `pyproject.toml`:
-```bash
-uv lock
-```
-
-### Running the quality gate on changed files only
-```bash
-uv run ruff check $(git diff --name-only main...HEAD -- '*.py')
-uv run mypy $(git diff --name-only main...HEAD -- '*.py' | grep -v tests/)
-```
-
-### Pre-commit hook (optional)
-Install a pre-commit hook to run lint and format on every commit:
-```bash
-uv run pre-commit install
-```
+- **Unit tests** test one module in isolation. Use real small DataFrames. No network calls.
+- **Integration tests** test boundaries: public-mode data audit, API response shapes, job lifecycle.
+- **API tests** test middleware and router behaviour via `httpx.AsyncClient` or `TestClient`.
+- `pytest_asyncio_mode = "auto"` is configured in `pyproject.toml` — async test functions are detected automatically.
 
 ---
 
 ## Testing security paths
 
-The API-key auth and public-mode enforcement are tested in two locations:
+The `api/security.py` middleware is tested in `tests/api/middleware/test_auth.py` (or equivalent). Key patterns:
 
-- `tests/integration/test_api_auth.py` — end-to-end auth tests using FastAPI `TestClient`
-- `tests/unit/test_api_security.py` — unit tests for `is_protected_path()` and `APIKeyMiddleware`
-
-### Writing a private-mode auth test
-
-Use `monkeypatch.setenv` to set `CSM_API_KEY`, then assert 401 for missing/wrong keys and 200 for correct keys:
+### Testing private-mode auth
 
 ```python
-def test_protected_endpoint_requires_key(client):
-    resp = client.post("/api/v1/data/refresh")
-    assert resp.status_code == 401
-    assert "Missing X-API-Key" in resp.json()["detail"]
+import pytest
+from fastapi.testclient import TestClient
 
-def test_protected_endpoint_accepts_valid_key(client, monkeypatch):
-    monkeypatch.setenv("CSM_API_KEY", "test-key")
-    resp = client.post("/api/v1/data/refresh", headers={"X-API-Key": "test-key"})
-    assert resp.status_code == 200
+def test_missing_api_key_returns_401(monkeypatch):
+    monkeypatch.setenv("CSM_API_KEY", "test-secret-key")
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    # Reload settings or use app with patched sys.modules
+    response = client.post("/api/v1/data/refresh")
+    assert response.status_code == 401
+    assert "Missing X-API-Key header" in response.json()["detail"]
+
+def test_invalid_api_key_returns_401(monkeypatch):
+    monkeypatch.setenv("CSM_API_KEY", "test-secret-key")
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    response = client.post(
+        "/api/v1/data/refresh",
+        headers={"X-API-Key": "wrong-key"}
+    )
+    assert response.status_code == 401
+    assert "Invalid X-API-Key header" in response.json()["detail"]
 ```
 
-### Writing a public-mode 403 test
-
-Set `CSM_PUBLIC_MODE=true`, then assert that write endpoints return 403 with the canonical "Disabled in public mode" body:
+### Testing public-mode 403
 
 ```python
-def test_write_blocked_in_public_mode(client, monkeypatch):
-    monkeypatch.setenv("CSM_PUBLIC_MODE", "true")
-    resp = client.post("/api/v1/data/refresh")
-    assert resp.status_code == 403
-    assert resp.json()["detail"] == "Disabled in public mode"
+def test_write_endpoint_blocked_in_public_mode():
+    # CSM_PUBLIC_MODE=true is the default in the Docker image
+    response = client.post("/api/v1/data/refresh")
+    assert response.status_code == 403
+    body = response.json()
+    assert body["type"] == "tag:csm-set,2026:problem/public-mode-disabled"
+    assert "request_id" in body
 ```
 
-The `TestClient` fixtures in `tests/conftest.py` provide a pre-configured FastAPI app. See [Public Mode Guide](../guides/public-mode.md) § Configuring API Key for the full operational security documentation.
+### Testing with the sys.modules patch pattern
+
+The `APIKeyMiddleware` reads settings from `sys.modules['csm.config.settings'].settings` rather than from the import-time binding. This allows test fixtures to patch the settings without touching environment variables:
+
+```python
+import sys
+from csm.config.settings import Settings
+
+def test_with_patched_settings(monkeypatch):
+    custom = Settings(api_key="test", public_mode=False)
+    monkeypatch.setitem(sys.modules, "csm.config.settings", type(sys.modules["csm.config.settings"]))
+    # ... set up client and make requests
+```
 
 ---
 
-## Cross-references
+## Local dev tips
 
-- [Architecture Overview](../architecture/overview.md) — monorepo layers, data flow, security model
-- [Getting Started](../getting-started/overview.md) — Docker + uv quickstart
-- [Module Reference](../reference/) — per-subpackage API surface
-- [.claude/knowledge/project-skill.md](../../.claude/knowledge/project-skill.md) — full project rules
-- [.claude/playbooks/feature-development.md](../../.claude/playbooks/feature-development.md) — feature development playbook
+### VS Code
+
+Recommended extensions: Python, Ruff, Mypy Type Checker. Configure:
+
+```json
+{
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.analysis.typeCheckingMode": "strict",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  }
+}
+```
+
+### Debugging the API
+
+```bash
+uv run uvicorn api.main:app --reload --port 8000 --log-level debug
+```
+
+Set `CSM_LOG_LEVEL=DEBUG` in `.env` for verbose structured logging including request IDs.
+
+### Running a single test
+
+```bash
+uv run pytest tests/unit/research/test_ranking.py::test_rank_all -v
+```
+
+### Running a single notebook
+
+```bash
+uv run jupyter notebook notebooks/02_signal_research.ipynb
+```
+
+### Before pushing
+
+Run the full quality gate. The same commands will execute in CI — if it passes locally, it will pass in CI.

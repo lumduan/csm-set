@@ -1,106 +1,87 @@
-# Research Layer — Module Reference
+# Research Module Reference
 
-The `csm.research` subpackage handles cross-sectional ranking, information coefficient (IC) analysis, walk-forward backtesting, and the backtest engine that ties the full signal-to-portfolio pipeline together.
+Reference for `src/csm/research/` — the ranking, information coefficient (IC) analysis, and walk-forward backtesting layer. This subpackage converts feature panels into ranked signals, evaluates their predictive power, and simulates portfolio performance over historical data.
 
 ## Module index
 
 | Module | Purpose |
 |--------|---------|
-| `src/csm/research/ranking.py` | Cross-sectional ranking and quintile assignment; `CrossSectionalRanker` |
-| `src/csm/research/ic_analysis.py` | Information coefficient computation (Spearman rank IC, Pearson IC); `ICAnalyzer`, `ICResult` |
-| `src/csm/research/backtest.py` | Walk-forward backtest engine; `MomentumBacktest`, `BacktestConfig`, `BacktestResult` |
-| `src/csm/research/walk_forward.py` | Walk-forward cross-validation for parameter selection |
-| `src/csm/research/exceptions.py` | Research-layer exceptions: `ResearchError`, `BacktestError` |
+| `src/csm/research/ranking.py` | Cross-sectional percentile ranking and quintile assignment within each rebalance date |
+| `src/csm/research/ic_analysis.py` | Information coefficient (IC) computation — Pearson IC, rank (Spearman) IC, ICIR, decay curves |
+| `src/csm/research/backtest.py` | Walk-forward momentum backtest engine — position sizing, turnover, sector caps, regime overlay |
+| `src/csm/research/walk_forward.py` | Walk-forward fold construction and cross-validation utilities |
+| `src/csm/research/exceptions.py` | Research-layer exception classes |
 
 ## Public callables
 
-### `class CrossSectionalRanker`
+### `CrossSectionalRanker`
 
 - **Defined in:** `src/csm/research/ranking.py`
-- **Purpose:** Ranks stocks within each rebalance date by a signal column. Assigns z-scores, percentiles, and quintiles.
-- **Key methods:**
-  - `rank(self, panel_df: pd.DataFrame, signal_col: str) -> pd.DataFrame` — returns the panel with added `z_score`, `rank_pct`, and `quintile` columns for the given signal.
-  - `rank_all(self, panel_df: pd.DataFrame) -> pd.DataFrame` — ranks on all momentum columns (`mom_12_1`, `mom_6_1`, `mom_3_1`) simultaneously, adding `_z_score`, `_rank_pct`, `_quintile` suffixed columns for each.
+- **Purpose:** Ranks symbols cross-sectionally within each rebalance date. Computes percentile ranks and quintile labels for momentum signals.
 - **Behaviour:**
-  - Z-score: within each date group, `(signal - mean) / std`.
-  - Rank percentile: within each date group, `rank / (n - 1)`.
-  - Quintile: 1 (weakest) to 5 (strongest), equal-sized groups.
-  - Handles empty panels and single-stock dates gracefully (returns `NaN` z-scores).
-  - The panel must have a `date` column; groupby is on `date`.
+  - `rank(panel_df, signal_col)` → `pd.DataFrame` — for one signal column, appends `{signal_col}_rank` (float64, percentile) and `{signal_col}_quintile` (Int8, 1–5) columns. NaN-signal symbols are excluded from ranking on that date
+  - `rank_all(panel_df)` → `pd.DataFrame` — applies `rank()` to every numeric feature column, skipping forward-return columns (`fwd_ret_*`) and existing rank/quintile columns; operates on a single shared copy
+  - Quintile assignment uses `pd.qcut` with a fallback to sparse labels for very small or highly tied cross-sections
+  - Input must have a `MultiIndex(date, symbol)`; raises `ValueError` otherwise
 - **Example:**
   ```python
-  from csm.research import CrossSectionalRanker
+  from csm.research.ranking import CrossSectionalRanker
 
   ranker = CrossSectionalRanker()
-  ranked = ranker.rank(panel, signal_col="mom_12_1")
-  # ranked columns: ..., z_score, rank_pct, quintile
-  full = ranker.rank_all(panel)
-  # full columns: ..., mom_12_1_z_score, mom_12_1_rank_pct, mom_12_1_quintile, ...
+  ranked = ranker.rank_all(panel_df)
+  # panel_df columns: [mom_12_1, mom_6_1, ...]
+  # ranked columns: [..., mom_12_1_rank, mom_12_1_quintile, ...]
   ```
 
-### `class ICAnalyzer`
+### `ICAnalyzer`
 
 - **Defined in:** `src/csm/research/ic_analysis.py`
-- **Purpose:** Computes information coefficients between signal values at time t and forward returns. Measures signal predictive power.
-- **Key types:**
-  - `ICResult` — data class containing Spearman rank IC, Pearson IC, t-statistic, and p-value for each period.
+- **Purpose:** Computes information coefficient (IC) statistics — the cross-sectional correlation between signal values at time *t* and forward returns over a holding period. A positive, statistically significant IC indicates predictive power.
 - **Behaviour:**
-  - Rank IC = Spearman correlation between signal z-score at t and forward return at t+h.
-  - Pearson IC = Pearson correlation (more sensitive to outliers, included for comparison).
-  - Computed cross-sectionally at each date, then averaged across dates.
-  - t-statistic tests whether the mean IC is significantly different from zero.
+  - `compute_ic(panel_df, signal_col, fwd_return_col)` → `ICResult` — Pearson IC (cross-sectional correlation) for each date; returns mean IC, IC standard deviation, t-statistic, IR, and hit rate
+  - `compute_rank_ic(panel_df, signal_col, fwd_return_col)` → `ICResult` — Spearman (rank) IC; robust to outliers, preferred for non-normal return distributions
+  - `compute_icir(ic_series)` → `float` — Information Coefficient Information Ratio (mean IC / std IC); a measure of signal consistency
+  - `compute_decay_curve(panel_df, signal_col, fwd_return_col, horizons)` → `pd.Series` — IC at multiple forward horizons, showing how predictive power decays over time
+  - `summary_table(panel_df, signal_cols, fwd_return_col)` → `pd.DataFrame` — one-row-per-signal summary of IC statistics
 - **Example:**
   ```python
-  from csm.research import ICAnalyzer
+  from csm.research.ic_analysis import ICAnalyzer
 
   analyzer = ICAnalyzer()
-  ic = analyzer.compute(panel, signal_col="mom_12_1_z_score", forward_col="fwd_1m")
+  result = analyzer.compute_rank_ic(panel_df, "mom_12_1", "fwd_ret_21d")
+  # result.mean_ic, result.ic_std, result.t_stat, result.ir, result.hit_rate
+  decay = analyzer.compute_decay_curve(panel_df, "mom_12_1", "fwd_ret_21d", [5, 10, 21, 63])
   ```
 
-### `class MomentumBacktest`
+### `MomentumBacktest(config: BacktestConfig)`
 
 - **Defined in:** `src/csm/research/backtest.py`
-- **Purpose:** The central backtest engine. Runs a walk-forward simulation: at each rebalance date, re-selects stocks, recomputes weights, simulates execution, and tracks performance.
-- **Constructor:** `__init__(self, store: ParquetStore, config: BacktestConfig, universe_builder: UniverseBuilder) -> None`
-- **Key method:**
-  - `run(self, start: pd.Timestamp, end: pd.Timestamp) -> BacktestResult` — runs the full backtest and returns a `BacktestResult` with equity curve, monthly reports, and summary metrics.
+- **Purpose:** Walk-forward momentum backtest engine. Runs a full historical simulation with configurable position sizing, turnover buffer, sector capping, regime overlay, liquidity filters, and transaction costs.
 - **Behaviour:**
-  - Expanding window: initial training uses first 36 months; each subsequent step adds one month.
-  - At each step: rebuild universe → recompute signals → rank → select → optimise weights → simulate execution → record performance.
-  - Internal methods handle ADV filter, sector caps, vol scaling, regime-based position scaling, and fast re-entry/exit logic.
-  - Returns `BacktestResult` which can be serialised via `.metrics_dict()`, `.equity_curve_dict()`, `.annual_returns_dict()`.
+  - `run(panel_df, prices, volume_matrix, sector_map, index_prices)` → `BacktestResult` — executes the full backtest; returns period-by-period reports, equity curve, annual returns, and summary metrics
+  - Internally applies: ADTV filter → top-N selection with buffer logic → sector cap enforcement → volatility scaling → drawdown circuit breaker check → rebalance execution
+  - `BacktestResult` includes `.metrics_dict()`, `.equity_curve_dict()`, `.annual_returns_dict()` for JSON export
+  - Configurable via `BacktestConfig`: start date, end date, top N, buffer N, max sector weight, transaction cost (bps), vol target, drawdown threshold, ADTV constraint, fast exit/re-entry rules
 - **Example:**
   ```python
-  from csm.research import MomentumBacktest, BacktestConfig
+  from csm.research.backtest import MomentumBacktest, BacktestConfig
 
   config = BacktestConfig(
-      n_holdings=25,
-      lookback_window="12-1M",
-      weight_scheme="equal_weight",
+      start_date=pd.Timestamp("2015-01-01"),
+      end_date=pd.Timestamp("2024-12-31"),
+      top_n=20,
+      buffer_n=5,
+      max_sector_weight=0.40,
+      transaction_cost_bps=25,
   )
-  backtest = MomentumBacktest(store, config, universe_builder)
-  result = backtest.run(
-      start=pd.Timestamp("2018-01-01"),
-      end=pd.Timestamp("2025-12-31"),
-  )
-  print(result.metrics_dict())
+  bt = MomentumBacktest(config)
+  result = bt.run(panel_df, prices, volume_matrix, sector_map, index_prices)
+  summary = result.metrics_dict()  # CAGR, Sharpe, Sortino, max DD, win rate, ...
   ```
-
-### `class BacktestConfig(BaseModel)`
-
-- **Defined in:** `src/csm/research/backtest.py`
-- **Purpose:** Configuration for `MomentumBacktest`. Fields include: `n_holdings`, `lookback_window`, `weight_scheme`, `sector_cap`, `max_position_weight`, `turnover_limit`, `transaction_cost_bps`, `use_regime_filter`, `use_circuit_breaker`.
-
-### `class BacktestResult(BaseModel)`
-
-- **Defined in:** `src/csm/research/backtest.py`
-- **Purpose:** Output of `MomentumBacktest.run()`. Contains `equity_curve`, `monthly_reports`, `annual_returns`, and summary fields (CAGR, Sharpe, Sortino, max DD, win rate, turnover). Serialisable via `.metrics_dict()`, `.equity_curve_dict()`, `.annual_returns_dict()`.
 
 ## Cross-references
 
-- Used by: `scripts/export_results.py` (runs backtest and exports results to `results/static/`)
-- Tested in: `tests/unit/research/test_backtest.py`, `tests/unit/research/test_ranking.py`
-- Concepts: [Momentum Concept](../../concepts/momentum.md) § Backtest methodology
-- Related: [Features Module Reference](../features/overview.md) — signals consumed by the ranker
-- Related: [Portfolio Module Reference](../portfolio/overview.md) — weight optimisation used by the backtest
-- Related: [Risk Module Reference](../risk/overview.md) — performance metrics computed from backtest results
+- Used by: `api/routers/backtest.py`, `api/routers/signals.py`, `scripts/export_results.py`
+- Tested in: `tests/unit/research/`
+- Concept: `docs/concepts/momentum.md`
+- Architecture: `docs/architecture/overview.md` § Runtime data flow

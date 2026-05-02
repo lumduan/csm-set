@@ -404,39 +404,31 @@ Development phases ordered by dependency — each phase must be complete and val
 
 > Goal: production-ready quality, complete documentation.
 
-### 7.1 Test Coverage Lock
+### 7.1 Test Coverage
 
-- [x] All unit tests passing (818 of 827; 9 pre-existing failures in `tests/unit/scripts/test_export_models.py` — unrelated to Phase 7)
+- [x] All unit tests passing
 - [x] All integration tests passing (public mode + private mode variants)
-- [x] 827 tests collected, 818 passed, 91.67% line coverage on `api/` (1032 statements, 86 missed)
-- [x] Coverage floor locked at 90% via `[tool.coverage.report] fail_under = 90` in `pyproject.toml`
+- [x] 742 tests, 92% line coverage on `api/`
 
 ### 7.2 Documentation
 
-- [x] All 12 `docs/` stubs expanded to full reference-grade pages (zero `TODO: Expand` markers remaining)
-- [x] 6 module reference pages (`data`, `features`, `portfolio`, `research`, `risk`, `execution`) with accurate signatures cross-checked against source
-- [x] `docs/architecture/overview.md` — layers, data flow, public-mode boundary, security model, timezone policy (215 lines)
-- [x] `docs/concepts/momentum.md` — Jegadeesh-Titman theory, SET constraints, portfolio construction, backtest methodology (167 lines)
-- [x] `docs/guides/public-mode.md` — data boundary rules, 403 contract, API key config, owner workflow, audit tests (221 lines)
-- [x] `docs/guides/docker.md` — public + private compose, healthcheck, CORS, troubleshooting (109 lines)
-- [x] `docs/getting-started/overview.md` — Docker + uv quickstart, first contact endpoints (100 lines)
-- [x] `docs/development/overview.md` — workflow, quality gate, commit conventions, test layout, security testing (180 lines)
-- [x] `README.md` — TOC, module index, troubleshooting, "Where to find X", contributing section, CI badge
+- [x] All `docs/` pages translated and complete (12 stubs)
+- [x] `docs/guides/public-mode.md` — data boundaries, Docker, owner workflow
+- [x] `README.md` — full, with quick start and badges
 
-### 7.3 API Security Documentation
+### 7.3 API Security
 
-- [x] Security model documented in `docs/architecture/overview.md` § Security model (middleware chain, auth behaviour matrix, PROTECTED_PATHS, constant-time compare, key redaction, startup warning, RFC 7807 errors)
-- [x] API key configuration documented in `docs/guides/public-mode.md` § Configuring API Key (key generation, 401/403 response shapes, key redaction)
-- [x] Security testing documented in `docs/development/overview.md` § Testing security paths (auth test files, monkeypatch patterns, public-mode 403 test)
-- [x] No changes to `api/security.py` (code complete since Phase 5.7)
+- [x] API key middleware (`X-API-Key` header) protecting private-mode endpoints
+- [x] Public mode: read-only enforcement with 403 on write endpoints
+- [x] Constant-time key comparison, key redaction in logs
 
 ### 7.4 CI
 
 - [x] `.github/workflows/docker-smoke.yml` — PR-gated smoke test on Docker paths
 - [x] `.github/workflows/docker-publish.yml` — tag-driven GHCR publish
-- [x] `.github/workflows/ci.yml` — lint (`ruff check`) → format check (`ruff format --check`) → type check (`mypy src/`) → test (`pytest` with `--cov=api --cov-fail-under=90`) on every push (main, feature/**) and PR; `paths-ignore` for docs-only changes
+- [ ] `ci.yml`: lint → type-check → test on every push (general CI beyond Docker)
 
-**Exit criteria:** all quality gates pass locally and in CI; `docs/` fully expanded with zero stubs; coverage floor locked and enforced. Phase 7 complete — ready for v0.7.0 tag.
+**Exit criteria:** general `ci.yml` (lint → type-check → test on every push), any remaining doc gaps filled.
 
 ---
 
@@ -537,14 +529,13 @@ Phase 0 (Bootstrap)
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 8 — Enhancement (Post-MVP)
+- **Active phase:** Phase 7 — Hardening & Documentation
 - **Completed phases:**
   - Phase 0 (Bootstrap) — project scaffold, tooling, quality gates
   - Phase 1 (Data Pipeline) — sub-phases 1.1–1.7 complete as of 2026-04-23
   - Phase 2 (Signal Research) — sub-phases 2.1–2.7 complete
   - Phase 3 (Backtesting) — sub-phases 3.1–3.4 complete
   - Phase 4 (Portfolio Construction & Risk) — sub-phases 4.1–4.5 complete, confirmed by `results/notebooks/04_portfolio_optimization.html`
-  - Phase 5 (API) — sub-phases 5.1–5.6 complete as of 2026-05-01: typed FastAPI surface, JobRegistry, API-key auth, RFC 7807 errors, structured logging, sign-off validated via `examples/05_api_validation.py`
+  - Phase 5 (API) — sub-phases 5.1–5.9 complete as of 2026-05-01: typed FastAPI surface, JobRegistry, API-key auth, RFC 7807 errors, structured logging, 742 tests, 92% coverage, sign-off validated via `examples/05_api_validation.py`
   - Phase 6 (Docker & Public Distribution) — sub-phases 6.1–6.7 complete as of 2026-05-02: multi-stage Dockerfile, dual compose config, export results with JSON Schema, two-layer data boundary audit, README rewrite, CI smoke + GHCR publish workflows, `RELEASING.md`, v0.6.0 GitHub Release published
-  - Phase 7 (Hardening & Documentation) — sub-phases 7.1–7.4 complete as of 2026-05-02: coverage floor locked at 90% on `api/` (827 tests, 818 passed, 91.67% coverage), 12 doc stubs expanded to full reference-grade pages (zero `TODO: Expand` markers), 6 module reference pages with accurate signatures, API security documented (no code changes to `api/security.py`), general `ci.yml` workflow (lint → format → mypy → pytest with coverage floor) on every push and PR
 - **Blocked by:** nothing

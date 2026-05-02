@@ -4,10 +4,10 @@ on:
   push:
     branches: [main, feature/**]
   pull_request:
-  paths-ignore:
-    - 'docs/**'
-    - '**/*.md'
-    - LICENSE
+    paths-ignore:
+      - docs/**
+      - '*.md'
+      - LICENSE
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,14 +26,18 @@ jobs:
         with:
           version: latest
           enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --all-groups --frozen
 
-      - name: Lint (ruff)
+      - name: Lint (ruff check)
         run: uv run ruff check .
 
-      - name: Format check (ruff)
+      - name: Format check (ruff format)
         run: uv run ruff format --check .
 
       - name: Type check (mypy)
@@ -46,6 +50,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage
           path: coverage.xml
           retention-days: 7

@@ -1,119 +1,106 @@
-# Data Layer — Module Reference
+# Data Module Reference
 
-The `csm.data` subpackage handles OHLCV data ingestion (tvkit + parquet), cleaning, universe construction, and symbol filtering. All I/O is async at the loader boundary; downstream modules operate on in-memory DataFrames.
+Reference for `src/csm/data/` — the data ingestion, storage, cleaning, and universe construction layer. This subpackage handles all raw-data operations: fetching OHLCV from TradingView via tvkit, persisting DataFrames as Parquet files, filtering symbols by security type, building investable-universe snapshots, and cleaning prices for downstream signal computation.
 
 ## Module index
 
 | Module | Purpose |
 |--------|---------|
-| `src/csm/data/loader.py` | Fetch OHLCV data via tvkit; `OHLCVLoader`, `Adjustment` enum |
-| `src/csm/data/store.py` | Parquet-based persistence layer; `ParquetStore` |
-| `src/csm/data/universe.py` | Monthly universe snapshots with liquidity/listing filters; `UniverseBuilder` |
-| `src/csm/data/cleaner.py` | Price cleaning (forward-fill, coverage, winsorisation); `PriceCleaner` |
-| `src/csm/data/symbol_filter.py` | Symbol-level filtering by security type; `filter_symbols`, `SecurityType` |
-| `src/csm/data/exceptions.py` | Data-layer exceptions: `DataError`, `FetchError`, `StoreError`, `UniverseError`, `DataAccessError` |
+| `src/csm/data/loader.py` | Async OHLCV fetcher backed by tvkit; public-mode guard; retry with backoff |
+| `src/csm/data/store.py` | Parquet-backed key-value store for DataFrame artefacts; synchronous I/O (explicit architectural exception) |
+| `src/csm/data/universe.py` | Universe builder — applies price/volume/coverage filters; persists dated snapshots |
+| `src/csm/data/cleaner.py` | Per-symbol OHLCV cleaner — forward-fill gaps, drop low-coverage symbols, winsorise returns |
+| `src/csm/data/symbol_filter.py` | TradingView symbol type filtering (stock vs. index vs. futures etc.) |
+| `src/csm/data/exceptions.py` | Data-layer exception classes (`DataAccessError`, `FetchError`, `StoreError`) |
 
 ## Public callables
 
-### `class OHLCVLoader`
+### `OHLCVLoader(settings: Settings)`
 
 - **Defined in:** `src/csm/data/loader.py`
-- **Purpose:** Fetches OHLCV data from TradingView via tvkit. Accepts a `Settings` instance for configuration.
-- **Constructor:** `__init__(self, settings: Settings) -> None`
-- **Key methods:**
-  - `async fetch(self, symbol: str, interval: str = "1D", bars: int = 800, adjustment: Adjustment = Adjustment.DIVIDENDS) -> pd.DataFrame` — fetches OHLCV for a single symbol.
-  - `async fetch_batch(self, symbols: list[str], interval: str = "1D", bars: int = 800, adjustment: Adjustment = Adjustment.DIVIDENDS) -> dict[str, pd.DataFrame]` — fetches OHLCV for multiple symbols concurrently with semaphore-limited concurrency.
+- **Purpose:** Async OHLCV fetcher using tvkit. Wraps a `asyncio.Semaphore` for concurrency control.
 - **Behaviour:**
-  - Returns a DataFrame with columns `open, high, low, close, volume, adj_close`, indexed by `pd.Timestamp` in UTC.
-  - Retries transient network failures per `Settings.tvkit_retry_attempts`.
-  - `Adjustment.DIVIDENDS` applies total-return backward adjustment (recommended for backtesting).
-  - `Adjustment.SPLITS` applies split-only adjustment (legacy pre-tvkit 0.11.0 behaviour).
+  - `fetch(symbol, interval, bars, adjustment)` — fetches a single symbol; retries on transient errors; returns `pd.DataFrame` with columns `["open", "high", "low", "close", "volume"]` and `DatetimeIndex` (tz=`Asia/Bangkok`)
+  - `fetch_batch(symbols, interval, bars, adjustment)` — fetches multiple symbols concurrently, bounded by `settings.tvkit_concurrency`; per-symbol failures are logged and the symbol is omitted from the result
+  - Raises `DataAccessError` immediately if `settings.public_mode` is True (no network call)
+  - Raises `FetchError` if all retry attempts fail or a non-transient error occurs
 - **Example:**
   ```python
   from csm.config.settings import settings
   from csm.data.loader import OHLCVLoader
 
   loader = OHLCVLoader(settings)
-  df = await loader.fetch("PTT", interval="1D", bars=500)
+  df = await loader.fetch("SET:AOT", interval="1D", bars=500)
+  results = await loader.fetch_batch(["SET:AOT", "SET:ADVANC"], "1D", 500)
   ```
-- **Tested in:** `tests/unit/data/test_loader.py`
 
-### `class ParquetStore`
+### `ParquetStore(base_dir: Path)`
 
 - **Defined in:** `src/csm/data/store.py`
-- **Purpose:** Key-value store backed by Parquet files on disk. Keys are validated and mapped to filenames under a base directory.
-- **Constructor:** `__init__(self, base_dir: Path) -> None`
-- **Key methods:**
-  - `save(self, key: str, df: pd.DataFrame) -> None` — writes a DataFrame to `{base_dir}/{key}.parquet` with snappy compression.
-  - `load(self, key: str) -> pd.DataFrame` — reads a DataFrame from `{base_dir}/{key}.parquet`. Raises `StoreError` if the key is not found.
-  - `exists(self, key: str) -> bool` — returns True if the key exists on disk.
-  - `list_keys(self) -> list[str]` — returns all stored keys.
-  - `delete(self, key: str) -> None` — removes the key from disk.
-- **Behaviour:** Keys are validated (alphanumeric + underscores/hyphens only). Filenames are derived from keys with a `.parquet` suffix.
+- **Purpose:** Parquet-backed key-value persistence for DataFrames. Callers use logical string keys (e.g., `"SET:AOT"`, `"universe/2024-01-31"`); the store handles percent-encoding of special characters and path construction.
+- **Behaviour:**
+  - `save(key, df)` — persist a DataFrame under a logical key; overwrites existing files; creates parent directories automatically
+  - `load(key)` — load and return a DataFrame; raises `KeyError` if not found
+  - `exists(key)` — return `True` if the dataset file exists
+  - `list_keys()` — return sorted list of all stored keys
+  - `delete(key)` — remove the stored file; raises `KeyError` if not found
+  - Synchronous I/O — this is a documented architectural exception to the project's async-first rule (pyarrow I/O is CPU-bound local file I/O, not network I/O)
 - **Example:**
   ```python
   from pathlib import Path
   from csm.data.store import ParquetStore
 
   store = ParquetStore(Path("./data/processed"))
-  store.save("PTT_1D", df)
-  df = store.load("PTT_1D")
+  store.save("SET:AOT", df)
+  loaded = store.load("SET:AOT")
+  all_keys = store.list_keys()  # ["SET:ADVANC", "SET:AOT", "universe/2024-01-31", ...]
   ```
 
-### `class UniverseBuilder`
+### `UniverseBuilder(store: ParquetStore, settings: Settings)`
 
 - **Defined in:** `src/csm/data/universe.py`
-- **Purpose:** Constructs monthly universe snapshots for the strategy. Applies listing age, liquidity, and security-type filters.
-- **Constructor:** `__init__(self, store: ParquetStore, settings: Settings) -> None`
-- **Key methods:**
-  - `filter(self, symbol: str, asof: pd.Timestamp) -> bool` — returns True if the symbol passes all universe criteria at the given date.
-  - `build_snapshot(self, asof: pd.Timestamp, symbols: list[str]) -> list[str]` — returns the list of symbols that pass filters at the given date.
-  - `build_all_snapshots(self, start: pd.Timestamp, end: pd.Timestamp, symbols: list[str], freq: str = "ME") -> dict[pd.Timestamp, list[str]]` — returns a dict mapping each month-end to the qualifying symbols.
+- **Purpose:** Builds dated universe snapshots by applying sequential filters (price, volume, coverage) to OHLCV data. Produces one snapshot per rebalance date saved under key `universe/{YYYY-MM-DD}`.
 - **Behaviour:**
-  - Requires >= 12 months of price history before a stock enters the universe (listing age gate).
-  - Applies ADV threshold (>= 100M THB 20-day average daily value).
-  - Excludes non-common-stock security types (warrants, preferred shares, ETFs) via `filter_symbols`.
+  - `filter(symbol, asof)` — returns `True` if the symbol passes price ≥ 1 THB, trailing 90-day avg volume ≥ 100M THB, and data coverage ≥ 80% filters as of the given date (no look-ahead)
+  - `build_snapshot(asof, symbols)` — returns sorted list of passing symbols for one date
+  - `build_all_snapshots(symbols, rebalance_dates, snapshot_store)` — builds and persists one snapshot per rebalance date
 - **Example:**
   ```python
   builder = UniverseBuilder(store, settings)
-  symbols = builder.build_snapshot(pd.Timestamp("2025-01-31", tz="Asia/Bangkok"), all_symbols)
+  passing = builder.build_snapshot(pd.Timestamp("2024-01-31"), ["SET:AOT", "SET:ADVANC"])
+  builder.build_all_snapshots(symbols, rebalance_dates)
   ```
 
-### `class PriceCleaner`
+### `PriceCleaner`
 
 - **Defined in:** `src/csm/data/cleaner.py`
-- **Purpose:** Applies cleaning transformations to raw OHLCV DataFrames.
-- **Key methods:**
-  - `forward_fill_gaps(self, df: pd.DataFrame) -> pd.DataFrame` — forward-fills missing trading days (non-trading days, holidays).
-  - `drop_low_coverage(self, df: pd.DataFrame, threshold: float = 0.66) -> pd.DataFrame | None` — drops symbols with fewer than `threshold` fraction of non-null observations. Returns None if the symbol should be excluded entirely.
-  - `winsorise_returns(self, df: pd.DataFrame, sigma: float = 5.0) -> pd.DataFrame` — clips daily returns to ±`sigma` standard deviations.
-  - `clean(self, df: pd.DataFrame) -> pd.DataFrame | None` — runs the full cleaning pipeline (gap fill → coverage check → winsorise). Returns None if the symbol fails coverage.
+- **Purpose:** Stateless per-symbol OHLCV cleaner. All methods are pure transforms.
+- **Behaviour:**
+  - `forward_fill_gaps(df, max_gap_days=5)` — forward-fills NaN values for gaps of ≤ `max_gap_days` consecutive rows
+  - `drop_low_coverage(df, min_coverage=0.80, window_years=1)` — returns `None` if any rolling window has insufficient close coverage; returns the DataFrame unchanged otherwise
+  - `winsorise_returns(df, lower=0.01, upper=0.99)` — clips extreme daily close returns at the given percentile bounds and back-computes the close series
+  - `clean(df)` — applies the full pipeline: `forward_fill_gaps` → `drop_low_coverage` → `winsorise_returns`; returns `None` if the symbol is dropped
 - **Example:**
   ```python
+  from csm.data.cleaner import PriceCleaner
+
   cleaner = PriceCleaner()
-  cleaned = cleaner.clean(raw_df)
-  if cleaned is not None:
-      store.save(f"{symbol}_1D", cleaned)
+  cleaned = cleaner.clean(raw_df)  # pd.DataFrame or None if dropped
   ```
 
-### `filter_symbols(symbols: list[dict], security_types: frozenset[SecurityType]) -> list[dict]`
+### `filter_symbols(codes: list[str], ...) -> list[str]`
 
 - **Defined in:** `src/csm/data/symbol_filter.py`
-- **Purpose:** Filters a list of symbol metadata dicts to only those matching the given security types.
-- **Behaviour:** Uses `settfex` to identify security types. Filters out warrants, preferred shares, ETFs, and other non-common-stock instruments.
+- **Purpose:** Filter a list of TradingView symbol codes by security type.
 - **Example:**
   ```python
   from csm.data.symbol_filter import filter_symbols, SecurityType
-  common = filter_symbols(symbol_metadata, frozenset({SecurityType.COMMON}))
+
+  stocks = filter_symbols(all_tv_symbols, keep_types={SecurityType.STOCK})
   ```
-
-### `class SecurityType(StrEnum)`
-
-- **Defined in:** `src/csm/data/symbol_filter.py`
-- **Purpose:** Enum of SET security types: `COMMON`, `PREFERRED`, `WARRANT`, `ETF`, `DR`, `UNKNOWN`.
 
 ## Cross-references
 
-- Used by: `src/csm/features/pipeline.py` (builds panel from cleaned price data), `scripts/fetch_history.py` (batch-loads OHLCV)
-- Tested in: `tests/unit/data/test_loader.py`, `tests/unit/data/test_store.py`, `tests/unit/data/test_cleaner.py`, `tests/unit/data/test_symbol_filter.py`
-- Concept: [Architecture Overview](../../architecture/overview.md) § Runtime data flow
+- Used by: `api/routers/universe.py`, `scripts/fetch_history.py`, `scripts/build_universe.py`, `src/csm/features/pipeline.py`
+- Tested in: `tests/unit/data/`, `tests/integration/`
+- Concept: `docs/architecture/overview.md` § Runtime data flow
