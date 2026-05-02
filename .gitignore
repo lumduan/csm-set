@@ -39,7 +39,7 @@ htmlcov/
 Thumbs.db
 
 # uv
-uv.lock
+# uv.lock is COMMITTED — required for reproducible Docker builds (uv sync --frozen)
 
 
 # ---------------------------------------------------------------------------
