@@ -5,6 +5,7 @@
 [![uv](https://img.shields.io/badge/managed%20by-uv-purple)](https://docs.astral.sh/uv/)
 [![Type Safety](https://img.shields.io/badge/type%20safety-mypy%20strict-green)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](Dockerfile)
+[![CI](https://github.com/lumduan/csm-set/actions/workflows/ci.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/ci.yml)
 [![CI Smoke](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml)
 [![GHCR](https://github.com/lumduan/csm-set/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/lumduan/csm-set/pkgs/container/csm-set)
 
@@ -29,6 +30,28 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 
 ---
 
+## Table of Contents
+
+- [What this project does](#what-this-project-does)
+- [Quick Start (Public)](#quick-start-public)
+- [Architecture (Headless)](#architecture-headless)
+- [What you will see](#what-you-will-see)
+- [What requires credentials (owner only)](#what-requires-credentials-owner-only)
+- [Build your own frontend](#build-your-own-frontend)
+- [Owner workflow](#owner-workflow)
+- [Stack](#stack)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Module index](#module-index)
+- [Where to find X](#where-to-find-x)
+- [Project structure](#project-structure)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [References](#references)
+- [License](#license)
+
+---
+
 ## Development Status
 
 | Phase | Description | Status |
@@ -46,7 +69,31 @@ See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 
 ---
 
+## Module index
+
+| Path | Purpose |
+|------|---------|
+| `src/csm/config/` | Settings (pydantic-settings), strategy constants |
+| `src/csm/data/` | tvkit loader, parquet store, universe builder, cleaning |
+| `src/csm/execution/` | Trade simulation, slippage models, trade list generation |
+| `src/csm/features/` | Momentum, risk-adjusted, sector, pipeline composer |
+| `src/csm/portfolio/` | Weight optimisation, constraints, rebalancing, circuit breakers |
+| `src/csm/research/` | Ranking, IC analysis, backtest, walk-forward |
+| `src/csm/risk/` | Performance metrics, regime detection, drawdown |
+| `api/` | FastAPI app, routers, security middleware, error handling |
+| `ui/` | FastUI dashboard views (mounted on FastAPI) |
+| `scripts/` | Owner utilities (fetch, export, build universe) |
+| `tests/` | Unit + integration tests (mirrors src/ layout) |
+| `results/` | Pre-computed research artefacts (committed, frontend-agnostic) |
+| `docs/` | Architecture, reference, guides, development, plans |
+
+---
+
 ## What this project does
+
+**Cross-sectional momentum** is a quantitative strategy that ranks stocks within a universe by their past returns and buys the top-ranked names. Unlike time-series momentum (which looks at absolute performance), cross-sectional momentum compares each stock *relative to its peers* — the top quintile is "winners", the bottom quintile is "losers", and the strategy goes long the winners. The approach was first documented by Jegadeesh & Titman (1993) and has been replicated across global equity markets by Asness, Moskowitz & Pedersen (2013). For a deeper dive, see [docs/concepts/momentum.md](docs/concepts/momentum.md).
+
+This implementation targets the **Stock Exchange of Thailand (SET)** with universe constraints (>= 100M THB ADV, listed >= 12 months), sector caps, and a 200-day SMA regime filter.
 
 - Computes cross-sectional momentum signals (Jegadeesh–Titman: 12-1M, 6-1M, 3-1M)
 - Walk-forward backtest with realistic transaction costs
@@ -280,6 +327,35 @@ uv run python ui/main.py
 
 ---
 
+## Troubleshooting
+
+| Symptom | Resolution |
+|---------|------------|
+| `port 8000 already in use` | Another process is bound to port 8000. Run `lsof -i :8000` to find it, then stop it or use a different port: `docker compose -f docker-compose.yml -f docker-compose.override.yml up` with `ports: "8001:8000"`. |
+| `Cannot connect to the Docker daemon` | Docker Desktop isn't running. Start Docker Desktop and wait for the engine to be ready before retrying `docker compose up`. |
+| Private mode: tvkit `403` or `WebSocket auth failed` | Your TradingView session token is expired or missing. Re-run `tvkit auth` to refresh credentials, or verify `TVKIT_CONFIG_PATH` points to a valid profile. |
+| `data/` write permission denied | In Docker, the `data/` volume mount is owned by root. Run `chmod -R 777 data/` on the host, or use `docker compose -f docker-compose.yml -f docker-compose.private.yml up` which mounts with the correct uid. |
+| `uv sync` fails with "package not found" | Your lockfile is stale. Run `uv lock` to regenerate `uv.lock`, then retry `uv sync --all-groups`. |
+| Container exits with OOM (exit code 137) | The nbconvert step during image build hit the memory limit. Increase Docker's memory allocation (Docker Desktop → Settings → Resources → Memory → at least 4 GB) and rebuild. |
+
+## Where to find X
+
+| I want to ... | Look at |
+|---------------|---------|
+| understand the data flow | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| extend a momentum signal | [src/csm/features/momentum.py](src/csm/features/momentum.py) |
+| add a new portfolio constraint | [src/csm/portfolio/construction.py](src/csm/portfolio/construction.py) |
+| configure timezone or env vars | [src/csm/config/settings.py](src/csm/config/settings.py) + `.env.example` |
+| run the quality gate | [docs/development/overview.md](docs/development/overview.md) § Quality gate |
+| refresh public artefacts | [scripts/export_results.py](scripts/export_results.py) + [docs/guides/public-mode.md](docs/guides/public-mode.md) |
+| release a new version | [RELEASING.md](RELEASING.md) |
+| understand the API auth model | [api/security.py](api/security.py) + [docs/guides/public-mode.md](docs/guides/public-mode.md) |
+| write a new test | [docs/development/overview.md](docs/development/overview.md) § Test layout |
+| find all exported functions in a package | [docs/reference/](docs/reference/) |
+| change the momentum lookback window | [src/csm/config/constants.py](src/csm/config/constants.py) + [src/csm/features/momentum.py](src/csm/features/momentum.py) |
+
+---
+
 ## Project structure
 
 ```
@@ -315,8 +391,23 @@ csm-set/
 - [Reference: Portfolio](docs/reference/portfolio/overview.md)
 - [Reference: Research](docs/reference/research/overview.md)
 - [Reference: Risk](docs/reference/risk/overview.md)
+- [Reference: Execution](docs/reference/execution/overview.md)
 - [API Reference (OpenAPI)](http://localhost:8000/api/docs) — available when the container is running
 - [Master Roadmap](docs/plans/ROADMAP.md)
+
+---
+
+## Contributing
+
+Contributions are welcome — whether you're fixing a bug, improving docs, or adding a feature. Please read through the following before opening a PR:
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+- [Release Process](RELEASING.md)
+- [Development Guide](docs/development/overview.md) — workflow, quality gate, commit conventions
+
+The quality gate (ruff → mypy → pytest with coverage) must pass before your PR can be merged. See [docs/development/overview.md](docs/development/overview.md) for the full workflow.
 
 ---
 
