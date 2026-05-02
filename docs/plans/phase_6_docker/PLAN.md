@@ -476,12 +476,12 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
 
 ### Phase 6.7 — GHCR Image Publishing
 
-**Status:** `[ ]` Pending
+**Status:** `[x]` Complete (2026-05-02)
 **Goal:** Tag-driven release pipeline that publishes versioned, multi-tagged images to GitHub Container Registry, so public users can `docker pull` instead of `docker compose up` (build).
 
 **Deliverables:**
 
-- [ ] `.github/workflows/docker-publish.yml` (NEW):
+- [x] `.github/workflows/docker-publish.yml` (NEW):
   - **Triggers:** `push: tags: ['v*.*.*']` and `workflow_dispatch` (manual)
   - **Permissions:** `contents: read`, `packages: write`
   - **Job:** `publish` on `ubuntu-latest`, timeout 30 min
@@ -490,7 +490,7 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
     2. `docker/login-action@v3` with `registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`
     3. `docker/metadata-action@v5` to compute tags: `vX.Y.Z`, `vX.Y`, `latest` (only on highest-versioned tag), `sha-${{ github.sha }}`
     4. `docker/build-push-action@v5` with `platforms: linux/amd64`, `push: true`, `cache-from: type=gha`, `cache-to: type=gha,mode=max`
-- [ ] `RELEASING.md` (NEW or appendix in this PLAN) — owner runbook:
+- [x] `RELEASING.md` (NEW) — owner runbook:
   - `git tag -a v0.6.0 -m "Phase 6 release"` → `git push origin v0.6.0`
   - GHCR publish workflow runs automatically
   - Verify: `docker pull ghcr.io/lumduan/csm-set:v0.6.0` from a fresh machine
@@ -498,9 +498,16 @@ Browser ─▶ :8000 /api/v1/signals/latest ─▶ public_mode middleware ─▶
 
 **Acceptance Criteria:**
 
-- Pushing a `v*.*.*` tag triggers the workflow and publishes to `ghcr.io/lumduan/csm-set` with all expected tags
-- `docker pull ghcr.io/lumduan/csm-set:latest && docker run -p 8000:8000 ghcr.io/lumduan/csm-set:latest` boots cleanly on a fresh machine
-- README badge shows correct latest tag
+- Pushing a `v*.*.*` tag triggers the workflow and publishes to `ghcr.io/lumduan/csm-set` with all expected tags — *pending actual tag push to remote*
+- `docker pull ghcr.io/lumduan/csm-set:latest && docker run -p 8000:8000 ghcr.io/lumduan/csm-set:latest` boots cleanly on a fresh machine — *pending first publish*
+- README badge shows correct latest tag — `[x]` live badge URL configured
+
+**Completion Notes:**
+
+- `.github/workflows/docker-publish.yml` created with tag trigger (`v*.*.*`) + `workflow_dispatch`, `packages: write` permission, concurrency group, `docker/metadata-action@v5` (semver + sha + latest tags), `docker/build-push-action@v5` (GHA cache, `linux/amd64` only).
+- `RELEASING.md` created with step-by-step release runbook, verification commands, and troubleshooting table.
+- README: GHCR badge updated from placeholder to live badge URL; pre-built image section updated with concrete `docker pull` + `docker run` example; sub-progress marked `(6.7 ✓)`.
+- No deviations from master plan. Workflow matches specification exactly.
 
 ---
 

@@ -6,7 +6,7 @@
 [![Type Safety](https://img.shields.io/badge/type%20safety-mypy%20strict-green)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](Dockerfile)
 [![CI Smoke](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml)
-[![GHCR](https://img.shields.io/badge/GHCR-coming%20in%206.7-lightgrey)](https://github.com/lumduan/csm-set/pkgs/container/csm-set)
+[![GHCR](https://github.com/lumduan/csm-set/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/lumduan/csm-set/pkgs/container/csm-set)
 
 โครงการนี้ใช้กลยุทธ์ Cross-Sectional Momentum บนตลาดหุ้นไทย (SET)
 โดยดึงข้อมูลผ่าน [tvkit](https://github.com/lumduan/tvkit) แล้วก็คำนวณ momentum signal → rank หุ้น → backtest → แสดงผลใน dashboard
@@ -42,7 +42,7 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 | 7 | CI/CD & Hardening | `[ ]` Pending |
 | 8 | Documentation & Polish | `[ ]` Pending |
 
-**Phase 6 sub-progress:** Multi-stage Dockerfile (6.1 ✓), Docker Compose dual config (6.2 ✓), Export results script with JSON Schema sidecars (6.3 ✓), Data boundary audit — file + API (6.4 ✓), README rewrite (6.5 ✓), CI smoke workflow (6.6 ✓), GHCR image publishing (6.7 — pending).
+**Phase 6 sub-progress:** Multi-stage Dockerfile (6.1 ✓), Docker Compose dual config (6.2 ✓), Export results script with JSON Schema sidecars (6.3 ✓), Data boundary audit — file + API (6.4 ✓), README rewrite (6.5 ✓), CI smoke workflow (6.6 ✓), GHCR image publishing (6.7 ✓).
 
 See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 
@@ -73,14 +73,16 @@ Open [http://localhost:8000](http://localhost:8000).
 
 The container boots uvicorn in public mode, serves pre-computed research artefacts (notebook HTML, backtest metrics, signal rankings), and exposes the full REST API. Nothing to configure — it just works.
 
-### Pre-built image (coming in Phase 6.7)
+### Pre-built image
 
-Once GHCR publishing is live, you will be able to skip the build step:
+Skip the build step entirely with a pre-built image from GHCR:
 
 ```bash
 docker pull ghcr.io/lumduan/csm-set:latest
 docker run -p 8000:8000 ghcr.io/lumduan/csm-set:latest
 ```
+
+Available tags: `latest`, `vX.Y.Z`, `vX.Y`, `sha-<short-sha>`. See [RELEASING.md](RELEASING.md) for the owner release process.
 
 ---
 
