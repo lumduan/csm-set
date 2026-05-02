@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -69,7 +70,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     store: ParquetStore = ParquetStore(settings.data_dir / "processed")
     set_store(store)
 
-    jobs_persistence_dir = settings.results_dir / ".tmp" / "jobs"
+    if settings.public_mode:
+        jobs_persistence_dir = Path("/tmp/csm-jobs")
+    else:
+        jobs_persistence_dir = settings.results_dir / ".tmp" / "jobs"
     jobs = JobRegistry.load_all(jobs_persistence_dir)
     app.state.jobs = jobs
 
