@@ -96,7 +96,7 @@ app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifesp
 # auth layer, access-log middleware, or public-mode guard build their responses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allow_origins,
+    allow_origins=[o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
