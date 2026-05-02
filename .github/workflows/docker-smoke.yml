@@ -1,0 +1,85 @@
+name: Docker Smoke
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - docker-compose.private.yml
+      - pyproject.toml
+      - uv.lock
+      - src/**
+      - api/**
+      - ui/**
+      - results/**
+      - .github/**
+  push:
+    branches: [main]
+
+concurrency:
+  group: docker-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          cache-binary: true
+
+      - name: Build and start services
+        run: docker compose up -d --wait
+
+      - name: Health check
+        run: |
+          curl --retry 5 --retry-delay 3 --retry-all-errors -fsS http://localhost:8000/health
+
+      - name: Smoke — read endpoints (200)
+        run: |
+          endpoints=(
+            "/api/v1/signals/latest"
+            "/api/v1/portfolio/current"
+            "/api/v1/notebooks"
+            "/static/notebooks/01_data_exploration.html"
+          )
+          for path in "${endpoints[@]}"; do
+            echo "=== GET $path ==="
+            status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$path")
+            if [ "$status" != "200" ]; then
+              echo "FAIL: expected 200, got $status"
+              exit 1
+            fi
+            echo "OK ($status)"
+          done
+
+      - name: Smoke — write endpoint blocked (403)
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/data/refresh)
+          if [ "$status" != "403" ]; then
+            echo "FAIL: expected 403, got $status"
+            exit 1
+          fi
+          echo "OK — POST /api/v1/data/refresh returns 403 in public mode"
+
+      - name: Capture container logs on failure
+        if: failure()
+        run: docker compose logs csm > smoke-logs.txt
+
+      - name: Upload logs artefact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: smoke-logs.txt
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

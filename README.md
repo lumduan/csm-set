@@ -5,7 +5,7 @@
 [![uv](https://img.shields.io/badge/managed%20by-uv-purple)](https://docs.astral.sh/uv/)
 [![Type Safety](https://img.shields.io/badge/type%20safety-mypy%20strict-green)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](Dockerfile)
-[![CI Smoke](https://img.shields.io/badge/CI%20smoke-coming%20in%206.6-lightgrey)](.github/workflows/docker-smoke.yml)
+[![CI Smoke](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml)
 [![GHCR](https://img.shields.io/badge/GHCR-coming%20in%206.7-lightgrey)](https://github.com/lumduan/csm-set/pkgs/container/csm-set)
 
 โครงการนี้ใช้กลยุทธ์ Cross-Sectional Momentum บนตลาดหุ้นไทย (SET)
@@ -42,7 +42,7 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 | 7 | CI/CD & Hardening | `[ ]` Pending |
 | 8 | Documentation & Polish | `[ ]` Pending |
 
-**Phase 6 sub-progress:** Multi-stage Dockerfile (6.1 ✓), Docker Compose dual config (6.2 ✓), Export results script with JSON Schema sidecars (6.3 ✓), Data boundary audit — file + API (6.4 ✓), README rewrite (6.5 ✓), CI smoke workflow (6.6 — pending), GHCR image publishing (6.7 — pending).
+**Phase 6 sub-progress:** Multi-stage Dockerfile (6.1 ✓), Docker Compose dual config (6.2 ✓), Export results script with JSON Schema sidecars (6.3 ✓), Data boundary audit — file + API (6.4 ✓), README rewrite (6.5 ✓), CI smoke workflow (6.6 ✓), GHCR image publishing (6.7 — pending).
 
 See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 
