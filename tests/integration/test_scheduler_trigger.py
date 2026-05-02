@@ -18,18 +18,14 @@ from fastapi.testclient import TestClient
 class TestManualTrigger:
     """POST /api/v1/scheduler/run/{job_id} endpoint behaviour."""
 
-    def test_trigger_daily_refresh_returns_accepted(
-        self, private_client: TestClient
-    ) -> None:
+    def test_trigger_daily_refresh_returns_accepted(self, private_client: TestClient) -> None:
         resp = private_client.post("/api/v1/scheduler/run/daily_refresh")
         assert resp.status_code == 200
         body = resp.json()
         assert "job_id" in body
         assert body["status"] == "accepted"
 
-    def test_trigger_invalid_job_id_returns_400(
-        self, private_client: TestClient
-    ) -> None:
+    def test_trigger_invalid_job_id_returns_400(self, private_client: TestClient) -> None:
         resp = private_client.post("/api/v1/scheduler/run/nonexistent_job")
         assert resp.status_code == 400
         body = resp.json()
@@ -55,9 +51,7 @@ class TestManualTrigger:
                 break
             time.sleep(0.1)
         else:
-            raise AssertionError(
-                f"Scheduler trigger job {job_id} did not reach terminal state"
-            )
+            raise AssertionError(f"Scheduler trigger job {job_id} did not reach terminal state")
 
         body = resp.json()
         assert body["job_id"] == job_id

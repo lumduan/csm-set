@@ -1,12 +1,12 @@
-# ภาพรวมสถาปัตยกรรม
+# Architecture Overview
 
-หน้านี้อธิบายโครงสร้าง monorepo โดยรวมของ csm-set การแยกระหว่างชั้น library, API, และ UI และบทบาทของการบังคับใช้โหมด public
+This page describes the overall monorepo structure of csm-set, the separation between the library, API, and UI layers, and the role of public-mode enforcement.
 
-## สารบัญ
+## Table of Contents
 
-- โครงสร้าง monorepo
-- ความรับผิดชอบของแต่ละชั้น
-- จุดบังคับใช้โหมด public
-- การไหลของข้อมูลขณะ runtime
+- Monorepo structure
+- Layer responsibilities
+- Public-mode enforcement points
+- Runtime data flow
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

@@ -1,12 +1,12 @@
-# คู่มือโหมด Public
+# Public Mode Guide
 
-หน้านี้อธิบายสถาปัตยกรรมโหมด public ขอบเขตข้อมูลของโปรเจกต์ พฤติกรรมการเริ่มต้น Docker และ workflow สำหรับเจ้าของโปรเจกต์ในการรีเฟรช outputs ที่ปลอดภัยสำหรับสาธารณะ
+This page explains the public-mode architecture, the project's data boundary, Docker startup behaviour, and the owner workflow for refreshing public-safe outputs.
 
-## สารบัญ
+## Table of Contents
 
-- กฎขอบเขตข้อมูล
-- เริ่มต้นใช้งาน Docker อย่างรวดเร็ว
-- ความสามารถเปรียบเทียบโหมด public กับ private
-- Workflow การอัปเดตสำหรับเจ้าของโปรเจกต์
+- Data boundary rules
+- Quick Docker start
+- Public vs private feature comparison
+- Owner update workflow
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

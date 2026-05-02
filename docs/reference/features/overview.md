@@ -1,12 +1,12 @@
-# ข้อมูลอ้างอิง: Features
+# Reference: Features
 
-หน้านี้อธิบายชั้นการสร้าง features รวมถึง momentum, features ที่ปรับตามความเสี่ยง, การวัดแบบ sector-relative, และ pipeline การ normalize features
+This page describes the feature construction layer, including momentum, risk-adjusted features, sector-relative measurements, and the feature normalisation pipeline.
 
-## สารบัญ
+## Table of Contents
 
-- สัญญาณ momentum
-- Features ที่ปรับตามความเสี่ยง
-- Features แบบ sector-relative
-- การ normalize feature panel
+- Momentum signals
+- Risk-adjusted features
+- Sector-relative features
+- Feature panel normalisation
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

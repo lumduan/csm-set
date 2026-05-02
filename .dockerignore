@@ -1,0 +1,58 @@
+# Data files (large, not needed at build time)
+data/
+*.parquet
+*.csv
+*.feather
+
+# Tests
+tests/
+.pytest_cache/
+htmlcov/
+coverage.xml
+.coverage
+
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# CI
+.github/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Notebooks (raw .ipynb — only committed HTML results are copied)
+notebooks/
+*.ipynb_checkpoints
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Temporary / intermediate results
+results/.tmp/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

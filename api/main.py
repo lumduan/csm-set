@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -69,7 +70,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     store: ParquetStore = ParquetStore(settings.data_dir / "processed")
     set_store(store)
 
-    jobs_persistence_dir = settings.results_dir / ".tmp" / "jobs"
+    if settings.public_mode:
+        jobs_persistence_dir = Path("/tmp/csm-jobs")
+    else:
+        jobs_persistence_dir = settings.results_dir / ".tmp" / "jobs"
     jobs = JobRegistry.load_all(jobs_persistence_dir)
     app.state.jobs = jobs
 
@@ -96,9 +100,9 @@ app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifesp
 # auth layer, access-log middleware, or public-mode guard build their responses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -202,9 +206,7 @@ async def health(request: Request) -> HealthStatus:
         jobs_pending = len(jobs.list(status=JobStatus.ACCEPTED))
 
     is_private: bool = not settings.public_mode
-    is_degraded: bool = (is_private and not scheduler_running) or (
-        last_refresh_status == "failed"
-    )
+    is_degraded: bool = (is_private and not scheduler_running) or (last_refresh_status == "failed")
 
     return HealthStatus(
         status="degraded" if is_degraded else "ok",

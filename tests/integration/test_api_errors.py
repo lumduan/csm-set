@@ -30,18 +30,14 @@ class TestPublicMode403:
         assert body["type"] == "tag:csm-set,2026:problem/public-mode-disabled"
         assert resp.headers["Content-Type"] == PROBLEM_JSON
 
-    def test_403_includes_request_id_header_match(
-        self, public_client: TestClient
-    ) -> None:
+    def test_403_includes_request_id_header_match(self, public_client: TestClient) -> None:
         resp = public_client.post("/api/v1/backtest/run")
         body = resp.json()
         assert resp.headers["x-request-id"] == body["request_id"]
 
 
 class TestPrivateMode401:
-    def test_401_error_shape(
-        self, private_client_with_key: tuple[TestClient, str]
-    ) -> None:
+    def test_401_error_shape(self, private_client_with_key: tuple[TestClient, str]) -> None:
         client, _ = private_client_with_key
         resp = client.post("/api/v1/data/refresh")
         assert resp.status_code == 401
@@ -50,13 +46,9 @@ class TestPrivateMode401:
         assert body["type"] == "tag:csm-set,2026:problem/missing-api-key"
         assert resp.headers["Content-Type"] == PROBLEM_JSON
 
-    def test_401_wrong_key_shape(
-        self, private_client_with_key: tuple[TestClient, str]
-    ) -> None:
+    def test_401_wrong_key_shape(self, private_client_with_key: tuple[TestClient, str]) -> None:
         client, _ = private_client_with_key
-        resp = client.post(
-            "/api/v1/data/refresh", headers={"X-API-Key": "wrong"}
-        )
+        resp = client.post("/api/v1/data/refresh", headers={"X-API-Key": "wrong"})
         assert resp.status_code == 401
         body = resp.json()
         _assert_rfc7807_shape(body, status=401)
@@ -72,9 +64,7 @@ class TestNotFound404:
         assert body["type"] == "tag:csm-set,2026:problem/not-found"
         assert resp.headers["Content-Type"] == PROBLEM_JSON
 
-    def test_404_job_not_found(
-        self, private_client_with_key: tuple[TestClient, str]
-    ) -> None:
+    def test_404_job_not_found(self, private_client_with_key: tuple[TestClient, str]) -> None:
         client, key = private_client_with_key
         resp = client.get(
             "/api/v1/jobs/nonexistent-job-id",
@@ -128,9 +118,7 @@ class TestCrossCutting:
         r = client.get("/api/v1/jobs/no-such-job", headers={"X-API-Key": key})
         assert r.json()["request_id"] is not None
 
-    def test_request_id_header_matches_body_on_error(
-        self, public_client: TestClient
-    ) -> None:
+    def test_request_id_header_matches_body_on_error(self, public_client: TestClient) -> None:
         resp = public_client.get("/nonexistent-path")
         body = resp.json()
         assert resp.headers["x-request-id"] == body["request_id"]

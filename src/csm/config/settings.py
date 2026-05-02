@@ -87,6 +87,10 @@ class Settings(BaseSettings):
         default=None,
         description="Optional TradingView authentication token.",
     )
+    cors_allow_origins: str = Field(
+        default="*",
+        description="Comma-separated list of allowed CORS origins.",
+    )
 
     @field_validator("tvkit_adjustment")
     @classmethod

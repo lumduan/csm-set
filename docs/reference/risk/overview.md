@@ -1,12 +1,12 @@
-# ข้อมูลอ้างอิง: ความเสี่ยง
+# Reference: Risk
 
-หน้านี้อธิบายชั้นความเสี่ยง รวมถึงการตรวจจับ regime, การวิเคราะห์ drawdown, และเมตริกประสิทธิภาพสรุปที่ใช้ในรายงานและ APIs
+This page describes the risk layer, including regime detection, drawdown analysis, and summary performance metrics used in reports and APIs.
 
-## สารบัญ
+## Table of Contents
 
-- การตรวจจับ market regime
-- การวิเคราะห์ drawdown
-- เมตริกประสิทธิภาพ
-- สถิติเปรียบเทียบกับ benchmark
+- Market regime detection
+- Drawdown analysis
+- Performance metrics
+- Benchmark comparison statistics
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

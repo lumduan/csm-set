@@ -1,18 +1,50 @@
-# Owner usage:
+# =============================================================================
+# CSM-SET — Private Docker Compose Override (Owner Only)
+# =============================================================================
+#
+# Purpose:
+#   Override file for the project owner.  Disables public mode so data
+#   fetching and export are enabled, mounts writable data/ and results/
+#   directories, and mounts the host Chrome profile for tvkit browser auth.
+#   Restricts CORS to local development origins.
+#
+# Invocation:
 #   docker compose -f docker-compose.yml -f docker-compose.private.yml up
 #
-# Differences from public mode:
-#   - public_mode disabled -> data fetch and refresh enabled
-#   - data/ directory mounted -> live OHLCV accessible
-#   - results/ mounted read-write -> export_results.py can write here
-#   - Chrome profile mounted -> tvkit browser authentication
+#   This MUST be used with the base docker-compose.yml.  Docker Compose
+#   merges the two files — this file only provides overrides, not a
+#   standalone service definition.
+#
+# What each override does:
+#   CSM_PUBLIC_MODE=false           Enable write endpoints and data fetch
+#   TVKIT_BROWSER=chrome            Use Chrome for tvkit browser auth
+#   CSM_CORS_ALLOW_ORIGINS          Restrict CORS to local React/Next.js dev
+#                                   servers instead of open wildcard
+#   ./data:/app/data                Writable mount for OHLCV parquet files
+#   ./results:/app/results          Writable mount for export_results.py output
+#   chrome profile mount            Read-only mount of host Chrome auth tokens
+#
+# Owner workflow after booting with this override:
+#   docker exec csm uv run python scripts/fetch_history.py
+#   docker exec csm uv run python scripts/export_results.py
+#   git add results/static/ && git commit -m "chore: refresh research artefacts"
+#   git push
+# =============================================================================
 
 services:
   csm:
     environment:
       CSM_PUBLIC_MODE: "false"
       TVKIT_BROWSER: "chrome"
+      CSM_CORS_ALLOW_ORIGINS: "http://localhost:3000,http://localhost:5173"
     volumes:
       - ./data:/app/data
       - ./results:/app/results
       - ~/.config/google-chrome:/root/.config/google-chrome:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 2g

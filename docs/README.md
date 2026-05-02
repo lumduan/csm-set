@@ -1,12 +1,12 @@
-# ดัชนีเอกสาร
+# Documentation Index
 
-หน้านี้เป็นจุดเริ่มต้นของเอกสารประกอบ csm-set และนำผู้อ่านไปยังคู่มือหลัก เอกสารอ้างอิงสถาปัตยกรรม และเอกสารอ้างอิงการนำไปใช้งาน
+This page is the entry point for csm-set documentation and directs readers to the main guides, architecture reference, and reference documentation.
 
-## สารบัญ
+## Table of Contents
 
-- หน้าเริ่มต้นใช้งาน
-- คู่มือโหมด public และ Docker
-- ภาพรวมสถาปัตยกรรม
-- ส่วนอ้างอิงต่างๆ
+- Getting started
+- Public mode and Docker guides
+- Architecture overview
+- Reference documentation
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.

@@ -1,12 +1,12 @@
-# ข้อมูลอ้างอิง: ชั้นข้อมูล
+# Reference: Data Layer
 
-หน้านี้สรุปชั้นข้อมูล รวมถึงขอบเขตการเข้าถึง tvkit รูปแบบการจัดเก็บ parquet การสร้าง universe และกฎการทำความสะอาดข้อมูล
+This page summarizes the data layer, including tvkit access boundaries, parquet storage format, universe construction, and data cleaning rules.
 
-## สารบัญ
+## Table of Contents
 
-- พฤติกรรมของ OHLCV loader
-- ข้อจำกัดในโหมด public
-- โครงสร้างการจัดเก็บ parquet
-- Logic ของ universe และการทำความสะอาดข้อมูล
+- OHLCV loader behavior
+- Public mode restrictions
+- Parquet storage structure
+- Universe and cleaning logic
 
-> TODO: ขยายหน้านี้เพิ่มเติม
+> TODO: Expand this page further.
