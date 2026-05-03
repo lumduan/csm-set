@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
-
 from scripts._export_models import (
     AnnualReturns,
     AnnualRow,
