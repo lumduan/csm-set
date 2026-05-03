@@ -426,9 +426,9 @@ Development phases ordered by dependency — each phase must be complete and val
 
 - [x] `.github/workflows/docker-smoke.yml` — PR-gated smoke test on Docker paths
 - [x] `.github/workflows/docker-publish.yml` — tag-driven GHCR publish
-- [ ] `ci.yml`: lint → type-check → test on every push (general CI beyond Docker)
+- [x] `ci.yml`: lint → type-check → test on every push (general CI beyond Docker)
 
-**Exit criteria:** general `ci.yml` (lint → type-check → test on every push), any remaining doc gaps filled.
+**Exit criteria:** general `ci.yml` (lint → type-check → test on every push), any remaining doc gaps filled. ✓
 
 ---
 
@@ -529,7 +529,7 @@ Phase 0 (Bootstrap)
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 7 — Hardening & Documentation
+- **Active phase:** Phase 8 — Enhancement (Post-MVP)
 - **Completed phases:**
   - Phase 0 (Bootstrap) — project scaffold, tooling, quality gates
   - Phase 1 (Data Pipeline) — sub-phases 1.1–1.7 complete as of 2026-04-23
@@ -538,4 +538,5 @@ Phase 0 (Bootstrap)
   - Phase 4 (Portfolio Construction & Risk) — sub-phases 4.1–4.5 complete, confirmed by `results/notebooks/04_portfolio_optimization.html`
   - Phase 5 (API) — sub-phases 5.1–5.9 complete as of 2026-05-01: typed FastAPI surface, JobRegistry, API-key auth, RFC 7807 errors, structured logging, 742 tests, 92% coverage, sign-off validated via `examples/05_api_validation.py`
   - Phase 6 (Docker & Public Distribution) — sub-phases 6.1–6.7 complete as of 2026-05-02: multi-stage Dockerfile, dual compose config, export results with JSON Schema, two-layer data boundary audit, README rewrite, CI smoke + GHCR publish workflows, `RELEASING.md`, v0.6.0 GitHub Release published
+  - Phase 7 (Hardening & Documentation) — sub-phases 7.1–7.4 complete as of 2026-05-02: coverage floor locked at 90% on `api/`, 12 doc stubs expanded, API security documented, `ci.yml` general CI workflow live, v0.7.0 published
 - **Blocked by:** nothing

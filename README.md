@@ -32,7 +32,6 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 
 ## Table of Contents
 
-- [Development Status](#development-status)
 - [What this project does](#what-this-project-does)
 - [Quick Start (Public)](#quick-start-public)
 - [Architecture (Headless)](#architecture-headless)
@@ -50,23 +49,6 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 - [Contributing](#contributing)
 - [References](#references)
 - [License](#license)
-
----
-
-## Development Status
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Data Pipeline | `[x]` Completed |
-| 2 | Signal Research | `[x]` Completed |
-| 3 | Backtesting | `[x]` Completed |
-| 4 | Portfolio & Risk | `[x]` Completed |
-| 5 | API + FastUI | `[x]` Completed |
-| **6** | **Docker & Public Distribution** | **`[x]` Completed** |
-| 7 | Hardening & Documentation | `[~]` In progress |
-| 8 | Enhancement (Post-MVP) | `[ ]` Pending |
-
-See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 
 ---
 
