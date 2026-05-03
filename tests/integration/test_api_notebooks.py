@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
-
 from api.schemas.notebooks import NotebookIndex
+from fastapi.testclient import TestClient
 
 
 class TestNotebookIndexPublic:
@@ -66,9 +65,9 @@ class TestNotebookIndexPublic:
         _api_deps.settings = _settings_mod.settings
         _api_main.settings = _settings_mod.settings
         try:
+            from api.deps import set_store
             from fastapi.testclient import TestClient
 
-            from api.deps import set_store
             from csm.data.store import ParquetStore
 
             set_store(ParquetStore(tmp_path / "data" / "processed"))

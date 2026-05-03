@@ -7,9 +7,8 @@ import json
 import logging
 
 import pytest
-from fastapi.testclient import TestClient
-
 from api.logging import JsonFormatter
+from fastapi.testclient import TestClient
 
 
 def _capture_json_logs(caplog: pytest.LogCaptureFixture) -> io.StringIO:

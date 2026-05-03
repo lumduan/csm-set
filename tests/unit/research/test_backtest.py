@@ -409,7 +409,7 @@ def _make_index_prices_weak_bear(dates: list[pd.Timestamp], tz: str = TZ) -> pd.
     warm_dates = pd.date_range("2018-01-01", periods=261, freq="B", tz=tz)
     warm_prices = np.linspace(100.0, 130.0, 261)
     warm_prices[-1] = 80.0  # single-bar dip below EMA; slope stays rising
-    series = pd.Series(dict(zip(warm_dates, warm_prices)))
+    series = pd.Series(dict(zip(warm_dates, warm_prices, strict=False)))
     for d in dates:
         series[d] = 80.0
     return series.sort_index()
@@ -960,7 +960,7 @@ class TestVolScaling:
         assert pytest.approx(scaled, rel=0.05) == 0.5
 
     def test_low_vol_capped_at_scale_cap_then_1(self, backtest: MomentumBacktest) -> None:
-        """Very low realized vol → scale = vol_target/realized_vol clamped to vol_scale_cap, then min(…, 1.0)."""
+        """Very low realized vol → scale clamped to vol_scale_cap, then min(…, 1.0)."""
         symbols = ["A"]
         n = 100
         dates = pd.date_range("2020-01-01", periods=n, freq="D", tz="Asia/Bangkok")
