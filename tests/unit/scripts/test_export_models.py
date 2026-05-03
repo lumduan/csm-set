@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -11,26 +9,19 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import ValidationError
 
-# Load scripts._export_models via importlib to avoid namespace conflicts with
-# the tests.unit.scripts package during pytest collection.
-_EX_MODELS_FILE = Path(__file__).resolve().parents[3] / "scripts" / "_export_models.py"
-_ex_spec = importlib.util.spec_from_file_location("scripts._export_models", _EX_MODELS_FILE)
-assert _ex_spec is not None and _ex_spec.loader is not None
-_ex_models = importlib.util.module_from_spec(_ex_spec)
-sys.modules.setdefault("scripts._export_models", _ex_models)
-_ex_spec.loader.exec_module(_ex_models)
-
-BacktestSummary = _ex_models.BacktestSummary
-BacktestPeriod = _ex_models.BacktestPeriod
-BacktestConfigSnapshot = _ex_models.BacktestConfigSnapshot
-BacktestMetrics = _ex_models.BacktestMetrics
-EquityCurve = _ex_models.EquityCurve
-EquityPoint = _ex_models.EquityPoint
-AnnualReturns = _ex_models.AnnualReturns
-AnnualRow = _ex_models.AnnualRow
-SignalRanking = _ex_models.SignalRanking
-RankingEntry = _ex_models.RankingEntry
-ExportResultsConfig = _ex_models.ExportResultsConfig
+from scripts._export_models import (
+    AnnualReturns,
+    AnnualRow,
+    BacktestConfigSnapshot,
+    BacktestMetrics,
+    BacktestPeriod,
+    BacktestSummary,
+    EquityCurve,
+    EquityPoint,
+    ExportResultsConfig,
+    RankingEntry,
+    SignalRanking,
+)
 
 TZ_BKK = ZoneInfo("Asia/Bangkok")
 
