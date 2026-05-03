@@ -317,9 +317,9 @@ async def test_exits_nonzero_on_high_failure_rate(
         patch("scripts.fetch_history.Settings", return_value=_make_settings()),
         patch("scripts.fetch_history.ParquetStore", return_value=mock_store),
         patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+        pytest.raises(SystemExit) as exc_info,
     ):
-        with pytest.raises(SystemExit) as exc_info:
-            await main()
+        await main()
 
     assert exc_info.value.code == 1
 
@@ -339,9 +339,9 @@ async def test_public_mode_exits_before_fetch(
     with (
         patch("scripts.fetch_history.Settings", return_value=_make_settings(public_mode=True)),
         patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+        pytest.raises(SystemExit) as exc_info,
     ):
-        with pytest.raises(SystemExit) as exc_info:
-            await main()
+        await main()
 
     assert exc_info.value.code == 1
     mock_loader.fetch_batch.assert_not_called()
@@ -354,9 +354,11 @@ async def test_exits_if_symbols_json_missing(
     """sys.exit(1) when symbols.json does not exist."""
     monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path)])
 
-    with patch("scripts.fetch_history.Settings", return_value=_make_settings()):
-        with pytest.raises(SystemExit) as exc_info:
-            await main()
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings()),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        await main()
 
     assert exc_info.value.code == 1
 
@@ -382,9 +384,11 @@ async def test_exits_if_symbols_json_malformed(
 
     monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path)])
 
-    with patch("scripts.fetch_history.Settings", return_value=_make_settings()):
-        with pytest.raises(SystemExit) as exc_info:
-            await main()
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings()),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        await main()
 
     assert exc_info.value.code == 1
 

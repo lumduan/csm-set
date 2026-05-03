@@ -430,7 +430,8 @@ def test_validate_rebalance_dates_unsorted_raises(
 def test_build_volume_matrix_returns_wide_frame(
     sample_ohlcv_map: dict[str, pd.DataFrame], tmp_path: Path
 ) -> None:
-    """After build(), volume cache is populated and build_volume_matrix() returns a wide DataFrame."""
+    """After build(), volume cache is populated and build_volume_matrix() \
+returns a wide DataFrame."""
     dates = [pd.Timestamp("2023-06-30", tz=_TZ), pd.Timestamp("2023-12-29", tz=_TZ)]
     pipeline = FeaturePipeline(store=_store(tmp_path))
     pipeline.build(prices=sample_ohlcv_map, rebalance_dates=dates)

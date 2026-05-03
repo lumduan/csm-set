@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from csm.risk.regime import RegimeDetector, RegimeState
 

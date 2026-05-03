@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 
 import pytest
+from api.security import API_KEY_HEADER
 from fastapi.testclient import TestClient
 
-from api.security import API_KEY_HEADER
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
 
@@ -44,10 +44,7 @@ class TestPublicModeContract:
         self, client: TestClient, method: str, path: str
     ) -> None:
         """Success Criterion 2: every write endpoint 403s in public mode."""
-        if method == "POST":
-            resp = client.post(path, json={})
-        else:
-            resp = client.get(path)
+        resp = client.post(path, json={}) if method == "POST" else client.get(path)
 
         assert resp.status_code == 403, f"{method} {path} should 403 in public mode"
         body = resp.json()
@@ -335,10 +332,7 @@ class TestPrivateModeParity:
         """Protected paths (writes + jobs list) must 401 without key."""
         client, _key = private_client_with_key
 
-        if method == "POST":
-            resp = client.post(path, json={})
-        else:
-            resp = client.get(path)
+        resp = client.post(path, json={}) if method == "POST" else client.get(path)
 
         assert resp.status_code == 401, (
             f"{method} {path} should 401 without key, got {resp.status_code}"

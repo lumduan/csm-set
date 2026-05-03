@@ -6,6 +6,7 @@
 [![Type Safety](https://img.shields.io/badge/type%20safety-mypy%20strict-green)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](Dockerfile)
 [![CI Smoke](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/docker-smoke.yml)
+[![CI](https://github.com/lumduan/csm-set/actions/workflows/ci.yml/badge.svg)](https://github.com/lumduan/csm-set/actions/workflows/ci.yml)
 [![GHCR](https://github.com/lumduan/csm-set/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/lumduan/csm-set/pkgs/container/csm-set)
 
 โครงการนี้ใช้กลยุทธ์ Cross-Sectional Momentum บนตลาดหุ้นไทย (SET)
@@ -26,6 +27,29 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 > **This project is for educational purposes only. It does not constitute investment advice.**
 > **Past backtest results do not guarantee future returns.**
 > **The developer assumes no responsibility for any losses or damages arising from use of this project.**
+
+---
+
+## Table of Contents
+
+- [Development Status](#development-status)
+- [What this project does](#what-this-project-does)
+- [Quick Start (Public)](#quick-start-public)
+- [Architecture (Headless)](#architecture-headless)
+- [What you will see](#what-you-will-see)
+- [What requires credentials (owner only)](#what-requires-credentials-owner-only)
+- [Build your own frontend](#build-your-own-frontend)
+- [Owner workflow](#owner-workflow)
+- [Module index](#module-index)
+- [Where to find X](#where-to-find-x)
+- [Troubleshooting](#troubleshooting)
+- [Stack](#stack)
+- [Development](#development)
+- [Project structure](#project-structure)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [References](#references)
+- [License](#license)
 
 ---
 
@@ -54,6 +78,8 @@ See the full roadmap at [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md).
 - Three portfolio construction modes — equal weight, volatility-target, minimum-variance
 - FastAPI Data Engine on port 8000 + embedded FastUI dashboard
 - Frontend-agnostic JSON data contract with JSON Schema sidecars
+
+**Cross-sectional momentum** (also called relative momentum) ranks stocks within a universe by their past return over a lookback window (typically 12 months, skipping the most recent month to avoid short-term reversal). The strategy buys the top quintile and, in a long-only implementation, weights them equally or by risk target. The approach was first documented by Jegadeesh & Titman (1993) and has been replicated across equity markets globally. This project applies it to the Stock Exchange of Thailand (SET) with Thai-market-specific constraints: minimum ADV of 100M THB, minimum listing of 12 months, and a 200-day SMA regime filter on the SET index. See [docs/concepts/momentum.md](docs/concepts/momentum.md) for the full theoretical background.
 
 ---
 
@@ -248,6 +274,84 @@ Public users get the updated research on their next `git pull` or image rebuild.
 
 ---
 
+## Module index
+
+| Path | Purpose |
+|------|---------|
+| `src/csm/data/` | tvkit loader, parquet store, universe builder, price cleaning, dividend adjustment |
+| `src/csm/features/` | Momentum signals, risk-adjusted momentum, sector features, feature pipeline |
+| `src/csm/portfolio/` | Weight optimisation (equal, vol-target, min-variance), constraints, rebalancing, drawdown breaker |
+| `src/csm/research/` | Cross-sectional ranking, IC analysis, walk-forward backtest engine |
+| `src/csm/risk/` | Risk metrics (Sharpe, Sortino, max DD), market regime detection |
+| `src/csm/execution/` | Trade-list generation, execution simulation, slippage models |
+| `src/csm/config/` | Settings (pydantic-settings), constants, timezone-aware configuration |
+| `api/` | FastAPI app factory, routers, security middleware, error handling, static file serving |
+| `ui/` | FastUI dashboard pages (mounted on the FastAPI app) |
+| `scripts/` | Owner utilities: fetch OHLCV, build universe, export results |
+| `tests/` | Unit + integration tests (mirrors `src/csm/` and `api/` layout) |
+| `docs/` | Architecture, reference, guides, getting-started, development, plans |
+| `results/static/` | Pre-computed artefacts: notebook HTML, backtest JSON, signal rankings |
+
+---
+
+## Where to find X
+
+| I want to ... | Look at |
+|---------------|---------|
+| understand the data flow | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| extend a momentum signal | `src/csm/features/momentum.py` |
+| add a portfolio constraint | `src/csm/portfolio/optimizer.py` and `src/csm/portfolio/construction.py` |
+| configure timezone or env vars | `src/csm/config/settings.py` and `.env.example` |
+| run the quality gate | [docs/development/overview.md](docs/development/overview.md) § Quality gate |
+| refresh public artefacts | `scripts/export_results.py` and [docs/guides/public-mode.md](docs/guides/public-mode.md) |
+| release a new version | [RELEASING.md](RELEASING.md) |
+| see all API endpoints | [http://localhost:8000/api/docs](http://localhost:8000/api/docs) (when running) |
+| understand the security model | [docs/architecture/overview.md](docs/architecture/overview.md) § Security model |
+| add an API endpoint | `api/routers/` and [docs/reference/](docs/reference/) |
+| find a module's public API surface | [docs/reference/](docs/reference/) — one page per subpackage |
+
+---
+
+## Troubleshooting
+
+### Port 8000 already in use
+
+**Symptom:** `docker compose up` fails with `bind: address already in use`.
+
+**Fix:** Stop the process on port 8000 (`lsof -ti:8000 | xargs kill`) or set `CSM_PORT=8001` in `.env` and remap the compose port.
+
+### Docker daemon not running
+
+**Symptom:** `Cannot connect to the Docker daemon`.
+
+**Fix:** Start Docker Desktop (macOS/Windows) or `sudo systemctl start docker` (Linux).
+
+### Private mode: missing tvkit authentication
+
+**Symptom:** `scripts/fetch_history.py` exits with `TVKitAuthError` or `No credentials found`.
+
+**Fix:** Ensure your TradingView credentials are set in `.env` (see `.env.example`) and that your Chrome profile directory is correctly mounted in the private compose file.
+
+### Permission denied writing to `data/` or `results/`
+
+**Symptom:** Script fails with `PermissionError` when writing Parquet or JSON files.
+
+**Fix:** The private compose file mounts `data/` and `results/` as writable. If running locally without Docker, ensure the directories exist and are writable by your user: `mkdir -p data/raw results/static`.
+
+### Container exits with OOM (out of memory)
+
+**Symptom:** Container stops silently during `nbconvert` or backtest computation.
+
+**Fix:** The public compose file sets `mem_limit: 2g`. If you have many notebooks or a long backtest horizon, increase it (`mem_limit: 4g`) or run `scripts/export_results.py` locally where memory is unconstrained.
+
+### `uv sync` fails with missing Python version
+
+**Symptom:** `uv sync` complains `No Python installation found for request 3.11+`.
+
+**Fix:** Install Python 3.11+ via `uv python install 3.12` or your system package manager. Verify with `uv python list`.
+
+---
+
 ## Stack
 
 | Concern | Technology |
@@ -317,6 +421,18 @@ csm-set/
 - [Reference: Risk](docs/reference/risk/overview.md)
 - [API Reference (OpenAPI)](http://localhost:8000/api/docs) — available when the container is running
 - [Master Roadmap](docs/plans/ROADMAP.md)
+
+---
+
+## Contributing
+
+Contributions are welcome. Please read the following before opening a PR:
+
+- [Contributing Guide](CONTRIBUTING.md) — setup, workflow, and PR expectations
+- [Development Guide](docs/development/overview.md) — quality gate, commit conventions, code style
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md) — how to report vulnerabilities responsibly
+- [Releasing](RELEASING.md) — versioning and release process
 
 ---
 

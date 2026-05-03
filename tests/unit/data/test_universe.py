@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
