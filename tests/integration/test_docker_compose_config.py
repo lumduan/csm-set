@@ -36,10 +36,10 @@ class TestPublicCompose:
         assert "services" in doc
         assert "csm" in doc["services"]
 
-    def test_single_port_8000(self) -> None:
-        """Only port 8000 is exposed — port 8080 must not appear."""
+    def test_single_port_8100(self) -> None:
+        """Only port 8100 is exposed — port 8080 must not appear."""
         ports = _service(_load_yaml(PUBLIC_COMPOSE))["ports"]
-        assert ports == ["8000:8000"], f"Expected only 8000:8000, got {ports}"
+        assert ports == ["8100:8000"], f"Expected only 8100:8000, got {ports}"
 
     def test_has_mem_limit(self) -> None:
         """mem_limit: 2g is set."""
