@@ -159,7 +159,7 @@ live_test:
   reporting:
     daily_log_enabled: true
     weekly_health_check_day: "Saturday"
-    monthly_review_day: 5      # By the 5th of each month
+    monthly_review_day: first_trading  # First trading day of month (before ATO execution)
   alerts:
     drawdown_warning_threshold: -0.05
     drawdown_critical_threshold: -0.10
@@ -232,7 +232,7 @@ live_test:
   - Template format: status table (Container / Data / Scheduler / Disk), any incidents, action items
 
 - [ ] **B.3 Monthly Performance Reviews**
-  - By the 5th of each month (June, July, August): comprehensive review
+  - On the first trading day of each month (June, July, August): comprehensive review of prior month + execute rebalance at ATO
   - Metrics computed against live paper portfolio:
     - Month-over-month return
     - Cumulative return since live test start
@@ -328,7 +328,7 @@ live_test:
 
 1. **Data Refresh** — APScheduler triggers `scripts/fetch_history.py` -> `scripts/build_universe.py` -> `scripts/export_results.py --signals-only` after SET market close (~17:00 BKK / 10:00 UTC)
 2. **Signal Computation** — Feature pipeline runs on latest data, cross-sectional ranking generated
-3. **Portfolio Update** — If it's a rebalance day (last trading day of month), `ExecutionSimulator.simulate()` generates trade list; otherwise, portfolio is marked to market at latest closing prices
+3. **Portfolio Update** — If it's a **rebalance day (last trading day of month)**: `ExecutionSimulator.simulate()` generates trade list (sells + buys). Execute at ATO on the **first trading day of next month**. Other days: portfolio marked to market at latest closing prices.
 4. **Daily Log Generation** — Automated script produces `docs/live-test/daily/YYYY-MM-DD.md` with:
    - Regime state and any transitions
    - Portfolio NAV and day change
@@ -368,15 +368,19 @@ Weekly summary template:
 - [ ] ...
 ```
 
-### Monthly Protocol (Deep Review)
+### Monthly Protocol (Deep Review + Rebalance)
 
-By the 5th of each month:
+**Last trading day of the month:**
+1. Strategy computes new weights via `ExecutionSimulator` → generates trade list (sells + buys)
+2. Review the trade list: which positions are exiting, which are entering, what's the turnover
 
-1. Compute all performance metrics (see Metrics section below)
+**First trading day of the next month:**
+1. Compute all performance metrics for the month just ended (see Metrics section below)
 2. Generate charts: equity curve vs. SET TRI, drawdown plot, monthly return bars
 3. Write narrative commentary: what drove performance this month? Any regime changes?
 4. Compare against backtest prediction for the same period
-5. Save monthly review to `docs/live-test/monthly/YYYY-MM.md`
+5. Execute rebalance trades at ATO (sell exits, buy entrants)
+6. Save monthly review to `docs/live-test/monthly/YYYY-MM.md`
 
 ### Significant Event Protocol
 
