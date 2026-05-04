@@ -7,7 +7,7 @@
 # Timezone: All times in Asia/Bangkok (UTC+7)
 
 live_test:
-  enabled: false                    # Set to true when Phase A infrastructure check passes
+  enabled: true                    # Set to true when Phase A infrastructure check passes
   start_date: "2026-05-04"
   end_date: "2026-12-31"
 

@@ -8,14 +8,14 @@
 #   pre-computed research artefacts from results/static/ (read-only).
 #
 # Usage:
-#   docker compose up               # Start the public API on port 8000
+#   docker compose up               # Start the public API on port 8100
 #   docker compose up -d            # Detached mode
 #   docker compose down             # Stop and remove the container
 #
 # Smoke test:
 #   docker compose up -d --wait && \
-#     curl -f http://localhost:8000/health && \
-#     curl -f http://localhost:8000/api/v1/signals/latest && \
+#     curl -f http://localhost:8100/health && \
+#     curl -f http://localhost:8100/api/v1/signals/latest && \
 #     docker compose down
 #
 # Owner / private mode:
@@ -35,7 +35,7 @@ services:
   csm:
     build: .
     ports:
-      - "8000:8000"
+      - "8100:8000"
     environment:
       CSM_PUBLIC_MODE: "true"
       CSM_LOG_LEVEL: "INFO"

@@ -7,7 +7,7 @@
 
 - **Master Plan:** [docs/plans/live-test/PLAN.md](../plans/live-test/PLAN.md)
 - **Configuration:** [configs/live-settings.yaml](../../configs/live-settings.yaml)
-- **Environment Lock Commit:** _TBD after Phase A.1_
+- **Environment Lock Commit:** `892e78a` (`live-test-v1.0.0`)
 
 ## Directory Map
 
@@ -24,19 +24,20 @@
 
 **Phase A — Setup & Calibration (May 2026)**
 
-- [ ] A.1 Environment Lock
-- [ ] A.2 Configuration
-- [ ] A.3 Infrastructure Check
-- [ ] A.4 Baseline Reporting
+- [x] A.1 Environment Lock
+- [x] A.2 Configuration
+- [ ] A.3 Infrastructure Check (container healthy — 72h stability period started 2026-05-04)
+- [ ] A.4 Baseline Reporting (daily log created — pending stock purchases)
 
 ## Key Metrics at a Glance
 
-_To be populated as the live test progresses._
+_Last updated: 2026-05-04_
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Cumulative Return | — | Positive | — |
-| Sharpe Ratio | — | >= 0.5 | — |
-| Max Drawdown | — | > -15% | — |
-| Data Completeness | — | >= 95% | — |
-| System Uptime | — | >= 99% | — |
+| Cumulative Return | 0.00% | Positive | — |
+| NAV | 1,000,000 THB | — | — |
+| Sharpe Ratio | N/A | >= 0.5 | — |
+| Max Drawdown | 0.00% | > -15% | — |
+| Data Completeness | 100% (1/1 days) | >= 95% | OK |
+| System Uptime | Container healthy @ 8100 | >= 99% | OK |
