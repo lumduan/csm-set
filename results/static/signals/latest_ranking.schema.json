@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "RankingEntry": {
+      "description": "A single ranked security with signal values.\n\nContains only derived signal metrics (quintile, z-score, percentile rank) —\nnever raw price or return data.",
+      "properties": {
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "sector": {
+          "title": "Sector",
+          "type": "string"
+        },
+        "quintile": {
+          "description": "Quintile label 1–5",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Quintile",
+          "type": "integer"
+        },
+        "z_score": {
+          "description": "Cross-sectional z-score of the signal",
+          "title": "Z Score",
+          "type": "number"
+        },
+        "rank_pct": {
+          "description": "Percentile rank in (0, 1]",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Rank Pct",
+          "type": "number"
+        }
+      },
+      "required": [
+        "symbol",
+        "sector",
+        "quintile",
+        "z_score",
+        "rank_pct"
+      ],
+      "title": "RankingEntry",
+      "type": "object"
+    }
+  },
+  "description": "Cross-sectional momentum ranking for a given as-of date.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+    },
+    "description": {
+      "default": "Cross-sectional momentum ranking. No raw price data.",
+      "title": "Description",
+      "type": "string"
+    },
+    "rankings": {
+      "items": {
+        "$ref": "#/$defs/RankingEntry"
+      },
+      "title": "Rankings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "as_of",
+    "rankings"
+  ],
+  "title": "SignalRanking",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

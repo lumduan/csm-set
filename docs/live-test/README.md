@@ -27,7 +27,7 @@
 - [x] A.1 Environment Lock
 - [x] A.2 Configuration
 - [ ] A.3 Infrastructure Check (container healthy — 72h stability period started 2026-05-04)
-- [ ] A.4 Baseline Reporting (daily log created — pending stock purchases)
+- [x] A.4 Baseline Reporting (research report complete — 132 symbols ranked, top 10 buy list ready)
 
 ## Key Metrics at a Glance
 
