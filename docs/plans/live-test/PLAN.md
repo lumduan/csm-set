@@ -329,9 +329,14 @@ live_test:
 1. **Data Refresh** — APScheduler triggers `scripts/fetch_history.py` -> `scripts/build_universe.py` -> `scripts/export_results.py --signals-only` after SET market close (~17:00 BKK / 10:00 UTC)
 2. **Signal Computation** — Feature pipeline runs on latest data, cross-sectional ranking generated
 3. **Portfolio Update** — If it's a **rebalance day (last trading day of month)**: `ExecutionSimulator.simulate()` generates trade list (sells + buys). Execute at ATO on the **first trading day of next month**. Other days: portfolio marked to market at latest closing prices.
-4. **Daily Log Generation** — Automated script produces `docs/live-test/daily/YYYY-MM-DD.md` with:
+4. **Cut-Loss Check** — Compare each position's current price vs entry price:
+   - 🟡 Warning at -7% → flag in daily log, prepare to exit
+   - 🔴 Hard Stop at -10% → sell immediately, don't wait for month-end
+   - 🟢 Trailing Stop: after +10% gain, raise stop to breakeven
+5. **Daily Log Generation** — Automated script produces `docs/live-test/daily/YYYY-MM-DD.md` with:
    - Regime state and any transitions
    - Portfolio NAV and day change
+   - Cut-loss watch table (each position: entry price, current price, P&L%, status)
    - Number of symbols in universe, any data gaps
    - Scheduler job statuses
    - Any warnings or errors

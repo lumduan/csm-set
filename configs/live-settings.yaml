@@ -73,10 +73,17 @@ live_test:
 
   # Alerts and thresholds
   alerts:
-    drawdown_warning_threshold: -0.05    # Warn at -5% DD
-    drawdown_critical_threshold: -0.10   # Critical at -10% DD
+    drawdown_warning_threshold: -0.05    # Warn at -5% portfolio DD
+    drawdown_critical_threshold: -0.10   # Critical at -10% portfolio DD
     data_gap_hours: 24                   # Alert if no data for 24 hours
     container_memory_mb: 1800            # Alert if memory exceeds 1.8 GB
+
+  # Per-position cut-loss (stop-loss)
+  cut_loss:
+    warning_threshold: -0.07             # Flag in daily report at -7% from entry
+    hard_stop: -0.10                     # Sell immediately at -10% from entry (no wait for month-end)
+    trailing_stop_enabled: true          # After +10% gain, raise stop to breakeven (entry price)
+    trailing_stop_trigger: 0.10          # Gain threshold to activate trailing stop
 
   # Execution simulation
   execution:
