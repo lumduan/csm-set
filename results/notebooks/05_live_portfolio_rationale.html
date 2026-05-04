@@ -7796,7 +7796,7 @@ a.anchor-link {
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
 <main>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2098e29f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=20fbd2a9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7808,7 +7808,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8cce8379">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5c25da1f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7855,7 +7855,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8f076294">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=febf7e79">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7884,7 +7884,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=09d58caf">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=3a00529f">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7892,8 +7892,11 @@ a.anchor-link {
 <div class="jp-OutputArea-child">
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
 <pre>Loading data...
-Universe: 132 symbols on latest date (2026-04-30)
-Feature panel: 1443 rows across 11 rebalance dates
+  Prices: loaded from parquet
+  Signals: loaded from JSON
+
+Data source: parquet (2026-04-30)
+Universe: 132 symbols
 Q5 (top quintile): 27 symbols
 Ready.
 </pre>
@@ -7902,7 +7905,7 @@ Ready.
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3ab65f1c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3cca043c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7912,7 +7915,7 @@ Ready.
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=f082f594">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=6738faf9">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7920,122 +7923,106 @@ Ready.
 <div class="jp-OutputArea-child">
 <div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
 <style type="text/css">
-#T_79f9e_row0_col1 {
+#T_5e760_row0_col1 {
   background-color: #0f8446;
   color: #f1f1f1;
 }
-#T_79f9e_row0_col2, #T_79f9e_row0_col3, #T_79f9e_row1_col2, #T_79f9e_row1_col3, #T_79f9e_row2_col2, #T_79f9e_row2_col3, #T_79f9e_row3_col2, #T_79f9e_row3_col3, #T_79f9e_row4_col3 {
-  color: #1a9850;
-  font-weight: bold;
-}
-#T_79f9e_row0_col4 {
+#T_5e760_row0_col4 {
   background-color: #097940;
   color: #f1f1f1;
 }
-#T_79f9e_row1_col1, #T_79f9e_row1_col4 {
+#T_5e760_row1_col1, #T_5e760_row1_col4 {
   background-color: #006837;
   color: #f1f1f1;
 }
-#T_79f9e_row2_col1 {
+#T_5e760_row2_col1 {
   background-color: #15904c;
   color: #f1f1f1;
 }
-#T_79f9e_row2_col4, #T_79f9e_row4_col4 {
-  background-color: #42ac5a;
-  color: #f1f1f1;
-}
-#T_79f9e_row3_col1 {
+#T_5e760_row2_col4, #T_5e760_row3_col1, #T_5e760_row4_col4 {
   background-color: #3ca959;
   color: #f1f1f1;
 }
-#T_79f9e_row3_col4 {
-  background-color: #5db961;
+#T_5e760_row3_col4 {
+  background-color: #5ab760;
   color: #f1f1f1;
 }
-#T_79f9e_row4_col1 {
+#T_5e760_row4_col1 {
   background-color: #a9da6c;
   color: #000000;
 }
-#T_79f9e_row4_col2 {
-  color: #999999;
-  font-weight: bold;
-}
-#T_79f9e_row5_col1, #T_79f9e_row5_col4 {
+#T_5e760_row5_col1, #T_5e760_row5_col4 {
   background-color: #a50026;
   color: #f1f1f1;
 }
-#T_79f9e_row5_col2, #T_79f9e_row5_col3 {
-  color: #d73027;
-  font-weight: bold;
-}
 </style>
-<table id="T_79f9e">
+<table id="T_5e760">
 <caption>Signal Quality Assessment — IC/ICIR Analysis</caption>
 <thead>
 <tr>
 <th class="blank level0"> </th>
-<th class="col_heading level0 col0" id="T_79f9e_level0_col0">Signal</th>
-<th class="col_heading level0 col1" id="T_79f9e_level0_col1">Mean IC</th>
-<th class="col_heading level0 col2" id="T_79f9e_level0_col2">ICIR</th>
-<th class="col_heading level0 col3" id="T_79f9e_level0_col3">Rank ICIR</th>
-<th class="col_heading level0 col4" id="T_79f9e_level0_col4">% Positive</th>
-<th class="col_heading level0 col5" id="T_79f9e_level0_col5">Passes Gate</th>
+<th class="col_heading level0 col0" id="T_5e760_level0_col0">Signal</th>
+<th class="col_heading level0 col1" id="T_5e760_level0_col1">Mean IC</th>
+<th class="col_heading level0 col2" id="T_5e760_level0_col2">ICIR</th>
+<th class="col_heading level0 col3" id="T_5e760_level0_col3">Rank ICIR</th>
+<th class="col_heading level0 col4" id="T_5e760_level0_col4">% Positive</th>
+<th class="col_heading level0 col5" id="T_5e760_level0_col5">Passes Gate</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<th class="row_heading level0 row0" id="T_79f9e_level0_row0">4</th>
-<td class="data row0 col0" id="T_79f9e_row0_col0">Sharpe Momentum</td>
-<td class="data row0 col1" id="T_79f9e_row0_col1">0.0278</td>
-<td class="data row0 col2" id="T_79f9e_row0_col2">0.2326</td>
-<td class="data row0 col3" id="T_79f9e_row0_col3">0.2747</td>
-<td class="data row0 col4" id="T_79f9e_row0_col4">60.7000</td>
-<td class="data row0 col5" id="T_79f9e_row0_col5">—</td>
+<th class="row_heading level0 row0" id="T_5e760_level0_row0">4</th>
+<td class="data row0 col0" id="T_5e760_row0_col0">Sharpe Momentum</td>
+<td class="data row0 col1" id="T_5e760_row0_col1">0.0278</td>
+<td class="data row0 col2" id="T_5e760_row0_col2">0.2326</td>
+<td class="data row0 col3" id="T_5e760_row0_col3">0.2747</td>
+<td class="data row0 col4" id="T_5e760_row0_col4">60.6796</td>
+<td class="data row0 col5" id="T_5e760_row0_col5">—</td>
 </tr>
 <tr>
-<th class="row_heading level0 row1" id="T_79f9e_level0_row1">1</th>
-<td class="data row1 col0" id="T_79f9e_row1_col0">Mom 6 1</td>
-<td class="data row1 col1" id="T_79f9e_row1_col1">0.0304</td>
-<td class="data row1 col2" id="T_79f9e_row1_col2">0.2263</td>
-<td class="data row1 col3" id="T_79f9e_row1_col3">0.2921</td>
-<td class="data row1 col4" id="T_79f9e_row1_col4">61.2000</td>
-<td class="data row1 col5" id="T_79f9e_row1_col5">—</td>
+<th class="row_heading level0 row1" id="T_5e760_level0_row1">1</th>
+<td class="data row1 col0" id="T_5e760_row1_col0">Mom 6 1</td>
+<td class="data row1 col1" id="T_5e760_row1_col1">0.0304</td>
+<td class="data row1 col2" id="T_5e760_row1_col2">0.2263</td>
+<td class="data row1 col3" id="T_5e760_row1_col3">0.2921</td>
+<td class="data row1 col4" id="T_5e760_row1_col4">61.1650</td>
+<td class="data row1 col5" id="T_5e760_row1_col5">—</td>
 </tr>
 <tr>
-<th class="row_heading level0 row2" id="T_79f9e_level0_row2">5</th>
-<td class="data row2 col0" id="T_79f9e_row2_col0">Residual Momentum</td>
-<td class="data row2 col1" id="T_79f9e_row2_col1">0.0269</td>
-<td class="data row2 col2" id="T_79f9e_row2_col2">0.2132</td>
-<td class="data row2 col3" id="T_79f9e_row2_col3">0.3202</td>
-<td class="data row2 col4" id="T_79f9e_row2_col4">59.2000</td>
-<td class="data row2 col5" id="T_79f9e_row2_col5">✓</td>
+<th class="row_heading level0 row2" id="T_5e760_level0_row2">5</th>
+<td class="data row2 col0" id="T_5e760_row2_col0">Residual Momentum</td>
+<td class="data row2 col1" id="T_5e760_row2_col1">0.0269</td>
+<td class="data row2 col2" id="T_5e760_row2_col2">0.2132</td>
+<td class="data row2 col3" id="T_5e760_row2_col3">0.3202</td>
+<td class="data row2 col4" id="T_5e760_row2_col4">59.2233</td>
+<td class="data row2 col5" id="T_5e760_row2_col5">✓</td>
 </tr>
 <tr>
-<th class="row_heading level0 row3" id="T_79f9e_level0_row3">0</th>
-<td class="data row3 col0" id="T_79f9e_row3_col0">Mom 12 1</td>
-<td class="data row3 col1" id="T_79f9e_row3_col1">0.0241</td>
-<td class="data row3 col2" id="T_79f9e_row3_col2">0.1687</td>
-<td class="data row3 col3" id="T_79f9e_row3_col3">0.2223</td>
-<td class="data row3 col4" id="T_79f9e_row3_col4">58.7000</td>
-<td class="data row3 col5" id="T_79f9e_row3_col5">—</td>
+<th class="row_heading level0 row3" id="T_5e760_level0_row3">0</th>
+<td class="data row3 col0" id="T_5e760_row3_col0">Mom 12 1</td>
+<td class="data row3 col1" id="T_5e760_row3_col1">0.0241</td>
+<td class="data row3 col2" id="T_5e760_row3_col2">0.1687</td>
+<td class="data row3 col3" id="T_5e760_row3_col3">0.2223</td>
+<td class="data row3 col4" id="T_5e760_row3_col4">58.7379</td>
+<td class="data row3 col5" id="T_5e760_row3_col5">—</td>
 </tr>
 <tr>
-<th class="row_heading level0 row4" id="T_79f9e_level0_row4">2</th>
-<td class="data row4 col0" id="T_79f9e_row4_col0">Mom 3 1</td>
-<td class="data row4 col1" id="T_79f9e_row4_col1">0.0173</td>
-<td class="data row4 col2" id="T_79f9e_row4_col2">0.1471</td>
-<td class="data row4 col3" id="T_79f9e_row4_col3">0.2243</td>
-<td class="data row4 col4" id="T_79f9e_row4_col4">59.2000</td>
-<td class="data row4 col5" id="T_79f9e_row4_col5">—</td>
+<th class="row_heading level0 row4" id="T_5e760_level0_row4">2</th>
+<td class="data row4 col0" id="T_5e760_row4_col0">Mom 3 1</td>
+<td class="data row4 col1" id="T_5e760_row4_col1">0.0173</td>
+<td class="data row4 col2" id="T_5e760_row4_col2">0.1471</td>
+<td class="data row4 col3" id="T_5e760_row4_col3">0.2243</td>
+<td class="data row4 col4" id="T_5e760_row4_col4">59.2233</td>
+<td class="data row4 col5" id="T_5e760_row4_col5">—</td>
 </tr>
 <tr>
-<th class="row_heading level0 row5" id="T_79f9e_level0_row5">3</th>
-<td class="data row5 col0" id="T_79f9e_row5_col0">Mom 1 0</td>
-<td class="data row5 col1" id="T_79f9e_row5_col1">-0.0121</td>
-<td class="data row5 col2" id="T_79f9e_row5_col2">-0.1006</td>
-<td class="data row5 col3" id="T_79f9e_row5_col3">-0.0552</td>
-<td class="data row5 col4" id="T_79f9e_row5_col4">48.1000</td>
-<td class="data row5 col5" id="T_79f9e_row5_col5">—</td>
+<th class="row_heading level0 row5" id="T_5e760_level0_row5">3</th>
+<td class="data row5 col0" id="T_5e760_row5_col0">Mom 1 0</td>
+<td class="data row5 col1" id="T_5e760_row5_col1">-0.0121</td>
+<td class="data row5 col2" id="T_5e760_row5_col2">-0.1006</td>
+<td class="data row5 col3" id="T_5e760_row5_col3">-0.0552</td>
+<td class="data row5 col4" id="T_5e760_row5_col4">48.0583</td>
+<td class="data row5 col5" id="T_5e760_row5_col5">—</td>
 </tr>
 </tbody>
 </table>
@@ -8058,7 +8045,7 @@ Composite ICIR: 0.2132  |  Rank ICIR: 0.3202
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=17f4bc04">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ce3761cf">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8068,7 +8055,7 @@ Composite ICIR: 0.2132  |  Rank ICIR: 0.3202
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=8acf72f1">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=931833d8">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8084,75 +8071,75 @@ Cross-Sectional Momentum Ranking (as of 2026-04-30)
 <div class="jp-OutputArea-child">
 <div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
 <style type="text/css">
-#T_850c1_row0_col1, #T_850c1_row0_col2, #T_850c1_row1_col1, #T_850c1_row1_col2 {
+#T_3da76_row0_col1, #T_3da76_row0_col2, #T_3da76_row1_col1, #T_3da76_row1_col2 {
   background-color: #00441b;
   color: #f1f1f1;
 }
-#T_850c1_row2_col1 {
+#T_3da76_row2_col1 {
   background-color: #3fa95c;
   color: #f1f1f1;
 }
-#T_850c1_row2_col2 {
+#T_3da76_row2_col2 {
   background-color: #0e7936;
   color: #f1f1f1;
 }
-#T_850c1_row3_col1 {
+#T_3da76_row3_col1 {
   background-color: #62bb6d;
   color: #f1f1f1;
 }
-#T_850c1_row3_col2 {
+#T_3da76_row3_col2 {
   background-color: #2e964d;
   color: #f1f1f1;
 }
-#T_850c1_row4_col1 {
+#T_3da76_row4_col1 {
   background-color: #bbe4b4;
   color: #000000;
 }
-#T_850c1_row4_col2 {
+#T_3da76_row4_col2 {
   background-color: #50b264;
   color: #f1f1f1;
 }
-#T_850c1_row5_col1 {
+#T_3da76_row5_col1 {
   background-color: #bce4b5;
   color: #000000;
 }
-#T_850c1_row5_col2 {
+#T_3da76_row5_col2 {
   background-color: #7fc97f;
   color: #000000;
 }
-#T_850c1_row6_col1 {
+#T_3da76_row6_col1 {
   background-color: #c6e8bf;
   color: #000000;
 }
-#T_850c1_row6_col2 {
+#T_3da76_row6_col2 {
   background-color: #a8dca2;
   color: #000000;
 }
-#T_850c1_row7_col1, #T_850c1_row8_col1 {
+#T_3da76_row7_col1, #T_3da76_row8_col1 {
   background-color: #f6fcf4;
   color: #000000;
 }
-#T_850c1_row7_col2 {
+#T_3da76_row7_col2 {
   background-color: #cbeac4;
   color: #000000;
 }
-#T_850c1_row8_col2 {
+#T_3da76_row8_col2 {
   background-color: #e6f5e1;
   color: #000000;
 }
-#T_850c1_row9_col1, #T_850c1_row9_col2 {
+#T_3da76_row9_col1, #T_3da76_row9_col2 {
   background-color: #f7fcf5;
   color: #000000;
 }
 </style>
-<table id="T_850c1">
+<table id="T_3da76">
 <thead>
 <tr>
 <th class="blank level0"> </th>
-<th class="col_heading level0 col0" id="T_850c1_level0_col0">12-1M Return</th>
-<th class="col_heading level0 col1" id="T_850c1_level0_col1">Z-Score</th>
-<th class="col_heading level0 col2" id="T_850c1_level0_col2">Percentile</th>
-<th class="col_heading level0 col3" id="T_850c1_level0_col3">Quintile</th>
+<th class="col_heading level0 col0" id="T_3da76_level0_col0">12-1M Return</th>
+<th class="col_heading level0 col1" id="T_3da76_level0_col1">Z-Score</th>
+<th class="col_heading level0 col2" id="T_3da76_level0_col2">Percentile</th>
+<th class="col_heading level0 col3" id="T_3da76_level0_col3">Quintile</th>
 </tr>
 <tr>
 <th class="index_name level0">Symbol</th>
@@ -8164,74 +8151,74 @@ Cross-Sectional Momentum Ranking (as of 2026-04-30)
 </thead>
 <tbody>
 <tr>
-<th class="row_heading level0 row0" id="T_850c1_level0_row0">DELTA</th>
-<td class="data row0 col0" id="T_850c1_row0_col0">2.3656</td>
-<td class="data row0 col1" id="T_850c1_row0_col1">2.357</td>
-<td class="data row0 col2" id="T_850c1_row0_col2">0.996</td>
-<td class="data row0 col3" id="T_850c1_row0_col3">Q5</td>
+<th class="row_heading level0 row0" id="T_3da76_level0_row0">DELTA</th>
+<td class="data row0 col0" id="T_3da76_row0_col0">2.3656</td>
+<td class="data row0 col1" id="T_3da76_row0_col1">2.357</td>
+<td class="data row0 col2" id="T_3da76_row0_col2">0.996</td>
+<td class="data row0 col3" id="T_3da76_row0_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row1" id="T_850c1_level0_row1">IRPC</th>
-<td class="data row1 col0" id="T_850c1_row1_col0">2.3656</td>
-<td class="data row1 col1" id="T_850c1_row1_col1">2.357</td>
-<td class="data row1 col2" id="T_850c1_row1_col2">0.996</td>
-<td class="data row1 col3" id="T_850c1_row1_col3">Q5</td>
+<th class="row_heading level0 row1" id="T_3da76_level0_row1">IRPC</th>
+<td class="data row1 col0" id="T_3da76_row1_col0">2.3656</td>
+<td class="data row1 col1" id="T_3da76_row1_col1">2.357</td>
+<td class="data row1 col2" id="T_3da76_row1_col2">0.996</td>
+<td class="data row1 col3" id="T_3da76_row1_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row2" id="T_850c1_level0_row2">PTTGC</th>
-<td class="data row2 col0" id="T_850c1_row2_col0">2.0073</td>
-<td class="data row2 col1" id="T_850c1_row2_col1">2.000</td>
-<td class="data row2 col2" id="T_850c1_row2_col2">0.985</td>
-<td class="data row2 col3" id="T_850c1_row2_col3">Q5</td>
+<th class="row_heading level0 row2" id="T_3da76_level0_row2">PTTGC</th>
+<td class="data row2 col0" id="T_3da76_row2_col0">2.0073</td>
+<td class="data row2 col1" id="T_3da76_row2_col1">2.000</td>
+<td class="data row2 col2" id="T_3da76_row2_col2">0.985</td>
+<td class="data row2 col3" id="T_3da76_row2_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row3" id="T_850c1_level0_row3">NEX</th>
-<td class="data row3 col0" id="T_850c1_row3_col0">1.9240</td>
-<td class="data row3 col1" id="T_850c1_row3_col1">1.917</td>
-<td class="data row3 col2" id="T_850c1_row3_col2">0.977</td>
-<td class="data row3 col3" id="T_850c1_row3_col3">Q5</td>
+<th class="row_heading level0 row3" id="T_3da76_level0_row3">NEX</th>
+<td class="data row3 col0" id="T_3da76_row3_col0">1.9240</td>
+<td class="data row3 col1" id="T_3da76_row3_col1">1.917</td>
+<td class="data row3 col2" id="T_3da76_row3_col2">0.977</td>
+<td class="data row3 col3" id="T_3da76_row3_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row4" id="T_850c1_level0_row4">AGE</th>
-<td class="data row4 col0" id="T_850c1_row4_col0">1.6789</td>
-<td class="data row4 col1" id="T_850c1_row4_col1">1.673</td>
-<td class="data row4 col2" id="T_850c1_row4_col2">0.970</td>
-<td class="data row4 col3" id="T_850c1_row4_col3">Q5</td>
+<th class="row_heading level0 row4" id="T_3da76_level0_row4">AGE</th>
+<td class="data row4 col0" id="T_3da76_row4_col0">1.6789</td>
+<td class="data row4 col1" id="T_3da76_row4_col1">1.673</td>
+<td class="data row4 col2" id="T_3da76_row4_col2">0.970</td>
+<td class="data row4 col3" id="T_3da76_row4_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row5" id="T_850c1_level0_row5">HANA</th>
-<td class="data row5 col0" id="T_850c1_row5_col0">1.6776</td>
-<td class="data row5 col1" id="T_850c1_row5_col1">1.671</td>
-<td class="data row5 col2" id="T_850c1_row5_col2">0.962</td>
-<td class="data row5 col3" id="T_850c1_row5_col3">Q5</td>
+<th class="row_heading level0 row5" id="T_3da76_level0_row5">HANA</th>
+<td class="data row5 col0" id="T_3da76_row5_col0">1.6776</td>
+<td class="data row5 col1" id="T_3da76_row5_col1">1.671</td>
+<td class="data row5 col2" id="T_3da76_row5_col2">0.962</td>
+<td class="data row5 col3" id="T_3da76_row5_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row6" id="T_850c1_level0_row6">BPP</th>
-<td class="data row6 col0" id="T_850c1_row6_col0">1.6455</td>
-<td class="data row6 col1" id="T_850c1_row6_col1">1.639</td>
-<td class="data row6 col2" id="T_850c1_row6_col2">0.955</td>
-<td class="data row6 col3" id="T_850c1_row6_col3">Q5</td>
+<th class="row_heading level0 row6" id="T_3da76_level0_row6">BPP</th>
+<td class="data row6 col0" id="T_3da76_row6_col0">1.6455</td>
+<td class="data row6 col1" id="T_3da76_row6_col1">1.639</td>
+<td class="data row6 col2" id="T_3da76_row6_col2">0.955</td>
+<td class="data row6 col3" id="T_3da76_row6_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row7" id="T_850c1_level0_row7">GUNKUL</th>
-<td class="data row7 col0" id="T_850c1_row7_col0">1.4057</td>
-<td class="data row7 col1" id="T_850c1_row7_col1">1.400</td>
-<td class="data row7 col2" id="T_850c1_row7_col2">0.947</td>
-<td class="data row7 col3" id="T_850c1_row7_col3">Q5</td>
+<th class="row_heading level0 row7" id="T_3da76_level0_row7">GUNKUL</th>
+<td class="data row7 col0" id="T_3da76_row7_col0">1.4057</td>
+<td class="data row7 col1" id="T_3da76_row7_col1">1.400</td>
+<td class="data row7 col2" id="T_3da76_row7_col2">0.947</td>
+<td class="data row7 col3" id="T_3da76_row7_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row8" id="T_850c1_level0_row8">INSET</th>
-<td class="data row8 col0" id="T_850c1_row8_col0">1.4044</td>
-<td class="data row8 col1" id="T_850c1_row8_col1">1.399</td>
-<td class="data row8 col2" id="T_850c1_row8_col2">0.939</td>
-<td class="data row8 col3" id="T_850c1_row8_col3">Q5</td>
+<th class="row_heading level0 row8" id="T_3da76_level0_row8">INSET</th>
+<td class="data row8 col0" id="T_3da76_row8_col0">1.4044</td>
+<td class="data row8 col1" id="T_3da76_row8_col1">1.399</td>
+<td class="data row8 col2" id="T_3da76_row8_col2">0.939</td>
+<td class="data row8 col3" id="T_3da76_row8_col3">Q5</td>
 </tr>
 <tr>
-<th class="row_heading level0 row9" id="T_850c1_level0_row9">JTS</th>
-<td class="data row9 col0" id="T_850c1_row9_col0">1.3993</td>
-<td class="data row9 col1" id="T_850c1_row9_col1">1.394</td>
-<td class="data row9 col2" id="T_850c1_row9_col2">0.932</td>
-<td class="data row9 col3" id="T_850c1_row9_col3">Q5</td>
+<th class="row_heading level0 row9" id="T_3da76_level0_row9">JTS</th>
+<td class="data row9 col0" id="T_3da76_row9_col0">1.3993</td>
+<td class="data row9 col1" id="T_3da76_row9_col1">1.394</td>
+<td class="data row9 col2" id="T_3da76_row9_col2">0.932</td>
+<td class="data row9 col3" id="T_3da76_row9_col3">Q5</td>
 </tr>
 </tbody>
 </table>
@@ -8240,7 +8227,7 @@ Cross-Sectional Momentum Ranking (as of 2026-04-30)
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=43fc57f5">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=45606f9a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8249,7 +8236,7 @@ Cross-Sectional Momentum Ranking (as of 2026-04-30)
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=44779a8e">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=03ae1c20">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8275,7 +8262,7 @@ Key observations from momentum decomposition:
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=03581d7e">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0fa9433e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8284,7 +8271,7 @@ Key observations from momentum decomposition:
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=3e74f718">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=9c052bf2">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8293,42 +8280,42 @@ Key observations from momentum decomposition:
 <div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
 <style type="text/css">
 </style>
-<table id="T_71470">
+<table id="T_910af">
 <caption>Portfolio Summary</caption>
 <thead>
 <tr>
-<th class="col_heading level0 col0" id="T_71470_level0_col0">Metric</th>
-<th class="col_heading level0 col1" id="T_71470_level0_col1">Value</th>
+<th class="col_heading level0 col0" id="T_910af_level0_col0">Metric</th>
+<th class="col_heading level0 col1" id="T_910af_level0_col1">Value</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td class="data row0 col0" id="T_71470_row0_col0">Total AUM</td>
-<td class="data row0 col1" id="T_71470_row0_col1">1,000,000 THB</td>
+<td class="data row0 col0" id="T_910af_row0_col0">Total AUM</td>
+<td class="data row0 col1" id="T_910af_row0_col1">1,000,000 THB</td>
 </tr>
 <tr>
-<td class="data row1 col0" id="T_71470_row1_col0">Number of Positions</td>
-<td class="data row1 col1" id="T_71470_row1_col1">10</td>
+<td class="data row1 col0" id="T_910af_row1_col0">Number of Positions</td>
+<td class="data row1 col1" id="T_910af_row1_col1">10</td>
 </tr>
 <tr>
-<td class="data row2 col0" id="T_71470_row2_col0">Max Position</td>
-<td class="data row2 col1" id="T_71470_row2_col1">12.0% (DELTA, IRPC, PTTGC)</td>
+<td class="data row2 col0" id="T_910af_row2_col0">Max Position</td>
+<td class="data row2 col1" id="T_910af_row2_col1">12.0% (DELTA, IRPC, PTTGC)</td>
 </tr>
 <tr>
-<td class="data row3 col0" id="T_71470_row3_col0">Min Position</td>
-<td class="data row3 col1" id="T_71470_row3_col1">8.0% (INSET, JTS)</td>
+<td class="data row3 col0" id="T_910af_row3_col0">Min Position</td>
+<td class="data row3 col1" id="T_910af_row3_col1">8.0% (INSET, JTS)</td>
 </tr>
 <tr>
-<td class="data row4 col0" id="T_71470_row4_col0">Weighting Scheme</td>
-<td class="data row4 col1" id="T_71470_row4_col1">Volatility-Target</td>
+<td class="data row4 col0" id="T_910af_row4_col0">Weighting Scheme</td>
+<td class="data row4 col1" id="T_910af_row4_col1">Volatility-Target</td>
 </tr>
 <tr>
-<td class="data row5 col0" id="T_71470_row5_col0">Vol Target (annual)</td>
-<td class="data row5 col1" id="T_71470_row5_col1">15%</td>
+<td class="data row5 col0" id="T_910af_row5_col0">Vol Target (annual)</td>
+<td class="data row5 col1" id="T_910af_row5_col1">15%</td>
 </tr>
 <tr>
-<td class="data row6 col0" id="T_71470_row6_col0">Next Rebalance</td>
-<td class="data row6 col1" id="T_71470_row6_col1">2026-05-30 (BME)</td>
+<td class="data row6 col0" id="T_910af_row6_col0">Next Rebalance</td>
+<td class="data row6 col1" id="T_910af_row6_col1">2026-05-30 (BME)</td>
 </tr>
 </tbody>
 </table>
@@ -8337,7 +8324,7 @@ Key observations from momentum decomposition:
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=73c39173">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=267d0a6e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8354,7 +8341,7 @@ Key observations from momentum decomposition:
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=d7f68503">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=28189c57">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8372,7 +8359,7 @@ Buffer Logic Parameters:
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5952a038">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c1393771">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8408,7 +8395,7 @@ Buffer Logic Parameters:
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=729638f4">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a6f5190b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8534,7 +8521,7 @@ Total budget: 1,000,000 THB. Round down to nearest board lot (100 shares) for ea
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=add8f40b">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5ee632af">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8571,7 +8558,7 @@ Total budget: 1,000,000 THB. Round down to nearest board lot (100 shares) for ea
 </tr>
 </tbody>
 </table>
-<p><strong>Strategy Version:</strong> CSM v1.0 (live-test branch, commit <code>4349c46</code>)
+<p><strong>Strategy Version:</strong> CSM v1.0 (live-test branch)
 <strong>Environment:</strong> <code>live-test-v1.0.0</code></p>
 <hr/>
 <p><em>This notebook was generated by the CSM strategy pipeline. All stock selections are determined by the cross-sectional momentum ranking algorithm with the configuration specified in <code>configs/live-settings.yaml</code>. No discretionary overrides were applied.</em></p>
