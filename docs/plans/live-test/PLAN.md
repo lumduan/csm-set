@@ -3,7 +3,9 @@
 **Feature:** Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy
 **Branch:** `feature/live-test`
 **Created:** 2026-05-04
-**Status:** Planning
+**Status:** Phase A in progress (container healthy, 72h stability period started)
+**Environment Lock:** Git tag `live-test-v1.0.0` at commit `892e78a`
+**Docker Port:** 8100 (host) → 8000 (container)
 **Depends on:** Phase 7 (Hardening & Documentation — complete), Phase 4.9 (Signal Robustness & Risk Stabilization — complete)
 **Positioning:** Post-MVP validation phase — runs the full strategy stack against live SET market data for 8 months (May–Dec 2026) to gather real-world evidence before any production deployment with real capital.
 
