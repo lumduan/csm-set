@@ -77,7 +77,7 @@ cd csm-set
 docker compose up
 ```
 
-Open [http://localhost:8000](http://localhost:8000).
+Open [http://localhost:8100](http://localhost:8100).
 
 The container boots uvicorn in public mode, serves pre-computed research artefacts (notebook HTML, backtest metrics, signal rankings), and exposes the full REST API. Nothing to configure — it just works.
 
@@ -87,7 +87,7 @@ Skip the build step entirely with a pre-built image from GHCR:
 
 ```bash
 docker pull ghcr.io/lumduan/csm-set:latest
-docker run -p 8000:8000 ghcr.io/lumduan/csm-set:latest
+docker run -p 8100:8000 ghcr.io/lumduan/csm-set:latest
 ```
 
 Available tags: `latest`, `vX.Y.Z`, `vX.Y`, `sha-<short-sha>`. See [RELEASING.md](RELEASING.md) for the owner release process.
@@ -144,7 +144,7 @@ Write endpoints (`/api/v1/data/refresh`, `/api/v1/backtest/run`, `/api/v1/schedu
 
 ## What you will see
 
-At `http://localhost:8000`:
+At `http://localhost:8100`:
 
 | Page | Content |
 |------|---------|
@@ -202,7 +202,7 @@ npx json-schema-to-typescript results/static/backtest/summary.schema.json \
 Then fetch live data from the API:
 
 ```javascript
-const rankings = await fetch('http://localhost:8000/api/v1/signals/latest')
+const rankings = await fetch('http://localhost:8100/api/v1/signals/latest')
   .then(r => r.json());
 // rankings.rankings: Array<{ symbol, sector, quintile, z_score, rank_pct }>
 ```
@@ -442,7 +442,7 @@ CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=true + 3 DSNs set
 | run the quality gate | [docs/development/overview.md](docs/development/overview.md) § Quality gate |
 | refresh public artefacts | `scripts/export_results.py` and [docs/guides/public-mode.md](docs/guides/public-mode.md) |
 | release a new version | [RELEASING.md](RELEASING.md) |
-| see all API endpoints | [http://localhost:8000/api/docs](http://localhost:8000/api/docs) (when running) |
+| see all API endpoints | [http://localhost:8100/api/docs](http://localhost:8100/api/docs) (when running) |
 | understand the security model | [docs/architecture/overview.md](docs/architecture/overview.md) § Security model |
 | add an API endpoint | `api/routers/` and [docs/reference/](docs/reference/) |
 | find a module's public API surface | [docs/reference/](docs/reference/) — one page per subpackage |
@@ -451,11 +451,11 @@ CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=true + 3 DSNs set
 
 ## Troubleshooting
 
-### Port 8000 already in use
+### Port 8100 already in use
 
 **Symptom:** `docker compose up` fails with `bind: address already in use`.
 
-**Fix:** Stop the process on port 8000 (`lsof -ti:8000 | xargs kill`) or set `CSM_PORT=8001` in `.env` and remap the compose port.
+**Fix:** Stop the process on port 8100 (`lsof -ti:8100 | xargs kill`) or set the host port in `docker-compose.yml` to a free port (e.g., `"8101:8000"`).
 
 ### Docker daemon not running
 
@@ -536,7 +536,7 @@ csm-set/
 ├── data/                         # Raw/processed Parquet files (gitignored)
 ├── docs/                         # Documentation and plans
 ├── Dockerfile                    # Multi-stage: builder + slim runtime
-├── docker-compose.yml            # Public: port 8000, results:ro, healthcheck, mem_limit 2g
+├── docker-compose.yml            # Public: port 8100, results:ro, healthcheck, mem_limit 2g
 ├── docker-compose.private.yml    # Owner override: writable mounts, tvkit auth
 └── pyproject.toml                # Project metadata, dependencies, tool config
 ```
@@ -556,7 +556,7 @@ csm-set/
 - [Reference: Portfolio](docs/reference/portfolio/overview.md)
 - [Reference: Research](docs/reference/research/overview.md)
 - [Reference: Risk](docs/reference/risk/overview.md)
-- [API Reference (OpenAPI)](http://localhost:8000/api/docs) — available when the container is running
+- [API Reference (OpenAPI)](http://localhost:8100/api/docs) — available when the container is running
 - [Master Roadmap](docs/plans/ROADMAP.md)
 
 ---

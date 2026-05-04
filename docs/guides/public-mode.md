@@ -110,7 +110,7 @@ The `request_id` is a ULID that correlates with the server's access log for debu
 docker compose up -d
 
 # Try to write — expect 403
-curl -X POST http://localhost:8000/api/v1/data/refresh -i
+curl -X POST http://localhost:8100/api/v1/data/refresh -i
 # HTTP/1.1 403 Forbidden
 # Content-Type: application/problem+json
 ```
@@ -232,7 +232,7 @@ CSM_API_KEY=dGhpcyBpcyBhIHNhbXBsZSBrZXkgZm9yIGRvY3VtZW50YXRpb24
 
 ```bash
 curl -H "X-API-Key: dGhpcyBpcyBhIHNhbXBsZSBrZXkgZm9yIGRvY3VtZW50YXRpb24" \
-  -X POST http://localhost:8000/api/v1/data/refresh
+  -X POST http://localhost:8100/api/v1/data/refresh
 ```
 
 ### Protected paths

@@ -23,7 +23,7 @@ cd csm-set
 docker compose up
 ```
 
-Open [http://localhost:8000](http://localhost:8000).
+Open [http://localhost:8100](http://localhost:8100).
 
 ### What's baked in
 
@@ -126,7 +126,7 @@ Send requests with the key:
 
 ```bash
 curl -H "X-API-Key: your-generated-key-here" \
-  -X POST http://localhost:8000/api/v1/data/refresh
+  -X POST http://localhost:8100/api/v1/data/refresh
 ```
 
 ---
@@ -137,7 +137,7 @@ Skip the local build entirely:
 
 ```bash
 docker pull ghcr.io/lumduan/csm-set:latest
-docker run -p 8000:8000 ghcr.io/lumduan/csm-set:latest
+docker run -p 8100:8000 ghcr.io/lumduan/csm-set:latest
 ```
 
 Available tags:
@@ -195,7 +195,7 @@ Example for a React dev server on port 3000:
 
 ```javascript
 // From http://localhost:3000
-const resp = await fetch('http://localhost:8000/api/v1/signals/latest');
+const resp = await fetch('http://localhost:8100/api/v1/signals/latest');
 const data = await resp.json();
 ```
 
@@ -205,21 +205,20 @@ Multiple origins are comma-separated. The middleware parses them from the `CSM_C
 
 ## Troubleshooting
 
-### Port 8000 already in use
+### Port 8100 already in use
 
-**Symptom:** `docker compose up` fails with `Error starting userland proxy: listen tcp4 0.0.0.0:8000: bind: address already in use`.
+**Symptom:** `docker compose up` fails with `Error starting userland proxy: listen tcp4 0.0.0.0:8100: bind: address already in use`.
 
-**Fix:** Find and stop the process using port 8000:
+**Fix:** Find and stop the process using port 8100:
 
 ```bash
-lsof -ti:8000 | xargs kill
+lsof -ti:8100 | xargs kill
 ```
 
-Or run csm-set on a different port:
+Or run csm-set on a different host port:
 
 ```bash
-CSM_PORT=8001 docker compose up
-# Add to docker-compose.yml: ports: ["8001:8000"]
+# Edit docker-compose.yml: change "8100:8000" to "8101:8000" (or any free port)
 ```
 
 ### Docker daemon not running
@@ -261,7 +260,7 @@ uv run python scripts/export_results.py
 **Symptom:** Container status shows `(unhealthy)` even though the API seems to work.
 
 **Fix:**
-1. Check the health endpoint directly: `curl http://localhost:8000/health`
+1. Check the health endpoint directly: `curl http://localhost:8100/health`
 2. If it returns JSON, the issue may be transient — wait for the next check interval
 3. If it hangs, the API may be stuck — check logs: `docker compose logs csm`
 4. Common cause: `start_period` too short for slow machines; increase to 60s
