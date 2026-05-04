@@ -53,7 +53,10 @@ docker compose down
 
 For the project owner with tvkit credentials. Enables data fetching, write endpoints, and result regeneration.
 
+Export your TradingView session cookies in the host shell first — the private compose file refuses to boot without them:
+
 ```bash
+export TVKIT_AUTH_TOKEN='{"sessionid":"...","sessionid_sign":"...","device_t":"...","tv_ecuid":"..."}'
 docker compose -f docker-compose.yml -f docker-compose.private.yml up -d
 ```
 
@@ -62,11 +65,19 @@ Docker Compose merges the two files. The private override:
 | Override | Value | Effect |
 |----------|-------|--------|
 | `CSM_PUBLIC_MODE` | `false` | Enable write endpoints and data fetches |
-| `TVKIT_BROWSER` | `chrome` | Use Chrome for tvkit browser auth |
+| `TVKIT_AUTH_TOKEN` | JSON cookie blob (forwarded from host) | tvkit cookie-based auth — lifts the 5,000-bar anonymous cap |
 | `CSM_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Restrict CORS to local dev servers |
 | `./data` mount | `/app/data` (rw) | Writable OHLCV data |
 | `./results` mount | `/app/results` (rw) | Writable results |
-| Chrome profile mount | `/root/.config/google-chrome` (`:ro`) | tvkit browser auth tokens |
+
+### Obtaining `TVKIT_AUTH_TOKEN`
+
+1. Sign in to [tradingview.com](https://www.tradingview.com) in your browser.
+2. Open DevTools → **Application** → **Cookies** → `https://www.tradingview.com`.
+3. Copy `sessionid` (required) and any of `sessionid_sign`, `device_t`, `tv_ecuid` (recommended).
+4. Combine into a single-line JSON object and export as `TVKIT_AUTH_TOKEN` (or set it in `.env`).
+
+Cookies expire when you log out of TradingView in that browser session, so re-export when fetches start failing with auth errors.
 
 ### Owner workflow inside the container
 

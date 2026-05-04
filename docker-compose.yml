@@ -20,7 +20,8 @@
 #
 # Owner / private mode:
 #   See docker-compose.private.yml for the override file that enables
-#   data fetching, writes, and tvkit browser authentication.
+#   data fetching, writes, and tvkit cookie-based authentication
+#   (TVKIT_AUTH_TOKEN, set as a JSON cookie blob).
 #   Invoke with:
 #     docker compose -f docker-compose.yml -f docker-compose.private.yml up
 #

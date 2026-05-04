@@ -163,7 +163,7 @@ Everything visible in public mode works with zero configuration. The following o
 
 | Operation | Requires | Script |
 |-----------|----------|--------|
-| Fetch live OHLCV data | tvkit + Chrome profile | `scripts/fetch_history.py` |
+| Fetch live OHLCV data | tvkit + `TVKIT_AUTH_TOKEN` cookies | `scripts/fetch_history.py` |
 | Build universe snapshots | fetched data | `scripts/build_universe.py` |
 | Re-run notebooks | fetched data | `scripts/export_results.py --notebooks-only` |
 | Generate new backtest results | fetched data + signal pipeline | `scripts/export_results.py --backtest-only` |
@@ -310,9 +310,9 @@ Public users get the updated research on their next `git pull` or image rebuild.
 
 ### Private mode: missing tvkit authentication
 
-**Symptom:** `scripts/fetch_history.py` exits with `TVKitAuthError` or `No credentials found`.
+**Symptom:** `scripts/fetch_history.py` exits with auth errors, returns ≤5,000 bars per symbol, or fails Pydantic validation at startup.
 
-**Fix:** Ensure your TradingView credentials are set in `.env` (see `.env.example`) and that your Chrome profile directory is correctly mounted in the private compose file.
+**Fix:** Set `TVKIT_AUTH_TOKEN` in `.env` (see `.env.example`) to a JSON object containing your TradingView session cookies — at minimum `{"sessionid": "..."}`, ideally also `sessionid_sign`, `device_t`, `tv_ecuid`. Extract them via your browser's DevTools → Application → Cookies → `tradingview.com`. Cookies expire when you sign out of TradingView in that browser.
 
 ### Permission denied writing to `data/` or `results/`
 
