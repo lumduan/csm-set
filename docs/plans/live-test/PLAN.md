@@ -1,7 +1,7 @@
 # Live Test — Master Plan
 
 **Feature:** Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy
-**Branch:** `feature/live-test`
+**Branch:** `live-test`
 **Created:** 2026-05-04
 **Status:** Phase A in progress (container healthy, 72h stability period started)
 **Environment Lock:** Git tag `live-test-v1.0.0` at commit `892e78a`
@@ -56,7 +56,7 @@ The live test covers four phases:
 
 ## Problem Statement
 
-Phase 7 delivered a production-grade strategy stack with 742 tests and 92% coverage. The backtest reports CAGR 12.52%, Sharpe 0.663, Max DD −31.03% (Phase 3.9 baseline). Phase 4.9's concentrated retail-scale configuration reports Sharpe 2.70 and Max DD −10.54% on synthetic data.
+Phase 7 delivered a production-grade strategy stack with 742 tests and 92% coverage. The backtest reports CAGR 12.52%, Sharpe 0.663, Max DD −31.03% (Phase 3.8 — 207 BME rebalance dates, 2009–2026). Phase 4.9's concentrated retail-scale configuration reports CAGR 36.24%, Sharpe 2.70, Max DD −10.54% on synthetic data.
 
 These numbers are promising but share one critical limitation: they are **historical**. Three questions can only be answered by running the strategy live:
 
@@ -140,7 +140,7 @@ live_test:
   end_date: "2026-12-31"
   aum_thb: 1_000_000          # Paper portfolio size (retail scale per Phase 4.9)
   rebalance:
-    frequency: monthly         # last trading day of month
+    frequency: monthly         # last trading day of month (BME)
     execution_time_utc: "09:00"
   data:
     refresh_cron: "30 13 * * 1-5"  # After SET market close (17:00 BKK = 10:00 UTC)
@@ -151,17 +151,29 @@ live_test:
       target_annual: 0.15
     circuit_breaker:
       enabled: true
-      trigger_threshold: -0.10
+      trigger_threshold: -0.10       # Phase 4.9: -10%/-5% with buffer
+      recovery_threshold: -0.05
+    buffer:                           # Phase 3.8: reduce turnover
+      enabled: true
+      rank_threshold: 0.25
+      exit_rank_floor: 0.35
+    ema100_fast_exit:                 # Phase 3.8: close if price < EMA100
+      enabled: true
     capacity:
       enabled: false           # Disabled at retail AUM (1M THB)
     quality_filter:
       enabled: true
+  weighting:
+    scheme: VOL_TARGET
+    max_position: 0.15
+    min_position: 0.05
+    max_holdings: 10
   reporting:
     daily_log_enabled: true
     weekly_health_check_day: "Saturday"
     monthly_review_day: first_trading  # First trading day of month (before ATO execution)
   alerts:
-    drawdown_warning_threshold: -0.05
+    drawdown_warning_threshold: -0.05  # Portfolio-level DD alerts only
     drawdown_critical_threshold: -0.10
     data_gap_hours: 24
     container_memory_mb: 1800
@@ -177,29 +189,33 @@ live_test:
 
 **Deliverables:**
 
-- [ ] **A.1 Environment Lock**
-  - Freeze strategy code: tag the commit as `live-test-v1.0.0` in git
-  - Document the exact commit SHA in `docs/live-test/README.md`
-  - Create `feature/live-test` branch off the locked commit
-  - Disable all non-critical code changes via branch protection or social contract
+- [x] **A.1 Environment Lock**
+  - [x] Freeze strategy code: tag the commit as `live-test-v1.0.0` in git (commit `892e78a`)
+  - [x] Document the exact commit SHA in `docs/live-test/README.md`
+  - [x] Create `live-test` branch off the locked commit
+  - [x] Code freeze in effect — no logic changes permitted
 
-- [ ] **A.2 Configuration**
-  - Create `configs/live-settings.yaml` with initial parameters (retail scale: 1M THB AUM, concentrated top-10 portfolio, quality filter on, capacity overlay off)
-  - Create `.env.live` from `.env.example` with tvkit credentials and `CSM_PUBLIC_MODE=false`
-  - Validate configuration loads correctly via `Settings` pydantic model
+- [x] **A.2 Configuration**
+  - [x] Create `configs/live-settings.yaml` with retail-scale parameters: 1M THB AUM, concentrated top-10, quality filter on, capacity overlay off
+  - [x] Add buffer logic (0.25 rank threshold) and EMA100 fast-exit overlay — aligned with Phase 3.8 backtest
+  - [x] Exit mechanisms documented: only monthly rebalance (exit rank floor 35%, buffer 0.25, EMA100 fast exit, portfolio circuit breaker -10%/-5%)
+  - [x] Per-position stop-loss rules REMOVED — not in backtest, not in live test
+  - [x] `.env` configured with tvkit credentials and `CSM_PUBLIC_MODE=false`
+  - [ ] Validate configuration loads correctly via `Settings` pydantic model
 
 - [ ] **A.3 Infrastructure Check**
-  - Verify Docker container starts and stays healthy for 72 consecutive hours
-  - Confirm APScheduler triggers daily data refresh without failures for 5 consecutive trading days
-  - Confirm tvkit authentication is stable (no session expiry within the trading week)
-  - Set up auto-restart policy (`restart: unless-stopped` in compose)
-  - Verify disk space: ensure >= 10 GB free for 8 months of parquet data accumulation
+  - [x] Docker container starts and is healthy (`csm-set-csm-1` Up, healthy)
+  - [ ] Container stable for 72 consecutive hours (started 2026-05-04 — in progress)
+  - [ ] APScheduler triggers daily data refresh without failures for 5 consecutive trading days (first trading day: 2026-05-05)
+  - [x] Docker auto-restart policy configured (`restart: unless-stopped` in compose)
+  - [ ] Verify disk space: ensure >= 10 GB free for 8 months of parquet data accumulation
 
-- [ ] **A.4 Baseline Reporting**
-  - Generate initial portfolio composition snapshot (what the strategy would buy today)
-  - Generate initial regime state report (BULL/BEAR/NEUTRAL, SMA200 position)
-  - Log the current SET index level and 200-day SMA for future comparison
-  - Export current backtest summary metrics as the comparison baseline
+- [x] **A.4 Baseline Reporting**
+  - [x] Generate initial portfolio composition snapshot (daily log 2026-05-04: 10 stocks, top momentum quintile)
+  - [x] Portfolio rationale notebook generated (`notebooks/05_live_portfolio_rationale.ipynb`) with embedded data fallback
+  - [x] Backtest baseline metrics documented: Phase 3.8 CAGR 12.52%, Sharpe 0.663, Max DD -31.03%; Phase 4.9 CAGR 36.24%, Sharpe 2.70, Max DD -10.54%
+  - [ ] Generate initial regime state report (BULL/BEAR/NEUTRAL, SMA200 position) — SET vs SMA200 check pending before first entry
+  - [ ] Log the current SET index level and 200-day SMA for future comparison
 
 **Exit criteria:** Container stable for 72 hours, 5 consecutive successful daily refreshes, baseline report committed.
 
