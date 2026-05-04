@@ -8389,7 +8389,7 @@ Buffer Logic Parameters:
 <h3 id="7.5-Cut-Loss-Rules-(Daily-Monitoring)">7.5 Cut-Loss Rules (Daily Monitoring)<a class="anchor-link" href="#7.5-Cut-Loss-Rules-(Daily-Monitoring)">¶</a></h3><ul>
 <li>🟡 <strong>Warning (−7%):</strong> Flag in daily report, prepare exit plan</li>
 <li>🔴 <strong>Hard Stop (−10%):</strong> Sell immediately, do not wait for month-end</li>
-<li>🟢 <strong>Trailing Stop:</strong> After +10% gain, raise stop to breakeven</li>
+<li>🟢 <strong>Monthly Rebalance:</strong> Re-rank all stocks on BME; exit if below 35th percentile</li>
 </ul>
 </div>
 </div>
@@ -8422,7 +8422,7 @@ Buffer Logic Parameters:
 </tr>
 <tr>
 <td><strong>Monitoring</strong></td>
-<td>Daily cut-loss check starting 2026-05-06</td>
+<td>Daily NAV mark-to-market; exits only at monthly rebalance</td>
 </tr>
 <tr>
 <td><strong>First Rebalance</strong></td>

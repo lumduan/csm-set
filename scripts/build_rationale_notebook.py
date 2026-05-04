@@ -759,12 +759,7 @@ The CSM strategy layers multiple risk controls to protect capital:
 
 ### 7.4 Sector Cap
 - **Maximum:** 35% in any single sector
-- **Enforcement:** Prune lowest-composite stocks from overweight sectors
-
-### 7.5 Cut-Loss Rules (Daily Monitoring)
-- 🟡 **Warning (−7%):** Flag in daily report, prepare exit plan
-- 🔴 **Hard Stop (−10%):** Sell immediately, do not wait for month-end
-- 🟢 **Trailing Stop:** After +10% gain, raise stop to breakeven""")
+- **Enforcement:** Prune lowest-composite stocks from overweight sectors""")
 
 # ============================================================
 # Cell 16 — Execution Plan
@@ -776,7 +771,7 @@ md("""## 8. Execution Plan — May 5, 2026
 | **Entry** | Buy all 10 positions **At The Opening (ATO)** on 2026-05-05 |
 | **Execution** | Manual via settrad click2win |
 | **Order Type** | Market-at-open (fill at prevailing ATO price) |
-| **Monitoring** | Daily cut-loss check starting 2026-05-06 |
+| **Monitoring** | Daily NAV mark-to-market; exits only at monthly rebalance |
 | **First Rebalance** | 2026-05-30 (last trading day of May) |
 
 ### Position Table (ATO — 2026-05-05)

@@ -34,20 +34,22 @@
 | When | What | How |
 |------|------|-----|
 | Daily after SET close (~17:00 BKK) | Fetch OHLCV, compute signals, export rankings | `scripts/refresh_daily.py` (APScheduler in private mode) |
-| **Daily — every trading day** | **Cut-loss watch:** check each position vs entry price. Flag at -7%, sell at -10% | Manual (settrad click2win) — report in daily log |
 | Every Saturday | Health check: container, data feed, scheduler, disk | Manual review (you) — write weekly summary |
 | Last trading day of month | Rebalance: compute volatility-target weights, generate trade list (sells + buys) | `ExecutionSimulator` (Phase 4.7) — review before ATO |
 | First trading day of month | Execute rebalance at ATO + monthly performance review (metrics, charts, vs backtest) | Manual (settrad click2win for trades, write monthly review) |
 
-## Cut-Loss Rules (Per Position)
+## Exit Mechanisms (Backtest-Aligned)
 
-| Rule | Threshold | Action |
-|------|-----------|--------|
-| Warning | -7% from entry price | Flag in daily log — prepare to exit |
-| Hard Stop | -10% from entry price | **Sell immediately** — do not wait for month-end rebalance |
-| Trailing Stop | After +10% gain | Raise stop to breakeven (entry price) — protect profits |
+All exits happen at **monthly rebalance** (BME). No intra-month stop-loss. This matches the Phase 3.8 backtest design exactly.
 
-These rules operate **alongside** the portfolio-level circuit breaker (-10% portfolio DD → cap equity at 20%). Per-position cut-loss catches single-stock blow-ups between monthly rebalances.
+| Mechanism | Threshold | Action |
+|-----------|-----------|--------|
+| Exit Rank Floor | Below 35th percentile | Unconditional eviction at rebalance |
+| Buffer Logic | Replacement ranks 25 pct pts higher | Existing holding evicted only if challenger is significantly better |
+| EMA100 Fast Exit | Price < EMA100 at rebalance | Close position at rebalance |
+| Circuit Breaker (portfolio) | -10% rolling DD | Reduce equity to 20% until recovery at -5% for 21 days |
+
+These are the **only exit mechanisms tested in the 15-year backtest** (207 rebalance dates, 2009–2026). No per-position trailing stops or hard stops are applied — winners ride to the next rebalance.
 
 ## Key Metrics at a Glance
 

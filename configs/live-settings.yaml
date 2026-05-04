@@ -37,10 +37,18 @@ live_test:
     circuit_breaker:
       enabled: true
       window_days: 60               # Rolling drawdown window
-      trigger_threshold: -0.10      # Trip at -10% rolling DD
+      trigger_threshold: -0.10      # Trip at -10% rolling DD (Phase 4.9 tighter threshold)
       recovery_threshold: -0.05     # Recovery at -5% rolling DD
       recovery_confirm_days: 21     # Must hold recovery for 21 days
       safe_mode_max_equity: 0.20    # Max 20% equity in safe mode
+
+    buffer:
+      enabled: true                 # Phase 3.8: reduce turnover via rank buffer
+      rank_threshold: 0.25          # Replacement must rank 25 percentile pts higher to evict
+      exit_rank_floor: 0.35         # Unconditional eviction below 35th percentile
+
+    ema100_fast_exit:
+      enabled: true                 # Phase 3.8: close position if price < EMA100 at rebalance
 
     capacity:
       enabled: false                # OFF at retail AUM (1M THB)
@@ -77,13 +85,6 @@ live_test:
     drawdown_critical_threshold: -0.10   # Critical at -10% portfolio DD
     data_gap_hours: 24                   # Alert if no data for 24 hours
     container_memory_mb: 1800            # Alert if memory exceeds 1.8 GB
-
-  # Per-position cut-loss (stop-loss)
-  cut_loss:
-    warning_threshold: -0.07             # Flag in daily report at -7% from entry
-    hard_stop: -0.10                     # Sell immediately at -10% from entry (no wait for month-end)
-    trailing_stop_enabled: true          # After +10% gain, raise stop to breakeven (entry price)
-    trailing_stop_trigger: 0.10          # Gain threshold to activate trailing stop
 
   # Execution simulation
   execution:
