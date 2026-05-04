@@ -1,10 +1,47 @@
 """Application settings for csm-set."""
 
+import json
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class TradingViewCookies(BaseModel):
+    """Parsed TradingView session cookies for authenticated tvkit access.
+
+    The pre-extracted cookie dict is forwarded to ``tvkit.api.chart.OHLCV(cookies=...)``,
+    bypassing tvkit's own ``TVKIT_AUTH_TOKEN`` env-var fallback (which expects a
+    single JWT string, not a cookie dict). ``sessionid`` is required by tvkit's
+    ``CookieProvider``; the remaining cookies are commonly emitted by TradingView
+    and forwarded as-is.
+
+    Attributes:
+        sessionid: TradingView session identifier cookie. Required.
+        sessionid_sign: Signed companion to ``sessionid``.
+        device_t: TradingView device-tracking cookie.
+        tv_ecuid: TradingView end-client UID cookie.
+    """
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    sessionid: str = Field(min_length=1, description="TradingView sessionid cookie.")
+    sessionid_sign: str | None = Field(
+        default=None, description="TradingView sessionid_sign cookie."
+    )
+    device_t: str | None = Field(default=None, description="TradingView device_t cookie.")
+    tv_ecuid: str | None = Field(default=None, description="TradingView tv_ecuid cookie.")
+
+    def as_cookie_dict(self) -> dict[str, str]:
+        """Return a flat ``name → value`` dict suitable for ``OHLCV(cookies=...)``."""
+        return {k: v for k, v in self.model_dump().items() if v is not None}
 
 
 class Settings(BaseSettings):
@@ -23,8 +60,11 @@ class Settings(BaseSettings):
         api_key: Shared secret for ``X-API-Key`` auth on private-mode protected endpoints.
         ui_port: NiceGUI port.
         refresh_cron: Cron expression for owner-side refresh jobs.
-        tvkit_browser: Optional browser profile name for tvkit authentication.
-        tvkit_auth_token: Optional TradingView authentication token.
+        tvkit_auth_token: Parsed TradingView session cookies, or ``None`` for anonymous mode.
+            Read from the ``TVKIT_AUTH_TOKEN`` env var (no ``CSM_`` prefix — the unprefixed
+            name is used so the variable can be shared between csm-set and any other
+            tooling that reads the same cookie blob). Value must be a JSON object
+            containing at minimum a ``sessionid`` field.
     """
 
     model_config = SettingsConfigDict(
@@ -79,13 +119,14 @@ class Settings(BaseSettings):
             "'splits' — split-adjusted only (legacy pre-v0.11.0 behaviour)."
         ),
     )
-    tvkit_browser: str | None = Field(
-        default=None,
-        description="Optional browser profile name for tvkit authentication.",
-    )
     tvkit_auth_token: str | None = Field(
         default=None,
-        description="Optional TradingView authentication token.",
+        validation_alias="TVKIT_AUTH_TOKEN",
+        description=(
+            "Raw JSON blob of TradingView session cookies. Read from the unprefixed "
+            "TVKIT_AUTH_TOKEN env var (no CSM_ prefix). Use ``tvkit_cookies`` to "
+            "access the parsed/validated form."
+        ),
     )
     cors_allow_origins: str = Field(
         default="*",
@@ -100,6 +141,47 @@ class Settings(BaseSettings):
             raise ValueError(f"tvkit_adjustment must be one of {sorted(allowed)!r}, got {value!r}")
         return value
 
+    @field_validator("tvkit_auth_token", mode="before")
+    @classmethod
+    def _normalise_auth_token(cls, value: object) -> object:
+        """Coerce empty/whitespace strings to ``None`` so anonymous mode is the default."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("tvkit_auth_token")
+    @classmethod
+    def _validate_auth_token_json(cls, value: str | None) -> str | None:
+        """Fail fast at startup if TVKIT_AUTH_TOKEN is set but not parseable JSON.
+
+        We validate the JSON shape here (without storing the parsed object) so
+        misconfiguration surfaces during ``Settings()`` construction rather than
+        at first fetch.
+        """
+        if value is None:
+            return None
+        try:
+            payload = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "TVKIT_AUTH_TOKEN must be a JSON object containing TradingView "
+                f"session cookies (e.g. {{'sessionid': '...'}}); got invalid JSON: {exc}"
+            ) from exc
+        # Run full structural validation now — discard the model, keep the raw string.
+        TradingViewCookies.model_validate(payload)
+        return value
+
+    @property
+    def tvkit_cookies(self) -> TradingViewCookies | None:
+        """Return the parsed TradingView cookie blob, or ``None`` for anonymous mode.
+
+        Parsing runs once per call (the JSON is small). The result is suitable for
+        passing to ``tvkit.api.chart.OHLCV(cookies=...)`` via ``as_cookie_dict()``.
+        """
+        if self.tvkit_auth_token is None:
+            return None
+        return TradingViewCookies.model_validate(json.loads(self.tvkit_auth_token))
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -109,4 +191,4 @@ def get_settings() -> Settings:
 
 settings: Settings = get_settings()
 
-__all__: list[str] = ["Settings", "get_settings", "settings"]
+__all__: list[str] = ["Settings", "TradingViewCookies", "get_settings", "settings"]

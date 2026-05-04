@@ -111,10 +111,15 @@ class OHLCVLoader:
         _adj_enum: Adjustment = Adjustment(effective)
         _ = _adj_enum  # referenced to satisfy linters until the tvkit kwarg is added
 
+        parsed_cookies = self._settings.tvkit_cookies
+        cookies: dict[str, str] | None = (
+            parsed_cookies.as_cookie_dict() if parsed_cookies is not None else None
+        )
+
         bars_data: list[OHLCVBar] = []
         for attempt in range(self._settings.tvkit_retry_attempts + 1):
             try:
-                async with OHLCV() as client:
+                async with OHLCV(cookies=cookies) as client:
                     bars_data = await client.get_historical_ohlcv(
                         symbol,
                         interval=interval,

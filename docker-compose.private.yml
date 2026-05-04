@@ -5,8 +5,9 @@
 # Purpose:
 #   Override file for the project owner.  Disables public mode so data
 #   fetching and export are enabled, mounts writable data/ and results/
-#   directories, and mounts the host Chrome profile for tvkit browser auth.
-#   Restricts CORS to local development origins.
+#   directories, and forwards TVKIT_AUTH_TOKEN from the host environment for
+#   tvkit cookie-based authentication.  Restricts CORS to local development
+#   origins.
 #
 # Invocation:
 #   docker compose -f docker-compose.yml -f docker-compose.private.yml up
@@ -17,12 +18,14 @@
 #
 # What each override does:
 #   CSM_PUBLIC_MODE=false           Enable write endpoints and data fetch
-#   TVKIT_BROWSER=chrome            Use Chrome for tvkit browser auth
+#   TVKIT_AUTH_TOKEN                JSON cookie blob — forwarded from the host
+#                                   environment (do not hard-code; export it
+#                                   in your shell or .env file before invoking
+#                                   docker compose)
 #   CSM_CORS_ALLOW_ORIGINS          Restrict CORS to local React/Next.js dev
 #                                   servers instead of open wildcard
 #   ./data:/app/data                Writable mount for OHLCV parquet files
 #   ./results:/app/results          Writable mount for export_results.py output
-#   chrome profile mount            Read-only mount of host Chrome auth tokens
 #
 # Owner workflow after booting with this override:
 #   docker exec csm uv run python scripts/fetch_history.py
@@ -35,12 +38,11 @@ services:
   csm:
     environment:
       CSM_PUBLIC_MODE: "false"
-      TVKIT_BROWSER: "chrome"
+      TVKIT_AUTH_TOKEN: "${TVKIT_AUTH_TOKEN:?TVKIT_AUTH_TOKEN must be exported (JSON cookie blob)}"
       CSM_CORS_ALLOW_ORIGINS: "http://localhost:3000,http://localhost:5173"
     volumes:
       - ./data:/app/data
       - ./results:/app/results
-      - ~/.config/google-chrome:/root/.config/google-chrome:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s

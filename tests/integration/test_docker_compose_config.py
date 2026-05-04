@@ -96,10 +96,14 @@ class TestPrivateCompose:
         assert "localhost:3000" in origins
         assert "localhost:5173" in origins
 
-    def test_sets_tvkit_browser(self) -> None:
-        """TVKIT_BROWSER is set to chrome."""
+    def test_forwards_tvkit_auth_token(self) -> None:
+        """TVKIT_AUTH_TOKEN is forwarded from the host shell with a required marker."""
         env = _service(_load_yaml(PRIVATE_COMPOSE))["environment"]
-        assert env["TVKIT_BROWSER"] == "chrome"
+        token_value = env["TVKIT_AUTH_TOKEN"]
+        # Compose ${VAR:?msg} interpolation form — fails fast when the host
+        # has not exported a cookie blob, instead of booting unauthenticated.
+        assert token_value.startswith("${TVKIT_AUTH_TOKEN")
+        assert ":?" in token_value, "must use the required-variable marker"
 
     def test_results_volume_writable(self) -> None:
         """Results volume is writable — no :ro suffix."""
@@ -114,12 +118,13 @@ class TestPrivateCompose:
         data_vol = [v for v in volumes if v.startswith("./data")]
         assert len(data_vol) == 1
 
-    def test_chrome_profile_mounted(self) -> None:
-        """Chrome profile is mounted for tvkit browser auth."""
+    def test_no_browser_profile_mount(self) -> None:
+        """Browser profile mounts are no longer needed under cookie-based auth."""
         volumes = _service(_load_yaml(PRIVATE_COMPOSE))["volumes"]
-        chrome_vol = [v for v in volumes if "google-chrome" in v]
-        assert len(chrome_vol) == 1
-        assert chrome_vol[0].endswith(":ro")
+        browser_vols = [v for v in volumes if "google-chrome" in v or "firefox" in v]
+        assert browser_vols == [], (
+            "tvkit auth now uses TVKIT_AUTH_TOKEN cookies; remove browser-profile mounts"
+        )
 
     def test_has_healthcheck(self) -> None:
         """Healthcheck stanza mirrors the public compose."""

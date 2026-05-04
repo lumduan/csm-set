@@ -15,6 +15,18 @@ FixtureFunction = TypeVar("FixtureFunction", bound=Callable[..., object])
 fixture = cast(Callable[[FixtureFunction], FixtureFunction], pytest.fixture)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_tvkit_auth_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent tests from picking up the owner's real TVKIT_AUTH_TOKEN from .env.
+
+    Pydantic-settings still reads ``.env`` even when the env var is unset in the
+    process environment, so we explicitly set the variable to an empty string —
+    Settings' before-validator coerces empty input back to ``None``, giving every
+    test a deterministic anonymous-mode default unless it opts in.
+    """
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
+
+
 @fixture
 def sample_prices() -> pd.DataFrame:
     """100 symbols x 500 trading days of synthetic close prices, tz-aware Asia/Bangkok."""

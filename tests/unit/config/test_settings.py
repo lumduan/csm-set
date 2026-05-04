@@ -1,8 +1,11 @@
 """Unit tests for Settings loading and public_mode behaviour."""
 
-import pytest
+import json
 
-from csm.config.settings import Settings, get_settings
+import pytest
+from pydantic import ValidationError
+
+from csm.config.settings import Settings, TradingViewCookies, get_settings
 
 
 def test_settings_loads_defaults() -> None:
@@ -40,8 +43,6 @@ def test_get_settings_returns_singleton() -> None:
 
 def test_settings_is_frozen() -> None:
     """Direct attribute assignment on Settings raises ValidationError (frozen model)."""
-    from pydantic import ValidationError
-
     s = Settings()
     with pytest.raises((ValidationError, TypeError)):
         s.public_mode = True  # type: ignore[misc]
@@ -63,8 +64,79 @@ def test_tvkit_adjustment_accepts_splits(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_tvkit_adjustment_rejects_unknown_value(monkeypatch: pytest.MonkeyPatch) -> None:
     """tvkit_adjustment raises ValidationError for values outside {'splits', 'dividends'}."""
-    from pydantic import ValidationError
-
     monkeypatch.setenv("CSM_TVKIT_ADJUSTMENT", "raw")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_tvkit_auth_token_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """tvkit_auth_token is None (anonymous mode) when the env var is unset/empty."""
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
+    s = Settings()
+    assert s.tvkit_auth_token is None
+    assert s.tvkit_cookies is None
+
+
+def test_tvkit_cookies_parses_json_blob(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A JSON cookie blob in TVKIT_AUTH_TOKEN parses into TradingViewCookies."""
+    payload = {
+        "sessionid": "abc123",
+        "sessionid_sign": "v3:signed",
+        "device_t": "device-token",
+        "tv_ecuid": "uuid-here",
+    }
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", json.dumps(payload))
+    s = Settings()
+    cookies = s.tvkit_cookies
+    assert isinstance(cookies, TradingViewCookies)
+    assert cookies.sessionid == "abc123"
+    assert cookies.sessionid_sign == "v3:signed"
+    assert cookies.as_cookie_dict() == payload
+
+
+def test_tvkit_cookies_accepts_minimal_sessionid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only ``sessionid`` is required; missing companions stay None and drop out of the dict."""
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", json.dumps({"sessionid": "only-id"}))
+    s = Settings()
+    cookies = s.tvkit_cookies
+    assert cookies is not None
+    assert cookies.as_cookie_dict() == {"sessionid": "only-id"}
+
+
+def test_tvkit_cookies_preserves_extra_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unknown cookies in the JSON blob are forwarded verbatim (extras allowed)."""
+    payload = {"sessionid": "x", "csrftoken": "csrf-value", "_ga": "tracker"}
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", json.dumps(payload))
+    s = Settings()
+    cookies = s.tvkit_cookies
+    assert cookies is not None
+    flat = cookies.as_cookie_dict()
+    assert flat["csrftoken"] == "csrf-value"
+    assert flat["_ga"] == "tracker"
+
+
+def test_tvkit_auth_token_rejects_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Malformed JSON in TVKIT_AUTH_TOKEN raises ValidationError at startup."""
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", "not-json-at-all")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_tvkit_auth_token_requires_sessionid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cookie blob without sessionid is rejected — tvkit cannot authenticate without it."""
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", json.dumps({"sessionid_sign": "v3:..."}))
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_tvkit_auth_token_ignores_csm_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CSM_TVKIT_AUTH_TOKEN prefix is intentionally NOT honoured.
+
+    The token is shared with external tooling that also reads the bare
+    ``TVKIT_AUTH_TOKEN`` env var, so we keep a single canonical name.
+    """
+    monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
+    monkeypatch.setenv("CSM_TVKIT_AUTH_TOKEN", json.dumps({"sessionid": "via-prefix"}))
+    s = Settings()
+    assert s.tvkit_auth_token is None
+    assert s.tvkit_cookies is None

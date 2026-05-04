@@ -37,6 +37,16 @@ class _FakeBar:
 
 
 class _FakeOHLCV:
+    last_cookies: dict[str, str] | None = None
+
+    def __init__(
+        self,
+        cookies: dict[str, str] | None = None,
+        **_unused: object,
+    ) -> None:
+        # Record cookies on the class so tests can assert on what the loader passed.
+        type(self).last_cookies = cookies
+
     async def __aenter__(self) -> "_FakeOHLCV":
         return self
 
@@ -106,6 +116,9 @@ async def test_fetch_batch_continues_after_symbol_failure(
     call_count: dict[str, int] = {"count": 0}
 
     class _FailOnFirstCallOHLCV:
+        def __init__(self, **_kwargs: object) -> None:
+            return None
+
         async def __aenter__(self) -> "_FailOnFirstCallOHLCV":
             return self
 
@@ -149,6 +162,9 @@ async def test_fetch_retries_on_transient_error(
     call_count: dict[str, int] = {"count": 0}
 
     class _FailTwiceOHLCV:
+        def __init__(self, **_kwargs: object) -> None:
+            return None
+
         async def __aenter__(self) -> "_FailTwiceOHLCV":
             return self
 
@@ -186,6 +202,9 @@ async def test_fetch_raises_fetch_error_when_all_retries_exhausted(
     """fetch() raises FetchError after exhausting all retry attempts."""
 
     class _AlwaysFailOHLCV:
+        def __init__(self, **_kwargs: object) -> None:
+            return None
+
         async def __aenter__(self) -> "_AlwaysFailOHLCV":
             return self
 
@@ -297,3 +316,40 @@ def test_adjustment_enum_values() -> None:
     assert Adjustment.DIVIDENDS == "dividends"
     assert Adjustment("splits") is Adjustment.SPLITS
     assert Adjustment("dividends") is Adjustment.DIVIDENDS
+
+
+async def test_fetch_passes_no_cookies_in_anonymous_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+) -> None:
+    """When tvkit_auth_token is None, OHLCV() is constructed with cookies=None."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    _FakeOHLCV.last_cookies = "sentinel"  # type: ignore[assignment]
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    await loader.fetch(symbol="SET:AOT", interval="1D", bars=2)
+    assert _FakeOHLCV.last_cookies is None
+
+
+async def test_fetch_forwards_cookies_when_auth_token_set(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: "Path",
+) -> None:
+    """When TVKIT_AUTH_TOKEN is set, the parsed cookie dict is forwarded to OHLCV()."""
+    import json
+
+    monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
+    monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    monkeypatch.setenv(
+        "TVKIT_AUTH_TOKEN",
+        json.dumps({"sessionid": "sid", "sessionid_sign": "sig", "device_t": "dev"}),
+    )
+    settings = Settings()
+    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    loader: OHLCVLoader = OHLCVLoader(settings)
+    await loader.fetch(symbol="SET:AOT", interval="1D", bars=2)
+    assert _FakeOHLCV.last_cookies == {
+        "sessionid": "sid",
+        "sessionid_sign": "sig",
+        "device_t": "dev",
+    }

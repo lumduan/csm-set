@@ -133,7 +133,7 @@ docker compose -f docker-compose.yml -f docker-compose.private.yml up -d
 docker compose exec csm uv run python scripts/fetch_history.py
 ```
 
-This uses tvkit to pull OHLCV data from TradingView. Requires a valid tvkit setup with Chrome profile authentication.
+This uses tvkit to pull OHLCV data from TradingView. Requires `TVKIT_AUTH_TOKEN` (a JSON object of TradingView session cookies — see [docs/guides/docker.md](docker.md#obtaining-tvkit_auth_token)) to lift the 5,000-bar anonymous cap.
 
 ### Step 3: Build universe
 
