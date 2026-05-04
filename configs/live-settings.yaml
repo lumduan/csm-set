@@ -1,0 +1,88 @@
+# CSM-SET Live Test Configuration
+# ================================
+# Single source of truth for all live-test parameters.
+# Distinct from .env (secrets/environment) and BacktestConfig Pydantic defaults (code).
+# Modify this file to tune the live test without touching strategy code.
+#
+# Timezone: All times in Asia/Bangkok (UTC+7)
+
+live_test:
+  enabled: false                    # Set to true when Phase A infrastructure check passes
+  start_date: "2026-05-04"
+  end_date: "2026-12-31"
+
+  # Paper portfolio configuration (retail scale per Phase 4.9)
+  aum_thb: 1_000_000                # 1M THB paper portfolio
+
+  # Rebalance schedule
+  rebalance:
+    frequency: monthly               # Last trading day of each month
+    execution_time_utc: "09:00"      # 16:00 BKK — after market close
+
+  # Data pipeline
+  data:
+    refresh_cron: "30 13 * * 1-5"   # 20:30 BKK on weekdays (after SET close at 17:00)
+    tvkit_rate_limit_rps: 5         # Requests per second to TradingView
+
+  # Risk overlays (aligned with Phase 4.9 retail configuration)
+  overlays:
+    vol_scaling:
+      enabled: true
+      target_annual: 0.15           # 15% annualized vol target
+      lookback_days: 63             # ~3 months trailing
+      cap: 1.5                      # Max leverage multiplier
+      fast_lookback_days: 21        # Fast vol response window
+      fast_blend_weight: 0.3        # Weight on fast vol in blended estimate
+
+    circuit_breaker:
+      enabled: true
+      window_days: 60               # Rolling drawdown window
+      trigger_threshold: -0.10      # Trip at -10% rolling DD
+      recovery_threshold: -0.05     # Recovery at -5% rolling DD
+      recovery_confirm_days: 21     # Must hold recovery for 21 days
+      safe_mode_max_equity: 0.20    # Max 20% equity in safe mode
+
+    capacity:
+      enabled: false                # OFF at retail AUM (1M THB)
+      adv_cap_pct: 0.10             # Max 10% of ADV per position
+      assumed_aum_thb: 200_000_000  # For capacity curve (if enabled)
+
+    quality_filter:
+      enabled: true                 # Phase 4.9 quality-first filtering
+      earnings_positive: true       # Require positive trailing earnings
+      min_net_profit_margin: 0.05   # Minimum 5% net profit margin
+      synthetic_fallback: true      # Use trailing return proxy if fundamental data unavailable
+
+    sector_regime:
+      sector_max_weight: 0.35       # Max 35% in any one sector
+      n_holdings_min: 10            # Minimum holdings (concentrated portfolio)
+      n_holdings_max: 20            # Maximum holdings
+
+  # Weighting scheme
+  weighting:
+    scheme: VOL_TARGET              # EQUAL | VOL_TARGET | INVERSE_VOL | MIN_VARIANCE
+    max_position: 0.15              # Max 15% per position (concentrated)
+    min_position: 0.05              # Min 5% per position
+    max_holdings: 10                # Top 10 by trailing return
+
+  # Reporting
+  reporting:
+    daily_log_enabled: true
+    weekly_health_check_day: "Saturday"
+    monthly_review_day: 5           # By the 5th of each month
+
+  # Alerts and thresholds
+  alerts:
+    drawdown_warning_threshold: -0.05    # Warn at -5% DD
+    drawdown_critical_threshold: -0.10   # Critical at -10% DD
+    data_gap_hours: 24                   # Alert if no data for 24 hours
+    container_memory_mb: 1800            # Alert if memory exceeds 1.8 GB
+
+  # Execution simulation
+  execution:
+    slippage_model:
+      half_spread_bps: 10.0         # Half-spread in basis points
+      impact_coef: 10.0             # Square-root impact coefficient
+    max_participation_rate: 0.10    # Max 10% of daily volume per trade
+    lot_size: 100                   # SET standard lot size
+    min_trade_weight: 0.001         # Minimum trade size (0.1% of portfolio)
