@@ -196,6 +196,21 @@
       "HealthStatus": {
         "description": "Service health information.",
         "properties": {
+          "db": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Database connectivity status for quant-infra-db. None when db_write_enabled=False. Keys: 'postgres', 'mongo'. Values: 'ok' or 'error:<message>'.",
+            "title": "Db"
+          },
           "jobs_pending": {
             "default": 0,
             "description": "Number of jobs in accepted state awaiting execution",

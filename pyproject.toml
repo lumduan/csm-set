@@ -30,6 +30,8 @@ dependencies = [
     "settfex>=0.1.0",
     "nbconvert>=7.17.1",
     "python-ulid>=3",
+    "asyncpg>=0.29",
+    "motor>=3.4",
 ]
 
 [dependency-groups]
@@ -79,6 +81,9 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = ["--cov-fail-under=90"]
+markers = [
+    "infra_db: integration tests requiring quant-infra-db stack on quant-network",
+]
 
 [tool.uv]
 default-groups = ["dev"]

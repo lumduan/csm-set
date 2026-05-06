@@ -35,3 +35,11 @@ class HealthStatus(BaseModel):
         default=0,
         description="Number of jobs in accepted state awaiting execution",
     )
+    db: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Database connectivity status for quant-infra-db. "
+            "None when db_write_enabled=False. "
+            "Keys: 'postgres', 'mongo'. Values: 'ok' or 'error:<message>'."
+        ),
+    )

@@ -132,6 +132,22 @@ class Settings(BaseSettings):
         default="*",
         description="Comma-separated list of allowed CORS origins.",
     )
+    db_csm_set_dsn: str | None = Field(
+        default=None,
+        description="PostgreSQL DSN for the db_csm_set database (strategy-private persistence).",
+    )
+    db_gateway_dsn: str | None = Field(
+        default=None,
+        description="PostgreSQL DSN for the db_gateway database (cross-strategy aggregation).",
+    )
+    mongo_uri: str | None = Field(
+        default=None,
+        description="MongoDB connection URI for the csm_logs database.",
+    )
+    db_write_enabled: bool = Field(
+        default=False,
+        description="Enable DB write-back after pipeline events when True.",
+    )
 
     @field_validator("tvkit_adjustment")
     @classmethod

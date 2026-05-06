@@ -140,3 +140,38 @@ def test_tvkit_auth_token_ignores_csm_prefix(monkeypatch: pytest.MonkeyPatch) ->
     s = Settings()
     assert s.tvkit_auth_token is None
     assert s.tvkit_cookies is None
+
+
+def test_db_write_enabled_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    """db_write_enabled is False when CSM_DB_WRITE_ENABLED is not set."""
+    monkeypatch.delenv("CSM_DB_WRITE_ENABLED", raising=False)
+    s = Settings()
+    assert s.db_write_enabled is False
+
+
+def test_db_dsn_fields_default_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All DB DSN fields default to None when env vars are unset."""
+    for key in ("CSM_DB_CSM_SET_DSN", "CSM_DB_GATEWAY_DSN", "CSM_MONGO_URI"):
+        monkeypatch.delenv(key, raising=False)
+    s = Settings()
+    assert s.db_csm_set_dsn is None
+    assert s.db_gateway_dsn is None
+    assert s.mongo_uri is None
+
+
+def test_db_write_enabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """db_write_enabled is True when CSM_DB_WRITE_ENABLED=true is in the environment."""
+    monkeypatch.setenv("CSM_DB_WRITE_ENABLED", "true")
+    s = Settings()
+    assert s.db_write_enabled is True
+
+
+def test_db_dsn_fields_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DB DSN fields read correctly from environment variables."""
+    monkeypatch.setenv("CSM_DB_CSM_SET_DSN", "postgresql://user:pass@host:5432/db_csm_set")
+    monkeypatch.setenv("CSM_DB_GATEWAY_DSN", "postgresql://user:pass@host:5432/db_gateway")
+    monkeypatch.setenv("CSM_MONGO_URI", "mongodb://host:27017/")
+    s = Settings()
+    assert s.db_csm_set_dsn == "postgresql://user:pass@host:5432/db_csm_set"
+    assert s.db_gateway_dsn == "postgresql://user:pass@host:5432/db_gateway"
+    assert s.mongo_uri == "mongodb://host:27017/"

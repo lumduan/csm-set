@@ -43,6 +43,7 @@ from api.schemas.health import HealthStatus
 from api.security import APIKeyMiddleware
 from api.static_files import NotebookStaticFiles
 from csm import __version__
+from csm.adapters.health import check_db_connectivity
 from csm.config.settings import settings
 from csm.data.store import ParquetStore
 
@@ -205,6 +206,12 @@ async def health(request: Request) -> HealthStatus:
     if jobs is not None:
         jobs_pending = len(jobs.list(status=JobStatus.ACCEPTED))
 
+    db_status: dict[str, str] | None = None
+    try:
+        db_status = await check_db_connectivity(settings)
+    except Exception:
+        logger.warning("DB connectivity check raised", exc_info=True)
+
     is_private: bool = not settings.public_mode
     is_degraded: bool = (is_private and not scheduler_running) or (last_refresh_status == "failed")
 
@@ -216,6 +223,7 @@ async def health(request: Request) -> HealthStatus:
         last_refresh_at=last_refresh_at,
         last_refresh_status=last_refresh_status,  # type: ignore[arg-type]
         jobs_pending=jobs_pending,
+        db=db_status,
     )
 
 
