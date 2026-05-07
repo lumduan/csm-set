@@ -809,8 +809,8 @@ After Phase 7 completes:
 | Phase 2 — PostgreSQL Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods + Phase 5.1 AdapterManager skeleton (user-approved scope deviation). |
 | Phase 3 — MongoDB Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2 precedent). |
 | Phase 4 — Gateway Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2–3 precedents). |
-| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phases 2–3 (Postgres + Mongo slots both wired); 5.2–5.4 hooks pending. |
-| Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; routers + schemas remain. |
+| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phases 2–4 (Postgres + Mongo + Gateway slots all wired); 5.2–5.4 hooks pending. |
+| Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; Gateway reads delivered in Phase 4; routers + schemas remain. |
 | Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |
 
 ---
