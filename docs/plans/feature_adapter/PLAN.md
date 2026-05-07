@@ -276,14 +276,19 @@ FastAPI lifespan (api.main)
 
 ### Phase 2 — PostgreSQL Adapter (`db_csm_set`)
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-05-07
 **Goal:** Idempotent async writes for `equity_curve`, `trade_history`, `backtest_log` using a single connection pool.
 
 **Rationale:** `db_csm_set` is the strategy-private persistence tier. Getting it to feature-parity with the local Parquet output is the smallest unit of value the rest of the plan stacks on.
 
+> **Scope notes (recorded 2026-05-07):** Phase 2 was extended with two user-approved deviations:
+>
+> - **Read methods pulled forward from Phase 6** — see §2.5. Phase 6 will only need to add routers + Pydantic response schemas; the SQL surface is owned here.
+> - **`AdapterManager` skeleton + FastAPI lifespan wiring pulled forward from Phase 5.1** — see §2.6. Mongo/Gateway slots remain `None` until their phases.
+
 #### 2.1 `PostgresAdapter` base
 
-- [ ] Implement `src/csm/adapters/postgres.py` `PostgresAdapter`:
+- [x] Implement `src/csm/adapters/postgres.py` `PostgresAdapter`:
   ```python
   class PostgresAdapter:
       def __init__(self, dsn: str) -> None: ...
@@ -291,42 +296,45 @@ FastAPI lifespan (api.main)
       async def close(self) -> None: ...
       async def __aenter__(self) -> "PostgresAdapter": ...
       async def __aexit__(self, *exc) -> None: ...
+      async def ping(self) -> bool: ...         # SELECT 1 through pool
   ```
-- [ ] Centralised SQL constants in a private `_SQL` namespace (no inline string concatenation).
-- [ ] Unit test `tests/unit/adapters/test_postgres.py::test_lifecycle`: mocks `asyncpg.create_pool`; asserts `connect` and `close` are called once each.
+- [x] Centralised SQL constants in a private `_SQL` namespace (no inline string concatenation).
+- [x] JSONB type codec registered in pool `init` callback so dict ↔ JSONB round-trips automatically.
+- [x] Unit test `tests/unit/adapters/test_postgres.py::TestLifecycle`: mocks `asyncpg.create_pool`; asserts `connect` and `close` are called once each, idempotency, `ping` behaviour, and `_require_pool` guard.
 
-**Acceptance criteria:** `uv run mypy src/csm/adapters/postgres.py` is clean; `PostgresAdapter` can be instantiated without a live DB.
+**Acceptance criteria:** `uv run mypy src/csm/adapters/postgres.py` is clean; `PostgresAdapter` can be instantiated without a live DB. ✅
 
 #### 2.2 `write_equity_curve`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_equity_curve(self, strategy_id: str, series: pd.Series) -> int:
       """Upsert (time, strategy_id, equity) rows. Returns row count written."""
   ```
-- [ ] Batched via `pool.executemany` — never one INSERT per row.
-- [ ] SQL: `INSERT ... ON CONFLICT (time, strategy_id) DO UPDATE SET equity = EXCLUDED.equity`.
-- [ ] Unit test: mock pool; assert `executemany` called once with N parameter tuples.
-- [ ] Integration test (`infra_db`): write 252 rows for `strategy_id='test-csm-set'`; `SELECT count(*)` returns 252; teardown removes rows.
+- [x] Batched via `pool.executemany` — never one INSERT per row.
+- [x] SQL: `INSERT ... ON CONFLICT (time, strategy_id) DO UPDATE SET equity = EXCLUDED.equity`.
+- [x] Unit test: mock pool; assert `executemany` called once with N parameter tuples.
+- [x] Integration test (`infra_db`): write 10 rows for `strategy_id='test-csm-set'`; rerun; `SELECT count(*)` returns 10 both times; autouse teardown removes rows.
 
-**Acceptance criteria:** integration test green; rerunning the write produces the same row count (idempotent).
+**Acceptance criteria:** integration test green; rerunning the write produces the same row count (idempotent). ✅
 
 #### 2.3 `write_trade_history`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_trade_history(self, strategy_id: str, trades: pd.DataFrame) -> int:
       """Upsert trade rows. Columns: time, symbol, side, quantity, price, commission."""
   ```
-- [ ] Idempotent on `(strategy_id, time, symbol, side)` natural key.
-- [ ] Unit test: 5-row DataFrame produces 5 parameter tuples.
-- [ ] Integration test: write trades; query by `(strategy_id, time)` returns identical rows.
+- [x] Idempotent on `(strategy_id, time, symbol, side)` natural key.
+- [x] Required-columns guard raises `KeyError` with descriptive message when input DataFrame is malformed.
+- [x] Unit test: 3-row DataFrame produces 3 parameter tuples; missing-column case raises.
+- [x] Integration test: write trades twice; row count remains 3.
 
-**Acceptance criteria:** writing the same DataFrame twice does not duplicate rows.
+**Acceptance criteria:** writing the same DataFrame twice does not duplicate rows. ✅
 
 #### 2.4 `write_backtest_log`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_backtest_log(
       self,
@@ -337,11 +345,35 @@ FastAPI lifespan (api.main)
   ) -> None:
       """Insert a single row. ON CONFLICT (run_id) DO NOTHING."""
   ```
-- [ ] Maps `BacktestResult.metrics_dict()` → `summary` JSONB.
-- [ ] Unit test: assert `run_id` uniqueness path (second call is a no-op).
-- [ ] Integration test: write log; `SELECT ... WHERE run_id=$1` returns the row with intact JSONB payload.
+- [x] `config` and `summary` serialised via `json.dumps` and inserted with explicit `$3::jsonb` / `$4::jsonb` casts. Phase 5 hook will pass `BacktestResult.metrics_dict()` as `summary`.
+- [x] Unit test: assert `execute` called with JSON payloads and `ON CONFLICT (run_id) DO NOTHING` SQL.
+- [x] Integration test: write same `run_id` twice with different summary; first-write summary preserved (DO NOTHING).
 
-**Acceptance criteria:** `db_csm_set.backtest_log` carries metrics for every recent backtest.
+**Acceptance criteria:** `db_csm_set.backtest_log` carries metrics for every recent backtest. ✅
+
+#### 2.5 Read methods (pulled forward from Phase 6)
+
+- [x] `async def read_equity_curve(strategy_id: str, days: int = 90) -> list[EquityPoint]` — last `days` rows, ascending by time.
+- [x] `async def read_trade_history(strategy_id: str, limit: int = 100) -> list[TradeRow]` — most recent `limit`, descending by time.
+- [x] `async def read_backtest_log(strategy_id: str | None = None, limit: int = 50) -> list[BacktestLogRow]` — descending by `created_at`, optional strategy filter via `($1::text IS NULL OR strategy_id = $1)`.
+- [x] Frozen Pydantic models in `src/csm/adapters/models.py` (`EquityPoint`, `TradeRow`, `BacktestLogRow`).
+- [x] Unit tests: each read fetches dict rows and validates them into the model.
+- [x] Integration tests: round-trip writes; ordering and limit honoured; JSONB returns as dict.
+
+**Acceptance criteria:** Phase 6 routers can wrap these methods directly without touching SQL. ✅
+
+#### 2.6 `AdapterManager` skeleton + lifespan wiring (pulled forward from Phase 5.1)
+
+- [x] `AdapterManager` in `src/csm/adapters/__init__.py` exposes `postgres: PostgresAdapter | None` plus reserved `mongo`/`gateway` slots (typed as `object | None` until Phases 3–4).
+- [x] `AdapterManager.from_settings(settings)` constructs the Postgres adapter when `db_write_enabled=True` *and* `db_csm_set_dsn` is set; missing DSN and `connect()` failures both downgrade to `postgres=None` with a logged warning. App boot never crashes.
+- [x] `AdapterManager.close()` is best-effort — close failures are logged, not raised.
+- [x] `AdapterManager.ping()` returns `{"postgres": "ok"|"error:..."}` per live adapter, empty dict otherwise.
+- [x] FastAPI `lifespan` constructs the manager, stores it on `app.state.adapters`, and awaits `manager.close()` on shutdown.
+- [x] `api/deps.py` exposes `get_adapter_manager(request)` paralleling `get_store()`.
+- [x] `/health` merges `manager.ping()` into the existing short-lived `check_db_connectivity()` response so Phase 1 behaviour is preserved when `db_write_enabled=False` and the pool ping is preferred when the adapter is live.
+- [x] Unit tests cover all degradation paths plus lifespan wiring (`tests/unit/adapters/test_manager.py`, `tests/unit/test_api_lifespan.py::TestAdapterManagerLifespan`).
+
+**Acceptance criteria:** `app.state.adapters` is an `AdapterManager` after startup; pool is closed on shutdown; `/health` carries `db.postgres="ok"` when the live adapter is up. ✅
 
 ---
 
@@ -476,12 +508,14 @@ FastAPI lifespan (api.main)
 
 #### 5.1 `AdapterManager` (central coordinator)
 
-- [ ] Implement `AdapterManager` in `src/csm/adapters/__init__.py`:
+> **Status:** Skeleton + Postgres slot delivered in Phase 2 (2026-05-07). Mongo and Gateway slots are reserved as `object | None` placeholders and become typed `MongoAdapter | None` / `GatewayAdapter | None` when their phases ship. Pipeline-hook items 5.2–5.4 below remain pending.
+
+- [x] Implement `AdapterManager` in `src/csm/adapters/__init__.py` (Phase 2):
   ```python
   class AdapterManager:
       postgres: PostgresAdapter | None
-      mongo: MongoAdapter | None
-      gateway: GatewayAdapter | None
+      mongo: MongoAdapter | None       # filled in Phase 3
+      gateway: GatewayAdapter | None   # filled in Phase 4
 
       @classmethod
       async def from_settings(cls, settings: Settings) -> "AdapterManager":
@@ -489,15 +523,16 @@ FastAPI lifespan (api.main)
           Missing DSN → adapter=None, log warning, do not raise."""
 
       async def close(self) -> None: ...
+      async def ping(self) -> dict[str, str]: ...
   ```
-- [ ] Wire into `api/main.py` `lifespan`:
+- [x] Wire into `api/main.py` `lifespan` (Phase 2):
   - Create on startup; store on `app.state.adapters`.
   - Close on shutdown.
-- [ ] Unit test: with `db_write_enabled=False`, all three attributes are `None`.
-- [ ] Unit test: with flag on but `mongo_uri=None`, `manager.mongo is None` and a warning is logged.
-- [ ] Unit test: with flag on and all DSNs set (mocked clients), all three adapters initialise.
+- [x] Unit test: with `db_write_enabled=False`, all three attributes are `None` (Phase 2).
+- [x] Unit test: with flag on but DSN missing, `manager.postgres is None` and a warning is logged (Phase 2 — Mongo/Gateway equivalents arrive with their phases).
+- [x] Unit test: with flag on and Postgres DSN set, the Postgres adapter is initialised (Phase 2 — full multi-adapter happy path completes after Phase 4).
 
-**Acceptance criteria:** `uv run uvicorn api.main:app --port 8000` boots cleanly in both modes.
+**Acceptance criteria:** `uv run uvicorn api.main:app --port 8000` boots cleanly in both modes. ✅ (verified for Postgres slot)
 
 #### 5.2 Post-refresh hook (daily signal → DB)
 
@@ -546,12 +581,14 @@ FastAPI lifespan (api.main)
 
 **Rationale:** csm-set already exposes today-snapshot endpoints. The DB makes time-series queries cheap, and a typed REST surface lets us evolve the schema independently of consumer code.
 
+> **Status note:** The underlying adapter reads (`PostgresAdapter.read_equity_curve` / `read_trade_history` / `read_backtest_log`) and the `EquityPoint` / `TradeRow` / `BacktestLogRow` models were delivered in Phase 2 (2026-05-07). Phase 6 only needs to add the routers, request validation, and response schemas on top.
+
 #### 6.1 Equity curve & trade history
 
 - [ ] Create `api/routers/history.py` with router prefix `/api/v1/history`.
 - [ ] Endpoints:
-  - `GET /equity-curve?strategy_id=csm-set&days=90` → `list[EquityPoint]`
-  - `GET /trades?strategy_id=csm-set&limit=100` → `list[TradeRow]`
+  - `GET /equity-curve?strategy_id=csm-set&days=90` → `list[EquityPoint]` (model from `csm.adapters.models`)
+  - `GET /trades?strategy_id=csm-set&limit=100` → `list[TradeRow]` (model from `csm.adapters.models`)
 - [ ] Mounted in `api/main.py` only when `not settings.public_mode` (private mode), and protected by `APIKeyMiddleware`.
 - [ ] Returns HTTP 503 with `{"detail": "db_write_enabled is false"}` when the corresponding adapter is `None`.
 - [ ] Pydantic v2 response schemas in `api/schemas/history.py`.
@@ -753,11 +790,11 @@ After Phase 7 completes:
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 1 — Connection & Config | `[x]` | Complete 2026-05-06 |
-| Phase 2 — PostgreSQL Adapter | `[ ]` | Blocked on Phase 1.3 — now unblocked |
+| Phase 2 — PostgreSQL Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods + Phase 5.1 AdapterManager skeleton (user-approved scope deviation). |
 | Phase 3 — MongoDB Adapter | `[ ]` | Blocked on Phase 1.3 |
 | Phase 4 — Gateway Adapter | `[ ]` | Blocked on Phases 2–4 |
-| Phase 5 — Pipeline Integration | `[ ]` | Blocked on Phases 2–4 |
-| Phase 6 — API History Endpoints | `[ ]` | Blocked on Phase 5 |
+| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phase 2; 5.2–5.4 hooks pending. |
+| Phase 6 — API History Endpoints | `[ ]` | Adapter reads delivered in Phase 2; routers + schemas remain. |
 | Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |
 
 ---

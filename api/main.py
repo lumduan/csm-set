@@ -43,6 +43,7 @@ from api.schemas.health import HealthStatus
 from api.security import APIKeyMiddleware
 from api.static_files import NotebookStaticFiles
 from csm import __version__
+from csm.adapters import AdapterManager
 from csm.adapters.health import check_db_connectivity
 from csm.config.settings import settings
 from csm.data.store import ParquetStore
@@ -83,12 +84,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.scheduler = scheduler
     if scheduler is not None:
         scheduler.start()
+
+    adapters: AdapterManager = await AdapterManager.from_settings(settings)
+    app.state.adapters = adapters
+
     try:
         yield
     finally:
         if scheduler is not None:
             scheduler.shutdown(wait=False)
         await jobs.shutdown()
+        await adapters.close()
 
 
 app: FastAPI = FastAPI(title="CSM-SET API", version=__version__, lifespan=lifespan)
@@ -211,6 +217,18 @@ async def health(request: Request) -> HealthStatus:
         db_status = await check_db_connectivity(settings)
     except Exception:
         logger.warning("DB connectivity check raised", exc_info=True)
+
+    adapters: AdapterManager | None = getattr(request.app.state, "adapters", None)
+    if adapters is not None:
+        try:
+            pool_results: dict[str, str] = await adapters.ping()
+        except Exception:
+            logger.warning("AdapterManager ping raised", exc_info=True)
+            pool_results = {}
+        if pool_results:
+            merged: dict[str, str] = dict(db_status) if db_status else {}
+            merged.update(pool_results)
+            db_status = merged
 
     is_private: bool = not settings.public_mode
     is_degraded: bool = (is_private and not scheduler_running) or (last_refresh_status == "failed")

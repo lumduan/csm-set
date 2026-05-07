@@ -19,6 +19,7 @@ from api.logging import REQUEST_ID_CTX
 from fastapi.testclient import TestClient
 
 from csm import __version__
+from csm.adapters import AdapterManager
 
 
 @pytest.fixture
@@ -56,6 +57,19 @@ class TestJobRegistryLifespan:
         from api.main import app  # noqa: PLC0415
 
         assert app.state.jobs.get("nonexistent") is None
+
+
+class TestAdapterManagerLifespan:
+    def test_lifespan_creates_adapter_manager_on_state(self, client: TestClient) -> None:
+        from api.main import app  # noqa: PLC0415
+
+        assert hasattr(app.state, "adapters")
+        assert isinstance(app.state.adapters, AdapterManager)
+
+    def test_adapter_manager_postgres_none_when_db_write_disabled(self, client: TestClient) -> None:
+        from api.main import app  # noqa: PLC0415
+
+        assert app.state.adapters.postgres is None
 
 
 class TestRequestID:
