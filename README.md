@@ -39,6 +39,8 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 - [What requires credentials (owner only)](#what-requires-credentials-owner-only)
 - [Build your own frontend](#build-your-own-frontend)
 - [Owner workflow](#owner-workflow)
+- [Persisting to quant-infra-db](#persisting-to-quant-infra-db)
+- [Configuration reference](#configuration-reference)
 - [Module index](#module-index)
 - [Where to find X](#where-to-find-x)
 - [Troubleshooting](#troubleshooting)
@@ -253,6 +255,159 @@ git push
 ```
 
 Public users get the updated research on their next `git pull` or image rebuild.
+
+---
+
+## Persisting to quant-infra-db
+
+CSM-SET can write its operational time series (equity curve, trade history, daily performance, portfolio snapshots, signal rankings, backtest results, model parameters) to the shared `quant-infra-db` Postgres + Mongo stack. This is **opt-in** — the default deployment runs entirely off the local Parquet store.
+
+### Prerequisites
+
+- The `quant-infra-db` Compose stack is running on a network reachable from the csm-set host (`quant-network` for the Compose default; any routable hostnames work).
+- `quant-postgres` exposes the `db_csm_set` database with the `equity_curve`, `trade_history`, and `backtest_log` tables, and the `db_gateway` database with the `daily_performance` and `portfolio_snapshot` tables.
+- `quant-mongo` exposes the `csm_logs` database with `signal_snapshots`, `backtest_results`, and `model_params` collections.
+- The csm-set process is running in private mode (`CSM_PUBLIC_MODE=false`) with `CSM_API_KEY` set.
+
+### Required environment variables
+
+Add the following to `.env` (or export in the shell):
+
+```bash
+CSM_DB_WRITE_ENABLED=true
+CSM_DB_CSM_SET_DSN=postgresql://postgres:<pass>@quant-postgres:5432/db_csm_set
+CSM_DB_GATEWAY_DSN=postgresql://postgres:<pass>@quant-postgres:5432/db_gateway
+CSM_MONGO_URI=mongodb://quant-mongo:27017/
+```
+
+When `CSM_DB_WRITE_ENABLED=false` (the default), the adapters are not constructed and pipeline hooks are no-ops — csm-set behaves exactly as the public deployment.
+
+### Verification
+
+```bash
+# 1. Health check shows all three stores reachable
+curl -s http://localhost:8000/health | jq '.db'
+# {
+#   "postgres": "ok",
+#   "mongo": "ok",
+#   "gateway": "ok"
+# }
+
+# 2. After a daily refresh, fetch the equity curve over REST
+curl -s -H "X-API-Key: ${CSM_API_KEY}" \
+  "http://localhost:8000/api/v1/history/equity-curve?strategy_id=csm-set&days=30" | jq '.[0]'
+```
+
+The full `/api/v1/history/*` surface is documented in the OpenAPI schema at `/api/docs`.
+
+### Running the integration test suite
+
+The marker-gated suite under `tests/integration/adapters/` exercises the live stack end-to-end. With the stack up and the DSN env vars exported:
+
+```bash
+uv run pytest tests/integration/adapters/ -v -m infra_db
+```
+
+Tests self-skip when DSNs are unset, so the default `uv run pytest tests/` invocation never touches the live stack.
+
+In CI, the [`infra-integration` workflow](.github/workflows/infra-integration.yml) runs this suite on push to `main` and on manual dispatch. Provide `QUANT_INFRA_COMPOSE_PATH` (defaults to `../quant-infra-db/docker-compose.yml`) so the workflow can bring up the Compose stack.
+
+### Cron automation
+
+When private mode + DB write-back are both enabled, the scheduler automatically runs the full pipeline every workday:
+
+```
+CSM_REFRESH_CRON fires (default: 18:00 BKK, Mon–Fri)
+  → Fetch OHLCV from TradingView for all symbols in universe
+  → Compute feature panel (cross-sectional momentum signals)
+  → Build equity curve, daily performance, portfolio snapshots
+  → Run post-refresh hook → write to all 3 DBs
+  → /api/v1/history/* serves fresh data immediately
+```
+
+The universe is loaded from `data/processed/universe_latest.parquet` (built via `scripts/build_universe.py`). Anonymous mode (no `TVKIT_AUTH_TOKEN`) works for small universes (<20 symbols) with the default 5,000-bar cap.
+
+### Verified end-to-end
+
+The full pipeline was tested against a live `quant-postgres` + `quant-mongo` stack (2026-05-07):
+
+| Test | Result |
+|---|---|
+| `uv run pytest tests/integration/adapters/ -m infra_db` | 36/36 passed |
+| Cron-triggered `daily_refresh` (anonymous mode, 10 symbols) | 5.67s, 0 failures |
+| Equity curve written | 967 rows (2023–2026) |
+| Signal snapshots written | 6 docs with ranked cross-sectional momentum |
+| REST API (all 6 `/api/v1/history/*` endpoints) | 200 |
+| Health check (`/health`) | `db.postgres=ok, mongo=ok, gateway=ok` |
+| Docker container on `quant-network` | All 3 adapters connected |
+
+---
+
+## Configuration reference
+
+All settings are read from environment variables (via `pydantic-settings`). Copy `.env.example` to `.env` and uncomment what you need.
+
+### TradingView auth
+
+| Var | Default | Purpose |
+|---|---|---|
+| `TVKIT_AUTH_TOKEN` | *unset* (anonymous) | JSON blob of TradingView session cookies. Without it, tvkit is capped at **5,000 OHLCV bars per symbol**. Set to `{"sessionid":"...", "sessionid_sign":"...", "device_t":"...", "tv_ecuid":"..."}` to lift the cap. Extract from your browser's DevTools → Application → Cookies → `tradingview.com`. Only `sessionid` is required. Leave unset for public deployments. |
+
+### Application
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_ENV` | `development` | Environment label. Controls log verbosity and dev-only behaviors. Set to `production` in deployed images. |
+| `CSM_DATA_DIR` | `./data` | Where raw/processed Parquet files live. Writable only in private mode. Gitignored. |
+| `CSM_LOG_LEVEL` | `INFO` | Python log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `CSM_PUBLIC_MODE` | `false` | When `true`, all write endpoints return 403, the scheduler is disabled, `/api/v1/history/*` is blocked, and no credentials are needed. This is the **Docker default**. When `false`, full private mode is active. |
+| `CSM_RESULTS_DIR` | `./results` | Pre-computed outputs (notebook HTML, backtest JSON, signal rankings). Tracked in git. The API serves these as static files. |
+
+### API
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_API_HOST` | `0.0.0.0` | Host interface uvicorn binds to. `0.0.0.0` = all interfaces (required for Docker). |
+| `CSM_API_PORT` | `8000` | Port the FastAPI server listens on. |
+| `CSM_API_KEY` | *unset* (auth disabled) | Secret for the `X-API-Key` header. When unset, a startup WARNING is logged and protected endpoints are **open**. When set, `/api/v1/history/*` GETs and all non-GET `/api/v1/*` endpoints require `X-API-Key: <value>`. Uses constant-time comparison via `secrets.compare_digest`. |
+
+### UI
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_UI_PORT` | `8080` | Port for the NiceGUI/FastUI dashboard (separate process from the API). |
+
+### Scheduler
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_REFRESH_CRON` | `0 18 * * 1-5` | Cron expression for the daily data refresh job. `0 18 * * 1-5` = 6:00 PM Asia/Bangkok, Monday–Friday. Ignored when `CSM_PUBLIC_MODE=true`. |
+
+### quant-infra-db write-back (opt-in)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_DB_WRITE_ENABLED` | `false` | Master switch. When `false`, no adapters are constructed, pipeline hooks are no-ops, and `/api/v1/history/*` returns 503. When `true`, the three DSN vars below must be set. |
+| `CSM_DB_CSM_SET_DSN` | *unset* | Postgres DSN for `db_csm_set`. Tables: `equity_curve` (TimescaleDB hypertable), `trade_history`, `backtest_log`. |
+| `CSM_DB_GATEWAY_DSN` | *unset* | Postgres DSN for `db_gateway`. Tables: `daily_performance` (per-strategy metrics), `portfolio_snapshot` (cross-strategy aggregate). |
+| `CSM_MONGO_URI` | *unset* | MongoDB URI for `csm_logs`. Collections: `signal_snapshots`, `backtest_results`, `model_params`. |
+
+### Runtime modes
+
+```
+CSM_PUBLIC_MODE=true
+  → Scheduler off, write endpoints → 403, /api/v1/history/* blocked
+  → Zero credentials needed — the Docker Compose default
+
+CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=false  (default private)
+  → Scheduler on, writes go to local Parquet only
+  → /api/v1/history/* returns 503 (no DB adapters)
+
+CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=true + 3 DSNs set
+  → Full stack: local Parquet + mirror to quant-infra-db
+  → /api/v1/history/* serves central-DB time series
+  → Pipeline hooks write to all 3 stores (graceful per-adapter failure)
+```
 
 ---
 

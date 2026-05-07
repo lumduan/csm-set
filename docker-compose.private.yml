@@ -50,3 +50,8 @@ services:
       retries: 3
       start_period: 20s
     mem_limit: 2g
+
+networks:
+  default:
+    name: quant-network
+    external: true

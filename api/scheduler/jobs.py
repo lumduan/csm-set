@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,10 +17,17 @@ from csm.data.loader import OHLCVLoader
 from csm.data.store import ParquetStore
 from csm.features.pipeline import FeaturePipeline
 
+if TYPE_CHECKING:
+    from csm.adapters import AdapterManager
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def daily_refresh(settings: Settings, store: ParquetStore) -> dict[str, Any]:
+async def daily_refresh(
+    settings: Settings,
+    store: ParquetStore,
+    adapters: AdapterManager | None = None,
+) -> dict[str, Any]:
     """Refresh OHLCV data and rebuild the latest feature panel.
 
     Returns a summary dict stored on ``JobRecord.summary`` when submitted
@@ -55,6 +62,17 @@ async def daily_refresh(settings: Settings, store: ParquetStore) -> dict[str, An
         },
     )
 
+    summary: dict[str, Any] = {
+        "symbols_fetched": len(fetched),
+        "failures": failures,
+        "duration_seconds": round(duration, 3),
+    }
+
+    if adapters is not None:
+        from csm.adapters.hooks import run_post_refresh_hook
+
+        await run_post_refresh_hook(manager=adapters, store=store, summary=summary)
+
     marker = {
         "timestamp": datetime.now(UTC).isoformat(),
         "symbols_fetched": len(fetched),
@@ -68,14 +86,14 @@ async def daily_refresh(settings: Settings, store: ParquetStore) -> dict[str, An
     tmp_marker.write_text(json.dumps(marker, indent=2), encoding="utf-8")
     tmp_marker.rename(marker_path)
 
-    return {
-        "symbols_fetched": len(fetched),
-        "failures": failures,
-        "duration_seconds": round(duration, 3),
-    }
+    return summary
 
 
-def create_scheduler(settings: Settings, store: ParquetStore) -> AsyncIOScheduler | None:
+def create_scheduler(
+    settings: Settings,
+    store: ParquetStore,
+    adapters: AdapterManager | None = None,
+) -> AsyncIOScheduler | None:
     """Create and configure the owner-side scheduler when private mode is enabled."""
 
     if settings.public_mode:
@@ -84,7 +102,7 @@ def create_scheduler(settings: Settings, store: ParquetStore) -> AsyncIOSchedule
 
     async def _job_wrapper() -> None:
         try:
-            summary = await daily_refresh(settings=settings, store=store)
+            summary = await daily_refresh(settings=settings, store=store, adapters=adapters)
             logger.info("Scheduled daily_refresh completed", extra={"summary": summary})
         except Exception:
             logger.exception("Scheduled daily_refresh failed")

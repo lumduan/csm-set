@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.deps import get_jobs, get_settings, get_store
+from api.deps import get_adapter_manager, get_jobs, get_settings, get_store
 from api.jobs import JobKind, JobRegistry
 from api.logging import get_request_id
 from api.scheduler.jobs import daily_refresh
@@ -44,6 +44,7 @@ _VALID_JOB_IDS: frozenset[str] = frozenset({"daily_refresh"})
 )
 async def trigger_job(
     job_id: str,
+    request: Request,
     jobs: JobRegistry = Depends(get_jobs),
     settings: Settings = Depends(get_settings),
     store: ParquetStore = Depends(get_store),
@@ -55,12 +56,14 @@ async def trigger_job(
             detail=f"Unknown job_id {job_id!r}. Valid values: {sorted(_VALID_JOB_IDS)}",
         )
 
+    adapters = get_adapter_manager(request)
     record = await jobs.submit(
         JobKind.DATA_REFRESH,
         daily_refresh,
         request_id=get_request_id(),
         settings=settings,
         store=store,
+        adapters=adapters,
     )
     logger.info("Manual trigger for scheduler job %r submitted as %s", job_id, record.job_id)
     return RefreshResult(job_id=record.job_id, status=record.status)

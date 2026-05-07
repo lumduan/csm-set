@@ -180,6 +180,171 @@
         "title": "BacktestRunResponse",
         "type": "object"
       },
+      "BacktestSummaryRow": {
+        "description": "Slim projection of ``csm_logs.backtest_results`` for listing endpoints.\n\nReturned by :meth:`csm.adapters.mongo.MongoAdapter.list_backtest_results`.\nExcludes the potentially-large ``equity_curve`` and ``trades`` arrays so\nlisting payloads stay cheap.\n\nAttributes:\n    run_id: Unique backtest run identifier.\n    strategy_id: Strategy identifier.\n    created_at: tz-aware result-generation timestamp (UTC).\n    metrics: Summary metrics keyed by metric name.",
+        "properties": {
+          "created_at": {
+            "description": "tz-aware result-generation timestamp (UTC).",
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Summary metrics keyed by metric name.",
+            "title": "Metrics",
+            "type": "object"
+          },
+          "run_id": {
+            "description": "Unique backtest run identifier.",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier.",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "strategy_id",
+          "created_at",
+          "metrics"
+        ],
+        "title": "BacktestSummaryRow",
+        "type": "object"
+      },
+      "DailyPerformanceRow": {
+        "description": "One row of the ``db_gateway.daily_performance`` table.\n\nStores daily strategy-level metrics for cross-strategy aggregation.\n``metadata`` is a JSONB catch-all for extensible metrics.\n\nAttributes:\n    time: tz-aware timestamp (UTC).\n    strategy_id: Strategy identifier (e.g. ``\"csm-set\"``).\n    daily_return: Day-over-day return (nullable).\n    cumulative_return: Running total return (nullable).\n    total_value: Total portfolio value in THB (nullable).\n    cash_balance: Uninvested cash in THB (nullable).\n    max_drawdown: Rolling max drawdown (nullable).\n    sharpe_ratio: Rolling Sharpe ratio (nullable).\n    metadata: JSONB catch-all for additional metrics.",
+        "properties": {
+          "cash_balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Uninvested cash (THB).",
+            "title": "Cash Balance"
+          },
+          "cumulative_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cumulative return.",
+            "title": "Cumulative Return"
+          },
+          "daily_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Day-over-day return.",
+            "title": "Daily Return"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rolling max drawdown.",
+            "title": "Max Drawdown"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "description": "JSONB metric catch-all.",
+            "title": "Metadata",
+            "type": "object"
+          },
+          "sharpe_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rolling Sharpe ratio.",
+            "title": "Sharpe Ratio"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier.",
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "time": {
+            "description": "tz-aware timestamp (UTC).",
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total portfolio value (THB).",
+            "title": "Total Value"
+          }
+        },
+        "required": [
+          "time",
+          "strategy_id"
+        ],
+        "title": "DailyPerformanceRow",
+        "type": "object"
+      },
+      "EquityPoint": {
+        "description": "One row of the ``db_csm_set.equity_curve`` hypertable.\n\nAttributes:\n    time: tz-aware timestamp (UTC).\n    strategy_id: Strategy identifier (e.g. ``\"csm-set\"``).\n    equity: Strategy equity value at ``time``.",
+        "properties": {
+          "equity": {
+            "description": "Strategy equity value.",
+            "title": "Equity",
+            "type": "number"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier.",
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "time": {
+            "description": "tz-aware timestamp (UTC).",
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "strategy_id",
+          "equity"
+        ],
+        "title": "EquityPoint",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -196,6 +361,21 @@
       "HealthStatus": {
         "description": "Service health information.",
         "properties": {
+          "db": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Database connectivity status for quant-infra-db. None when db_write_enabled=False. Keys: 'postgres', 'mongo'. Values: 'ok' or 'error:<message>'.",
+            "title": "Db"
+          },
           "jobs_pending": {
             "default": 0,
             "description": "Number of jobs in accepted state awaiting execution",
@@ -505,6 +685,70 @@
         "title": "PortfolioSnapshot",
         "type": "object"
       },
+      "PortfolioSnapshotRow": {
+        "description": "One row of the ``db_gateway.portfolio_snapshot`` table.\n\nStores daily cross-strategy aggregate state. ``allocation`` is a JSONB\ncolumn shaped for multi-strategy weights (e.g. ``{\"csm-set\": 1.0}``\ntoday, ``{\"csm-set\": 0.6, \"mean-rev\": 0.4}`` in the future).\n\nAttributes:\n    time: tz-aware timestamp (UTC).\n    total_portfolio: Combined portfolio value in THB (nullable).\n    weighted_return: Allocation-weighted daily return (nullable).\n    combined_drawdown: Cross-strategy combined drawdown (nullable).\n    active_strategies: Number of strategies active on this day.\n    allocation: Per-strategy weight dict (JSONB).",
+        "properties": {
+          "active_strategies": {
+            "description": "Number of active strategies.",
+            "title": "Active Strategies",
+            "type": "integer"
+          },
+          "allocation": {
+            "additionalProperties": true,
+            "description": "Per-strategy weight dict (JSONB).",
+            "title": "Allocation",
+            "type": "object"
+          },
+          "combined_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cross-strategy combined drawdown.",
+            "title": "Combined Drawdown"
+          },
+          "time": {
+            "description": "tz-aware timestamp (UTC).",
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          },
+          "total_portfolio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Combined portfolio value (THB).",
+            "title": "Total Portfolio"
+          },
+          "weighted_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Allocation-weighted daily return.",
+            "title": "Weighted Return"
+          }
+        },
+        "required": [
+          "time",
+          "active_strategies"
+        ],
+        "title": "PortfolioSnapshotRow",
+        "type": "object"
+      },
       "ProblemDetail": {
         "description": "RFC 7807 application/problem+json response body.\n\nFields ``type``, ``title``, and ``status`` carry defaults so existing code that\nconstructs ``ProblemDetail(detail=..., request_id=...)`` continues to work.  The\nglobal exception handlers always populate the full RFC 7807 set.",
         "properties": {
@@ -632,6 +876,90 @@
           "symbol"
         ],
         "title": "SignalRow",
+        "type": "object"
+      },
+      "SignalSnapshotDoc": {
+        "description": "One document of the ``csm_logs.signal_snapshots`` collection.\n\nStores a daily ranking array for a strategy, keyed on\n``(strategy_id, date)``. Re-running daily refresh upserts the document.\n\nAttributes:\n    strategy_id: Strategy identifier (e.g. ``\"csm-set\"``).\n    date: tz-aware timestamp (UTC) representing the trading day.\n    rankings: Per-symbol ranking records (one entry per ranked symbol).",
+        "properties": {
+          "date": {
+            "description": "tz-aware trading-day timestamp (UTC).",
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "rankings": {
+            "description": "Per-symbol ranking records.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rankings",
+            "type": "array"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier.",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "date",
+          "rankings"
+        ],
+        "title": "SignalSnapshotDoc",
+        "type": "object"
+      },
+      "TradeRow": {
+        "description": "One row of the ``db_csm_set.trade_history`` hypertable.\n\nAttributes:\n    time: tz-aware timestamp (UTC) when the trade was recorded.\n    strategy_id: Strategy identifier (e.g. ``\"csm-set\"``).\n    symbol: Traded ticker (e.g. ``\"PTT\"``).\n    side: ``\"buy\"`` or ``\"sell\"``.\n    quantity: Number of shares (positive).\n    price: Execution price.\n    commission: Commission paid (THB, includes broker + venue fees + VAT).",
+        "properties": {
+          "commission": {
+            "description": "Total commission (THB).",
+            "title": "Commission",
+            "type": "number"
+          },
+          "price": {
+            "description": "Execution price.",
+            "title": "Price",
+            "type": "number"
+          },
+          "quantity": {
+            "description": "Number of shares.",
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "description": "'buy' or 'sell'.",
+            "title": "Side",
+            "type": "string"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier.",
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "symbol": {
+            "description": "Traded ticker.",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "time": {
+            "description": "tz-aware trade timestamp (UTC).",
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "strategy_id",
+          "symbol",
+          "side",
+          "quantity",
+          "price",
+          "commission"
+        ],
+        "title": "TradeRow",
         "type": "object"
       },
       "UniverseItem": {
@@ -901,6 +1229,517 @@
         "summary": "Refresh raw market data",
         "tags": [
           "data"
+        ]
+      }
+    },
+    "/api/v1/history/backtests": {
+      "get": {
+        "description": "Return up to ``limit`` most-recent backtest summary rows from ``csm_logs.backtest_results``, descending by ``created_at``. The potentially-large ``equity_curve`` and ``trades`` arrays are excluded from this listing \u2014 fetch by ``run_id`` for the full document.",
+        "operationId": "list_backtests_api_v1_history_backtests_get",
+        "parameters": [
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of summary rows to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of summary rows to return.",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BacktestSummaryRow"
+                  },
+                  "title": "Response List Backtests Api V1 History Backtests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Backtest summaries",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/equity-curve": {
+      "get": {
+        "description": "Return up to ``days`` most-recent rows of the strategy equity curve from ``db_csm_set.equity_curve``, ascending by time.",
+        "operationId": "get_equity_curve_api_v1_history_equity_curve_get",
+        "parameters": [
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of most-recent days to return (ascending by time).",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "description": "Number of most-recent days to return (ascending by time).",
+              "maximum": 3650,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EquityPoint"
+                  },
+                  "title": "Response Get Equity Curve Api V1 History Equity Curve Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Historical equity curve",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/performance": {
+      "get": {
+        "description": "Return up to ``days`` most-recent rows from ``db_gateway.daily_performance`` for the given strategy, ascending by time.",
+        "operationId": "get_performance_api_v1_history_performance_get",
+        "parameters": [
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of most-recent days to return (ascending by time).",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Number of most-recent days to return (ascending by time).",
+              "maximum": 3650,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DailyPerformanceRow"
+                  },
+                  "title": "Response Get Performance Api V1 History Performance Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Daily performance metrics",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/portfolio-snapshots": {
+      "get": {
+        "description": "Return up to ``days`` most-recent cross-strategy portfolio snapshots from ``db_gateway.portfolio_snapshot``, ascending by time.",
+        "operationId": "get_portfolio_snapshots_api_v1_history_portfolio_snapshots_get",
+        "parameters": [
+          {
+            "description": "Number of most-recent days to return (ascending by time).",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Number of most-recent days to return (ascending by time).",
+              "maximum": 3650,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioSnapshotRow"
+                  },
+                  "title": "Response Get Portfolio Snapshots Api V1 History Portfolio Snapshots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Portfolio snapshots",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/signals": {
+      "get": {
+        "description": "Return the signal snapshot document for ``(strategy_id, date)`` from ``csm_logs.signal_snapshots``. The ``date`` query parameter is the trading day in ``YYYY-MM-DD`` form; the lookup is keyed on UTC midnight.",
+        "operationId": "get_signal_snapshot_api_v1_history_signals_get",
+        "parameters": [
+          {
+            "description": "Trading day to fetch (``YYYY-MM-DD``). Resolved to UTC midnight before lookup, matching how snapshots are stored.",
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "description": "Trading day to fetch (``YYYY-MM-DD``). Resolved to UTC midnight before lookup, matching how snapshots are stored.",
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalSnapshotDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "No signal snapshot for the given (strategy_id, date)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Signal snapshot for a given trading day",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/trades": {
+      "get": {
+        "description": "Return up to ``limit`` most-recent trades from ``db_csm_set.trade_history``, descending by time.",
+        "operationId": "get_trades_api_v1_history_trades_get",
+        "parameters": [
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of trades to return (descending by time).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Maximum number of trades to return (descending by time).",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TradeRow"
+                  },
+                  "title": "Response Get Trades Api V1 History Trades Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Historical trade log",
+        "tags": [
+          "history"
         ]
       }
     },

@@ -38,18 +38,29 @@ PROTECTED_PATHS: frozenset[str] = frozenset(
     }
 )
 
+PROTECTED_PREFIXES: frozenset[str] = frozenset(
+    {
+        # Phase 6 — private-mode history surface protects GET reads in addition
+        # to writes, so the path-prefix needs explicit gating.
+        "/api/v1/history/",
+    }
+)
+
 API_KEY_HEADER: str = "X-API-Key"
 
 
 def is_protected_path(method: str, path: str) -> bool:
     """Return True if the (method, path) pair requires auth in private mode.
 
-    Protected = either a member of :data:`PROTECTED_PATHS` or any non-GET method
-    on a ``/api/v1/*`` path. The non-GET rule is defence in depth so future write
-    endpoints inherit auth before they are added to the explicit set.
+    Protected = a member of :data:`PROTECTED_PATHS`, any path under a
+    :data:`PROTECTED_PREFIXES` prefix, or any non-GET method on a ``/api/v1/*``
+    path. The non-GET rule is defence in depth so future write endpoints inherit
+    auth before they are added to the explicit set.
     """
 
     if path in PROTECTED_PATHS:
+        return True
+    if any(path.startswith(prefix) for prefix in PROTECTED_PREFIXES):
         return True
     return method != "GET" and path.startswith("/api/v1/")
 
@@ -158,5 +169,6 @@ __all__: list[str] = [
     "API_KEY_HEADER",
     "APIKeyMiddleware",
     "PROTECTED_PATHS",
+    "PROTECTED_PREFIXES",
     "is_protected_path",
 ]
