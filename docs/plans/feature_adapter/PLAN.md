@@ -801,7 +801,7 @@ After Phase 7 completes:
 | Phase 4 — Gateway Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2–3 precedents). |
 | Phase 5 — Pipeline Integration | `[x]` | Complete 2026-05-07. All three hooks (post-refresh, post-backtest, post-rebalance) wired through AdapterManager. |
 | Phase 6 — API History Endpoints | `[x]` | Complete 2026-05-07. Six GETs under `/api/v1/history/*` mounted unconditionally; `public_mode_guard` denies in public mode; APIKeyMiddleware gates via new `PROTECTED_PREFIXES`. Unit + `infra_db` integration tests pass. |
-| Phase 7 — Testing & Hardening | `[x]` | Complete 2026-05-07. Coverage gate (`fail_under = 90` over `src/csm/adapters` + `api`), `infra-integration.yml` workflow, README + architecture + `.env.example` + CHANGELOG documentation all shipped. Adapter coverage measured at 96% baseline; full suite at 93%. |
+| Phase 7 — Testing & Hardening | `[x]` | Complete 2026-05-07. Coverage gate, `infra-integration.yml`, docs shipped. **Live-DB verification**: 36/36 `infra_db` tests pass against real `quant-postgres` + `quant-mongo`. Found & fixed 5 bugs (double JSONB encoding, null `started_at`, column-name mismatch, BSON NaN/NA encoding, event-loop mismatch). **Cron workflow**: anonymous TradingView fetch → compute → DB write verified end-to-end (10 symbols, 5.67s, 0 failures). Container runs on `quant-network` with cron `0 18 * * 1-5`. |
 
 ---
 

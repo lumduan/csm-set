@@ -312,6 +312,35 @@ Tests self-skip when DSNs are unset, so the default `uv run pytest tests/` invoc
 
 In CI, the [`infra-integration` workflow](.github/workflows/infra-integration.yml) runs this suite on push to `main` and on manual dispatch. Provide `QUANT_INFRA_COMPOSE_PATH` (defaults to `../quant-infra-db/docker-compose.yml`) so the workflow can bring up the Compose stack.
 
+### Cron automation
+
+When private mode + DB write-back are both enabled, the scheduler automatically runs the full pipeline every workday:
+
+```
+CSM_REFRESH_CRON fires (default: 18:00 BKK, Mon–Fri)
+  → Fetch OHLCV from TradingView for all symbols in universe
+  → Compute feature panel (cross-sectional momentum signals)
+  → Build equity curve, daily performance, portfolio snapshots
+  → Run post-refresh hook → write to all 3 DBs
+  → /api/v1/history/* serves fresh data immediately
+```
+
+The universe is loaded from `data/processed/universe_latest.parquet` (built via `scripts/build_universe.py`). Anonymous mode (no `TVKIT_AUTH_TOKEN`) works for small universes (<20 symbols) with the default 5,000-bar cap.
+
+### Verified end-to-end
+
+The full pipeline was tested against a live `quant-postgres` + `quant-mongo` stack (2026-05-07):
+
+| Test | Result |
+|---|---|
+| `uv run pytest tests/integration/adapters/ -m infra_db` | 36/36 passed |
+| Cron-triggered `daily_refresh` (anonymous mode, 10 symbols) | 5.67s, 0 failures |
+| Equity curve written | 967 rows (2023–2026) |
+| Signal snapshots written | 6 docs with ranked cross-sectional momentum |
+| REST API (all 6 `/api/v1/history/*` endpoints) | 200 |
+| Health check (`/health`) | `db.postgres=ok, mongo=ok, gateway=ok` |
+| Docker container on `quant-network` | All 3 adapters connected |
+
 ---
 
 ## Configuration reference
