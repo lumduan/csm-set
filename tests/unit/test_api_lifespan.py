@@ -76,6 +76,11 @@ class TestAdapterManagerLifespan:
 
         assert app.state.adapters.mongo is None
 
+    def test_adapter_manager_gateway_none_when_db_write_disabled(self, client: TestClient) -> None:
+        from api.main import app  # noqa: PLC0415
+
+        assert app.state.adapters.gateway is None
+
 
 class TestRequestID:
     def test_x_request_id_header_present(self, client: TestClient) -> None:

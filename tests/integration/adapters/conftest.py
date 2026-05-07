@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 
+from csm.adapters.gateway import GatewayAdapter
 from csm.adapters.mongo import MongoAdapter
 from csm.adapters.postgres import PostgresAdapter
 
@@ -32,6 +33,11 @@ def _live_dsn() -> str | None:
 def _live_mongo_uri() -> str | None:
     """Return the live ``csm_logs`` URI from env, or ``None`` when unset."""
     return os.environ.get("CSM_MONGO_URI")
+
+
+def _live_gateway_dsn() -> str | None:
+    """Return the live ``db_gateway`` DSN from env, or ``None`` when unset."""
+    return os.environ.get("CSM_DB_GATEWAY_DSN")
 
 
 @pytest_asyncio.fixture
@@ -91,3 +97,32 @@ async def mongo_adapter() -> AsyncIterator[MongoAdapter]:
             await _wipe()
         finally:
             await mg.close()
+
+
+@pytest_asyncio.fixture
+async def gateway_adapter() -> AsyncIterator[GatewayAdapter]:
+    """Yield a connected ``GatewayAdapter`` against the real ``db_gateway``.
+
+    Skips when ``CSM_DB_GATEWAY_DSN`` is not set. Wipes ``test-csm-set``
+    rows before and after the test, then closes the pool.
+    """
+    dsn = _live_gateway_dsn()
+    if not dsn:
+        pytest.skip("CSM_DB_GATEWAY_DSN must be set for infra_db tests")
+
+    gw = GatewayAdapter(dsn)
+    await gw.connect()
+
+    async def _wipe() -> None:
+        pool = gw._require_pool()  # noqa: SLF001 — test-only access
+        await pool.execute("DELETE FROM daily_performance WHERE strategy_id = $1", TEST_STRATEGY_ID)
+        await pool.execute("DELETE FROM portfolio_snapshot")  # wipe all test snapshots
+
+    try:
+        await _wipe()
+        yield gw
+    finally:
+        try:
+            await _wipe()
+        finally:
+            await gw.close()

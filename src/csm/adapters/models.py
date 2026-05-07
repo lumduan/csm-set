@@ -166,12 +166,79 @@ class BacktestSummaryRow(BaseModel):
     metrics: dict[str, float] = Field(description="Summary metrics keyed by metric name.")
 
 
+class DailyPerformanceRow(BaseModel):
+    """One row of the ``db_gateway.daily_performance`` table.
+
+    Stores daily strategy-level metrics for cross-strategy aggregation.
+    ``metadata`` is a JSONB catch-all for extensible metrics.
+
+    Attributes:
+        time: tz-aware timestamp (UTC).
+        strategy_id: Strategy identifier (e.g. ``"csm-set"``).
+        daily_return: Day-over-day return (nullable).
+        cumulative_return: Running total return (nullable).
+        total_value: Total portfolio value in THB (nullable).
+        cash_balance: Uninvested cash in THB (nullable).
+        max_drawdown: Rolling max drawdown (nullable).
+        sharpe_ratio: Rolling Sharpe ratio (nullable).
+        metadata: JSONB catch-all for additional metrics.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    time: datetime = Field(description="tz-aware timestamp (UTC).")
+    strategy_id: str = Field(description="Strategy identifier.")
+    daily_return: float | None = Field(default=None, description="Day-over-day return.")
+    cumulative_return: float | None = Field(default=None, description="Cumulative return.")
+    total_value: float | None = Field(default=None, description="Total portfolio value (THB).")
+    cash_balance: float | None = Field(default=None, description="Uninvested cash (THB).")
+    max_drawdown: float | None = Field(default=None, description="Rolling max drawdown.")
+    sharpe_ratio: float | None = Field(default=None, description="Rolling Sharpe ratio.")
+    metadata: dict[str, object] = Field(default_factory=dict, description="JSONB metric catch-all.")
+
+
+class PortfolioSnapshotRow(BaseModel):
+    """One row of the ``db_gateway.portfolio_snapshot`` table.
+
+    Stores daily cross-strategy aggregate state. ``allocation`` is a JSONB
+    column shaped for multi-strategy weights (e.g. ``{"csm-set": 1.0}``
+    today, ``{"csm-set": 0.6, "mean-rev": 0.4}`` in the future).
+
+    Attributes:
+        time: tz-aware timestamp (UTC).
+        total_portfolio: Combined portfolio value in THB (nullable).
+        weighted_return: Allocation-weighted daily return (nullable).
+        combined_drawdown: Cross-strategy combined drawdown (nullable).
+        active_strategies: Number of strategies active on this day.
+        allocation: Per-strategy weight dict (JSONB).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    time: datetime = Field(description="tz-aware timestamp (UTC).")
+    total_portfolio: float | None = Field(
+        default=None, description="Combined portfolio value (THB)."
+    )
+    weighted_return: float | None = Field(
+        default=None, description="Allocation-weighted daily return."
+    )
+    combined_drawdown: float | None = Field(
+        default=None, description="Cross-strategy combined drawdown."
+    )
+    active_strategies: int = Field(description="Number of active strategies.")
+    allocation: dict[str, object] = Field(
+        default_factory=dict, description="Per-strategy weight dict (JSONB)."
+    )
+
+
 __all__: list[str] = [
     "BacktestLogRow",
     "BacktestResultDoc",
     "BacktestSummaryRow",
+    "DailyPerformanceRow",
     "EquityPoint",
     "ModelParamsDoc",
+    "PortfolioSnapshotRow",
     "SignalSnapshotDoc",
     "TradeRow",
 ]

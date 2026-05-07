@@ -3,8 +3,8 @@
 PostgresAdapter (db_csm_set), MongoAdapter (csm_logs), and GatewayAdapter
 (db_gateway) are coordinated by AdapterManager from FastAPI lifespan.
 
-Phase 2 shipped the ``PostgresAdapter`` slot. Phase 3 fills the ``MongoAdapter``
-slot. ``gateway`` remains a ``None`` placeholder until Phase 4.
+Phase 2 shipped the ``PostgresAdapter`` slot. Phase 3 filled the ``MongoAdapter``
+slot. Phase 4 fills the ``GatewayAdapter`` slot.
 ``AdapterManager`` is the single coordination point referenced by the FastAPI
 lifespan in ``api.main``.
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from csm.adapters.gateway import GatewayAdapter
 from csm.adapters.mongo import MongoAdapter
 from csm.adapters.postgres import PostgresAdapter
 
@@ -43,6 +44,7 @@ class AdapterManager:
         *,
         postgres: PostgresAdapter | None = None,
         mongo: MongoAdapter | None = None,
+        gateway: GatewayAdapter | None = None,
     ) -> None:
         """Initialise the manager with already-connected adapter instances.
 
@@ -52,10 +54,11 @@ class AdapterManager:
         Args:
             postgres: Optional connected ``PostgresAdapter``.
             mongo: Optional connected ``MongoAdapter``.
+            gateway: Optional connected ``GatewayAdapter``.
         """
         self.postgres: PostgresAdapter | None = postgres
         self.mongo: MongoAdapter | None = mongo
-        self.gateway: object | None = None  # Phase 4 — GatewayAdapter slot.
+        self.gateway: GatewayAdapter | None = gateway
 
     @classmethod
     async def from_settings(cls, settings: Settings) -> AdapterManager:
@@ -113,7 +116,25 @@ class AdapterManager:
         else:
             logger.warning("db_write_enabled=True but mongo_uri is not set; mongo slot disabled")
 
-        return cls(postgres=postgres, mongo=mongo)
+        gateway: GatewayAdapter | None = None
+        if settings.db_gateway_dsn:
+            gw_candidate = GatewayAdapter(settings.db_gateway_dsn)
+            try:
+                await gw_candidate.connect()
+            except Exception as exc:
+                logger.warning(
+                    "GatewayAdapter connect failed; gateway slot disabled: %s",
+                    exc,
+                )
+                gateway = None
+            else:
+                gateway = gw_candidate
+        else:
+            logger.warning(
+                "db_write_enabled=True but db_gateway_dsn is not set; gateway slot disabled"
+            )
+
+        return cls(postgres=postgres, mongo=mongo, gateway=gateway)
 
     async def close(self) -> None:
         """Close every live adapter. Idempotent.
@@ -133,6 +154,12 @@ class AdapterManager:
             except Exception:
                 logger.warning("MongoAdapter close raised", exc_info=True)
             self.mongo = None
+        if self.gateway is not None:
+            try:
+                await self.gateway.close()
+            except Exception:
+                logger.warning("GatewayAdapter close raised", exc_info=True)
+            self.gateway = None
 
     async def ping(self) -> dict[str, str]:
         """Return per-adapter pool/client-based liveness results.
@@ -161,7 +188,14 @@ class AdapterManager:
                 results["mongo"] = f"error:{exc}"
             else:
                 results["mongo"] = "ok" if ok_mongo else "error:ping_failed"
+        if self.gateway is not None:
+            try:
+                ok_gw: bool = await self.gateway.ping()
+            except Exception as exc:
+                results["gateway"] = f"error:{exc}"
+            else:
+                results["gateway"] = "ok" if ok_gw else "error:ping_failed"
         return results
 
 
-__all__: list[str] = ["AdapterManager", "MongoAdapter", "PostgresAdapter"]
+__all__: list[str] = ["AdapterManager", "GatewayAdapter", "MongoAdapter", "PostgresAdapter"]

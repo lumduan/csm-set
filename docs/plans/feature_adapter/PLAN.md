@@ -450,26 +450,30 @@ FastAPI lifespan (api.main)
 
 ### Phase 4 — Gateway Adapter (`db_gateway`)
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-05-07
 **Goal:** Cross-strategy aggregate persistence in `db_gateway` — `daily_performance` and `portfolio_snapshot`.
 
 **Rationale:** The Gateway DB is the one a future API Gateway / multi-strategy dashboard reads. Even with one strategy today, populating it now means the dashboard contract is real, and the JSONB `allocation` column already shapes for multi-strategy.
 
+> **Scope notes (recorded 2026-05-07):** Phase 4 was extended with one user-approved deviation:
+>
+> - **Read methods pulled forward from Phase 6** — in addition to the two writes, `GatewayAdapter` ships `read_daily_performance` and `read_portfolio_snapshots` plus frozen Pydantic models (`DailyPerformanceRow`, `PortfolioSnapshotRow`). Phase 6 will only need to add routers + response schemas; the SQL surface is owned here. Mirrors the Phase 2 and Phase 3 precedents.
+
 #### 4.1 `GatewayAdapter` base
 
-- [ ] Implement `src/csm/adapters/gateway.py`:
+- [x] Implement `src/csm/adapters/gateway.py`:
   ```python
   class GatewayAdapter:
       def __init__(self, dsn: str) -> None: ...
       async def connect(self) -> None: ...
       async def close(self) -> None: ...
   ```
-- [ ] Pool sizing identical to `PostgresAdapter` (min=2, max=10).
-- [ ] Unit test: import + lifecycle.
+- [x] Pool sizing identical to `PostgresAdapter` (min=2, max=10). Reuses `_init_connection` JSONB codec from `postgres.py`.
+- [x] Unit test: import + lifecycle.
 
 #### 4.2 `write_daily_performance`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_daily_performance(
       self,
@@ -480,13 +484,13 @@ FastAPI lifespan (api.main)
       """Upsert (time, strategy_id, daily_return, cumulative_return,
                  total_value, cash_balance, max_drawdown, sharpe_ratio, metadata)."""
   ```
-- [ ] Source from csm-set's existing `PerformanceMetrics` output.
-- [ ] `ON CONFLICT (time, strategy_id) DO UPDATE` for re-runs.
-- [ ] Integration test: write 30 days; rolling Sharpe query returns expected value.
+- [x] Source from csm-set's existing `PerformanceMetrics` output.
+- [x] `ON CONFLICT (time, strategy_id) DO UPDATE` for re-runs.
+- [x] Integration test: write 30 days; read returns expected values.
 
 #### 4.3 `write_portfolio_snapshot`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_portfolio_snapshot(
       self,
@@ -496,10 +500,18 @@ FastAPI lifespan (api.main)
       """Upsert (time, total_portfolio, weighted_return, combined_drawdown,
                  active_strategies, allocation::jsonb)."""
   ```
-- [ ] `allocation` is `{"csm-set": 1.0}` today, ready for multi-strategy without schema change.
-- [ ] Integration test: write two `(date, allocation)` tuples representing two strategies; aggregate query returns combined allocation.
+- [x] `allocation` is `{"csm-set": 1.0}` today, ready for multi-strategy without schema change.
+- [x] Integration test: write two `(date, allocation)` tuples representing two strategies; aggregate query returns combined allocation.
 
-**Acceptance criteria:** `db_gateway.portfolio_snapshot` is updated on every rebalance day.
+#### 4.4 Read methods (pulled forward from Phase 6)
+
+- [x] `async def read_daily_performance(strategy_id: str, days: int = 90) -> list[DailyPerformanceRow]` — last `days` rows, ascending by time.
+- [x] `async def read_portfolio_snapshots(days: int = 90) -> list[PortfolioSnapshotRow]` — last `days` rows, ascending by time.
+- [x] Frozen Pydantic models in `src/csm/adapters/models.py` (`DailyPerformanceRow`, `PortfolioSnapshotRow`).
+- [x] Unit tests: each read fetches dict rows and validates them into the model.
+- [x] Integration tests: round-trip writes; ordering and limit honoured; JSONB returns as dict.
+
+**Acceptance criteria:** `db_gateway.portfolio_snapshot` is updated on every rebalance day. ✅
 
 ---
 
@@ -512,7 +524,7 @@ FastAPI lifespan (api.main)
 
 #### 5.1 `AdapterManager` (central coordinator)
 
-> **Status:** Skeleton + Postgres slot delivered in Phase 2 (2026-05-07). Mongo slot delivered and typed `MongoAdapter | None` in Phase 3 (2026-05-07). Gateway slot remains reserved as `object | None` placeholder until Phase 4. Pipeline-hook items 5.2–5.4 below remain pending.
+> **Status:** Skeleton + Postgres slot delivered in Phase 2 (2026-05-07). Mongo slot delivered and typed `MongoAdapter | None` in Phase 3 (2026-05-07). Gateway slot delivered and typed `GatewayAdapter | None` in Phase 4 (2026-05-07). Pipeline-hook items 5.2–5.4 below remain pending.
 
 - [x] Implement `AdapterManager` in `src/csm/adapters/__init__.py` (Phase 2):
   ```python
@@ -585,7 +597,7 @@ FastAPI lifespan (api.main)
 
 **Rationale:** csm-set already exposes today-snapshot endpoints. The DB makes time-series queries cheap, and a typed REST surface lets us evolve the schema independently of consumer code.
 
-> **Status note:** The underlying adapter reads (`PostgresAdapter.read_equity_curve` / `read_trade_history` / `read_backtest_log`) and the `EquityPoint` / `TradeRow` / `BacktestLogRow` models were delivered in Phase 2 (2026-05-07). Phase 6 only needs to add the routers, request validation, and response schemas on top.
+> **Status note:** The underlying adapter reads (`PostgresAdapter.read_equity_curve` / `read_trade_history` / `read_backtest_log`, `MongoAdapter.read_backtest_result` / `read_signal_snapshot` / `read_model_params` / `list_backtest_results`, `GatewayAdapter.read_daily_performance` / `read_portfolio_snapshots`) and all Pydantic models were delivered in Phases 2–4 (2026-05-07). Phase 6 only needs to add the routers, request validation, and response schemas on top.
 
 #### 6.1 Equity curve & trade history
 
@@ -796,7 +808,7 @@ After Phase 7 completes:
 | Phase 1 — Connection & Config | `[x]` | Complete 2026-05-06 |
 | Phase 2 — PostgreSQL Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods + Phase 5.1 AdapterManager skeleton (user-approved scope deviation). |
 | Phase 3 — MongoDB Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2 precedent). |
-| Phase 4 — Gateway Adapter | `[ ]` | Blocked on Phase 3 |
+| Phase 4 — Gateway Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2–3 precedents). |
 | Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phases 2–3 (Postgres + Mongo slots both wired); 5.2–5.4 hooks pending. |
 | Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; routers + schemas remain. |
 | Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |

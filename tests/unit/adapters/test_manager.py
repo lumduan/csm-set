@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from csm.adapters import AdapterManager, MongoAdapter, PostgresAdapter
+from csm.adapters import AdapterManager, GatewayAdapter, MongoAdapter, PostgresAdapter
 from csm.config.settings import Settings
 
 
@@ -17,6 +17,7 @@ def _settings(
     db_write_enabled: bool,
     db_csm_set_dsn: str | None,
     mongo_uri: str | None = None,
+    db_gateway_dsn: str | None = None,
 ) -> Settings:
     """Build ``Settings`` with the relevant fields configured via env."""
     monkeypatch.setenv("CSM_DB_WRITE_ENABLED", str(db_write_enabled).lower())
@@ -28,7 +29,10 @@ def _settings(
         monkeypatch.delenv("CSM_MONGO_URI", raising=False)
     else:
         monkeypatch.setenv("CSM_MONGO_URI", mongo_uri)
-    monkeypatch.delenv("CSM_DB_GATEWAY_DSN", raising=False)
+    if db_gateway_dsn is None:
+        monkeypatch.delenv("CSM_DB_GATEWAY_DSN", raising=False)
+    else:
+        monkeypatch.setenv("CSM_DB_GATEWAY_DSN", db_gateway_dsn)
     monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
     return Settings()
 
@@ -294,3 +298,148 @@ async def test_close_runs_both_adapters() -> None:
     fake_mongo.close.assert_awaited_once()
     assert manager.postgres is None
     assert manager.mongo is None
+
+
+# ---------------------------------------------------------------------------
+# Gateway branch (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+async def test_missing_gateway_dsn_logs_warning_and_gateway_none(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    s = _settings(
+        monkeypatch,
+        db_write_enabled=True,
+        db_csm_set_dsn=None,
+        mongo_uri=None,
+        db_gateway_dsn=None,
+    )
+    with caplog.at_level(logging.WARNING, logger="csm.adapters"):
+        manager = await AdapterManager.from_settings(s)
+
+    assert manager.gateway is None
+    assert any("db_gateway_dsn is not set" in rec.message for rec in caplog.records)
+
+
+async def test_gateway_connect_failure_logs_warning_and_gateway_none(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    s = _settings(
+        monkeypatch,
+        db_write_enabled=True,
+        db_csm_set_dsn=None,
+        mongo_uri=None,
+        db_gateway_dsn="postgresql://nope:nope@nowhere/db_gateway",
+    )
+
+    async def _boom(self: GatewayAdapter) -> None:
+        raise OSError("Gateway unreachable")
+
+    with (
+        patch.object(GatewayAdapter, "connect", new=_boom),
+        caplog.at_level(logging.WARNING, logger="csm.adapters"),
+    ):
+        manager = await AdapterManager.from_settings(s)
+
+    assert manager.gateway is None
+    assert any("GatewayAdapter connect failed" in rec.message for rec in caplog.records)
+
+
+async def test_happy_path_initialises_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    s = _settings(
+        monkeypatch,
+        db_write_enabled=True,
+        db_csm_set_dsn=None,
+        mongo_uri=None,
+        db_gateway_dsn="postgresql://u:p@h:5432/db_gateway",
+    )
+
+    async def _ok(self: GatewayAdapter) -> None:
+        return None
+
+    with patch.object(GatewayAdapter, "connect", new=_ok):
+        manager = await AdapterManager.from_settings(s)
+
+    assert manager.gateway is not None
+    assert isinstance(manager.gateway, GatewayAdapter)
+
+
+async def test_close_runs_when_gateway_set() -> None:
+    fake = AsyncMock(spec=GatewayAdapter)
+    manager = AdapterManager(gateway=fake)
+    await manager.close()
+
+    fake.close.assert_awaited_once()
+    assert manager.gateway is None
+
+
+async def test_close_swallows_gateway_close_errors(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = AsyncMock(spec=GatewayAdapter)
+    fake.close = AsyncMock(side_effect=RuntimeError("flaky teardown"))
+    manager = AdapterManager(gateway=fake)
+
+    with caplog.at_level(logging.WARNING, logger="csm.adapters"):
+        await manager.close()
+
+    assert manager.gateway is None
+    assert any("GatewayAdapter close raised" in rec.message for rec in caplog.records)
+
+
+async def test_ping_reflects_gateway_status() -> None:
+    fake = AsyncMock(spec=GatewayAdapter)
+    fake.ping = AsyncMock(return_value=True)
+    manager = AdapterManager(gateway=fake)
+
+    assert await manager.ping() == {"gateway": "ok"}
+
+
+async def test_ping_returns_error_when_gateway_ping_raises() -> None:
+    fake = AsyncMock(spec=GatewayAdapter)
+    fake.ping = AsyncMock(side_effect=OSError("gateway boom"))
+    manager = AdapterManager(gateway=fake)
+
+    result = await manager.ping()
+
+    assert result["gateway"].startswith("error:")
+    assert "gateway boom" in result["gateway"]
+
+
+async def test_ping_gateway_error_when_select_returns_unexpected() -> None:
+    fake = AsyncMock(spec=GatewayAdapter)
+    fake.ping = AsyncMock(return_value=False)
+    manager = AdapterManager(gateway=fake)
+
+    assert await manager.ping() == {"gateway": "error:ping_failed"}
+
+
+async def test_ping_combines_all_three_adapters() -> None:
+    fake_pg = AsyncMock(spec=PostgresAdapter)
+    fake_pg.ping = AsyncMock(return_value=True)
+    fake_mongo = AsyncMock(spec=MongoAdapter)
+    fake_mongo.ping = AsyncMock(return_value=True)
+    fake_gw = AsyncMock(spec=GatewayAdapter)
+    fake_gw.ping = AsyncMock(return_value=True)
+    manager = AdapterManager(postgres=fake_pg, mongo=fake_mongo, gateway=fake_gw)
+
+    assert await manager.ping() == {"postgres": "ok", "mongo": "ok", "gateway": "ok"}
+
+
+async def test_close_runs_all_three_adapters() -> None:
+    fake_pg = AsyncMock(spec=PostgresAdapter)
+    fake_mongo = AsyncMock(spec=MongoAdapter)
+    fake_gw = AsyncMock(spec=GatewayAdapter)
+    manager = AdapterManager(postgres=fake_pg, mongo=fake_mongo, gateway=fake_gw)
+
+    await manager.close()
+
+    fake_pg.close.assert_awaited_once()
+    fake_mongo.close.assert_awaited_once()
+    fake_gw.close.assert_awaited_once()
+    assert manager.postgres is None
+    assert manager.mongo is None
+    assert manager.gateway is None
