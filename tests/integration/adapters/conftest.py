@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 
+from csm.adapters import AdapterManager
 from csm.adapters.gateway import GatewayAdapter
 from csm.adapters.mongo import MongoAdapter
 from csm.adapters.postgres import PostgresAdapter
@@ -126,3 +127,63 @@ async def gateway_adapter() -> AsyncIterator[GatewayAdapter]:
             await _wipe()
         finally:
             await gw.close()
+
+
+@pytest_asyncio.fixture
+async def adapter_manager() -> AsyncIterator[AdapterManager]:
+    """Yield a live ``AdapterManager`` with all configured adapters connected.
+
+    Skips when none of the DSN/URI env vars are set. Wipes
+    ``test-csm-set`` artefacts from all three stores before and after
+    the test, then closes every adapter.
+    """
+    dsn = _live_dsn()
+    mongo_uri = _live_mongo_uri()
+    gateway_dsn = _live_gateway_dsn()
+
+    if not dsn and not mongo_uri and not gateway_dsn:
+        pytest.skip("No DB DSNs set for infra_db adapter_manager fixture")
+
+    postgres: PostgresAdapter | None = None
+    mongo: MongoAdapter | None = None
+    gateway: GatewayAdapter | None = None
+
+    if dsn:
+        postgres = PostgresAdapter(dsn)
+        await postgres.connect()
+    if mongo_uri:
+        mongo = MongoAdapter(mongo_uri)
+        await mongo.connect()
+    if gateway_dsn:
+        gateway = GatewayAdapter(gateway_dsn)
+        await gateway.connect()
+
+    manager = AdapterManager(postgres=postgres, mongo=mongo, gateway=gateway)
+
+    async def _wipe() -> None:
+        if postgres is not None:
+            pool = postgres._require_pool()  # noqa: SLF001
+            for table in ("equity_curve", "trade_history", "backtest_log"):
+                await pool.execute(f"DELETE FROM {table} WHERE strategy_id = $1", TEST_STRATEGY_ID)
+        if mongo is not None:
+            db = mongo._db()  # noqa: SLF001
+            await db["signal_snapshots"].delete_many({"strategy_id": TEST_STRATEGY_ID})
+            await db["model_params"].delete_many({"strategy_id": TEST_STRATEGY_ID})
+            await db["backtest_results"].delete_many(
+                {"run_id": {"$regex": f"^{TEST_RUN_ID_PREFIX}"}}
+            )
+        if gateway is not None:
+            pool = gateway._require_pool()  # noqa: SLF001
+            await pool.execute(
+                "DELETE FROM daily_performance WHERE strategy_id = $1", TEST_STRATEGY_ID
+            )
+            await pool.execute("DELETE FROM portfolio_snapshot")
+
+    try:
+        await _wipe()
+        yield manager
+    finally:
+        try:
+            await _wipe()
+        finally:
+            await manager.close()

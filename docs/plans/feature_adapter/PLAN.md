@@ -517,7 +517,7 @@ FastAPI lifespan (api.main)
 
 ### Phase 5 — Pipeline Integration
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-05-07
 **Goal:** Wire the adapters into csm-set's three event hooks (post-refresh, post-backtest, post-rebalance) so write-back is automatic. App boot stays correct in DB-on and DB-off modes.
 
 **Rationale:** Phases 2–4 produce the machinery. This phase makes it actually fire from production code paths.
@@ -552,7 +552,7 @@ FastAPI lifespan (api.main)
 
 #### 5.2 Post-refresh hook (daily signal → DB)
 
-- [ ] After daily refresh succeeds (in `api/scheduler/jobs.py` or `scripts/export_results.py` — whichever owns that lifecycle today), call:
+- [x] After daily refresh succeeds (in `api/scheduler/jobs.py` or `scripts/export_results.py` — whichever owns that lifecycle today), call:
   ```python
   if mgr.postgres:  await mgr.postgres.write_equity_curve("csm-set", equity_series)
   if mgr.mongo:     await mgr.mongo.write_signal_snapshot("csm-set", today, rankings)
@@ -560,33 +560,33 @@ FastAPI lifespan (api.main)
       await mgr.gateway.write_daily_performance("csm-set", today, metrics)
       await mgr.gateway.write_portfolio_snapshot(today, snapshot)
   ```
-- [ ] Each call wrapped in `try/except` that logs `WARNING` and continues.
-- [ ] Integration test (`infra_db`): trigger refresh; assert the four target tables/collections each grew by exactly one row/document.
+- [x] Each call wrapped in `try/except` that logs `WARNING` and continues.
+- [x] Integration test (`infra_db`): trigger refresh; assert the four target tables/collections each grew by exactly one row/document.
 
-**Acceptance criteria:** A scheduled run produces rows in `equity_curve`, `signal_snapshots`, `daily_performance`, `portfolio_snapshot`; a forced DB outage produces a warning, not a crash.
+**Acceptance criteria:** A scheduled run produces rows in `equity_curve`, `signal_snapshots`, `daily_performance`, `portfolio_snapshot`; a forced DB outage produces a warning, not a crash. ✅
 
 #### 5.3 Post-backtest hook (backtest → DB)
 
-- [ ] In `api/routers/backtest.py`, after a job moves to `SUCCESS`:
+- [x] In `api/routers/backtest.py`, after a job moves to `SUCCESS`:
   ```python
   if mgr.postgres: await mgr.postgres.write_backtest_log(run_id, "csm-set", config, summary)
   if mgr.mongo:
       await mgr.mongo.write_backtest_result(result_doc)
       await mgr.mongo.write_model_params("csm-set", version, params)
   ```
-- [ ] Integration test: trigger `/api/v1/backtest/run`; assert one row in `backtest_log`, one document in `backtest_results`, one document in `model_params`.
+- [x] Integration test: trigger `/api/v1/backtest/run`; assert one row in `backtest_log`, one document in `backtest_results`, one document in `model_params`.
 
-**Acceptance criteria:** Every backtest run is queryable by `run_id` from both Postgres and Mongo.
+**Acceptance criteria:** Every backtest run is queryable by `run_id` from both Postgres and Mongo. ✅
 
 #### 5.4 Post-rebalance hook (trades → DB)
 
-- [ ] In the rebalance workflow, after the trade list is generated:
+- [x] In the rebalance workflow, after the trade list is generated:
   ```python
   if mgr.postgres: await mgr.postgres.write_trade_history("csm-set", trade_df)
   ```
-- [ ] Integration test: simulate rebalance; assert `trade_history` rows match the local DataFrame.
+- [x] Integration test: simulate rebalance; assert `trade_history` rows match the local DataFrame.
 
-**Acceptance criteria:** `db_csm_set.trade_history` is updated on every rebalance event.
+**Acceptance criteria:** `db_csm_set.trade_history` is updated on every rebalance event. ✅
 
 ---
 
@@ -809,7 +809,7 @@ After Phase 7 completes:
 | Phase 2 — PostgreSQL Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods + Phase 5.1 AdapterManager skeleton (user-approved scope deviation). |
 | Phase 3 — MongoDB Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2 precedent). |
 | Phase 4 — Gateway Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2–3 precedents). |
-| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phases 2–4 (Postgres + Mongo + Gateway slots all wired); 5.2–5.4 hooks pending. |
+| Phase 5 — Pipeline Integration | `[x]` | Complete 2026-05-07. All three hooks (post-refresh, post-backtest, post-rebalance) wired through AdapterManager. |
 | Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; Gateway reads delivered in Phase 4; routers + schemas remain. |
 | Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |
 

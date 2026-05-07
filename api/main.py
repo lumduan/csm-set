@@ -79,14 +79,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     jobs = JobRegistry.load_all(jobs_persistence_dir)
     app.state.jobs = jobs
 
-    scheduler = create_scheduler(settings=settings, store=store)
+    adapters: AdapterManager = await AdapterManager.from_settings(settings)
+    app.state.adapters = adapters
+
+    scheduler = create_scheduler(settings=settings, store=store, adapters=adapters)
     app.state.store = store
     app.state.scheduler = scheduler
     if scheduler is not None:
         scheduler.start()
-
-    adapters: AdapterManager = await AdapterManager.from_settings(settings)
-    app.state.adapters = adapters
 
     try:
         yield
