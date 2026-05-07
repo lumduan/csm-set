@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import asyncpg
@@ -58,8 +58,8 @@ class _SQLStatements:
         "commission = EXCLUDED.commission"
     )
     INSERT_BACKTEST_LOG: str = (
-        "INSERT INTO backtest_log (run_id, strategy_id, config, summary) "
-        "VALUES ($1, $2, $3::jsonb, $4::jsonb) "
+        "INSERT INTO backtest_log (run_id, strategy_id, started_at, config, summary) "
+        "VALUES ($1, $2, $3, $4::jsonb, $5::jsonb) "
         "ON CONFLICT (run_id) DO NOTHING"
     )
     SELECT_EQUITY_CURVE_RECENT: str = (
@@ -78,10 +78,10 @@ class _SQLStatements:
         "LIMIT $2"
     )
     SELECT_BACKTEST_LOG_RECENT: str = (
-        "SELECT run_id, strategy_id, created_at, config, summary "
+        "SELECT run_id, strategy_id, started_at AS created_at, config, summary "
         "FROM backtest_log "
         "WHERE ($1::text IS NULL OR strategy_id = $1) "
-        "ORDER BY created_at DESC "
+        "ORDER BY started_at DESC "
         "LIMIT $2"
     )
     PING: str = "SELECT 1"
@@ -288,8 +288,9 @@ class PostgresAdapter:
             _SQL.INSERT_BACKTEST_LOG,
             run_id,
             strategy_id,
-            json.dumps(config),
-            json.dumps(summary),
+            datetime.now(UTC),
+            config,
+            summary,
         )
         logger.debug("write_backtest_log run_id=%s strategy=%s", run_id, strategy_id)
 

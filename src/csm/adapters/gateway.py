@@ -18,7 +18,6 @@ For best-effort persistence, callers wrap each call in their own
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -215,7 +214,7 @@ class GatewayAdapter:
             metrics.get("cash_balance"),
             metrics.get("max_drawdown"),
             metrics.get("sharpe_ratio"),
-            json.dumps(metrics),
+            metrics,
         )
         logger.debug("write_daily_performance strategy=%s date=%s", strategy_id, date.isoformat())
 
@@ -248,7 +247,7 @@ class GatewayAdapter:
             snapshot.get("weighted_return"),
             snapshot.get("combined_drawdown"),
             snapshot.get("active_strategies", 0),
-            json.dumps(allocation),
+            allocation,
         )
         logger.debug("write_portfolio_snapshot date=%s", date.isoformat())
 

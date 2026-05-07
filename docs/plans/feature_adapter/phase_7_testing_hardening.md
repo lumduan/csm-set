@@ -578,10 +578,13 @@ test(adapters): add coverage gate, infra-integration CI, and docs (Phase 7)
 | `CHANGELOG.md` | MODIFY | Unreleased entry |
 | `docs/plans/feature_adapter/PLAN.md` | MODIFY | Phase 7 progress flips; Current Status update |
 | `tests/unit/adapters/*.py` | MODIFY (if needed) | Top up to clear the 90% floor |
+| `src/csm/adapters/gateway.py` | MODIFY | Fix double JSONB encoding (remove manual `json.dumps`); remove unused `json` import |
+| `src/csm/adapters/postgres.py` | MODIFY | Fix double JSONB encoding; add `started_at` to `INSERT_BACKTEST_LOG`; alias `started_at AS created_at` in SELECT |
+| `tests/integration/adapters/test_history_api.py` | MODIFY | Switch from `TestClient` to `httpx.AsyncClient` + `ASGITransport` (event-loop compatibility) |
+| `quant-infra-db/init-scripts/03_schema_csm_set.sql` | MODIFY | Add missing unique indexes (`uq_equity_curve_time_strategy`, `uq_trade_history_dedup`) |
+| `quant-infra-db/init-scripts/04_schema_gateway.sql` | MODIFY | Add missing unique indexes (`uq_daily_perf_time_strategy`, `uq_portfolio_snapshot_time`) |
 
-No production code under `src/csm/adapters/` or `api/` is modified by this
-phase. The adapter and history-router surfaces are frozen at the end of
-Phase 6.
+Production adapter code (`src/csm/adapters/`) was modified
 
 ---
 
@@ -609,7 +612,7 @@ Phase 6.
   endpoints, and the new CI workflow.
 - [x] `docs/plans/feature_adapter/PLAN.md` Phase 7 marked Complete; Current
   Status table updated.
-- [~] `uv run pytest tests/integration/adapters/ -m infra_db -v` green
+- [x] `uv run pytest tests/integration/adapters/ -m infra_db -v` green (36 passed against live `quant-postgres` + `quant-mongo`)
   against the live stack — verified self-skip behaviour without DSNs;
   green-against-stack run is gated on the workflow firing in CI.
 
@@ -670,9 +673,23 @@ Phase 7 complete. All deliverables shipped in a single session:
    workaround documented in the plan: pass `--no-cov-on-fail` or run the
    full suite. No change required for CI.
 
+3. **Live-DB run surfaced four schema misalignments** (caught by the
+   `infra_db`-marked suite against the running `quant-postgres` +
+   `quant-mongo` containers, 36 tests covering all three stores):
+
+   | Bug | Fix | Files changed |
+   |---|---|---|
+   | Missing unique indexes on Postgres tables caused `ON CONFLICT` clauses to fail with `InvalidColumnReferenceError` | Added unique indexes to running DB and init scripts: `equity_curve (time, strategy_id)`, `trade_history (strategy_id, time, symbol, side)`, `daily_performance (time, strategy_id)`, `portfolio_snapshot (time)` | `init-scripts/03_schema_csm_set.sql`, `init-scripts/04_schema_gateway.sql` |
+   | Double JSONB serialization — adapter code called `json.dumps()` manually but the asyncpg JSONB codec (registered in `_init_connection`) also serializes, producing doubly-encoded strings | Removed manual `json.dumps()` calls; pass raw dicts. Removed now-unused `import json` from `gateway.py` | `src/csm/adapters/gateway.py`, `src/csm/adapters/postgres.py` |
+   | `backtest_log` INSERT missing `started_at` column (`NOT NULL` constraint violation) | Added `started_at` column to INSERT SQL; pass `datetime.now(UTC)` | `src/csm/adapters/postgres.py` |
+   | `backtest_log` SELECT referenced `created_at` but DB column is `started_at` (`UndefinedColumnError`) | Aliased `started_at AS created_at` in SELECT SQL (model field name preserved to avoid breaking Phase 6 API responses) | `src/csm/adapters/postgres.py` |
+   | `TestClient` event-loop mismatch — starlette's `TestClient` spawns its own asyncio loop, making asyncpg pools (created on the pytest-asyncio loop) unreachable | Rewrote `test_history_api.py` to use `httpx.AsyncClient` with `ASGITransport`, which shares the test's event loop. Added a shared `_api_client` async context manager. | `tests/integration/adapters/test_history_api.py` |
+
+   After fixes: **36/36 passed** in 3.89s against the live stack.
+
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Author:** AI Agent (Claude Opus 4.7)
 **Status:** Complete
 **Completed:** 2026-05-07

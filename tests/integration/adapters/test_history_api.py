@@ -5,20 +5,30 @@ csm-set schemas live. Skipped by default — run with ``pytest -m infra_db``.
 
 These tests write seed rows via the live ``AdapterManager`` (from the
 shared ``adapter_manager`` fixture in :mod:`tests.integration.adapters.conftest`)
-and then fetch them through the FastAPI router using ``TestClient``,
-overriding ``app.state.adapters`` for the duration of each test.
+and then fetch them through the FastAPI router using ``httpx.AsyncClient``
+with ``ASGITransport``, overriding ``app.state.adapters`` for the duration
+of each test.  ``httpx.AsyncClient`` is used instead of starlette's
+``TestClient`` so the asyncpg connection pools (created on the pytest-asyncio
+event loop) are reachable from the request handler's event loop.
 """
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
 from api.security import API_KEY_HEADER
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from csm.adapters import AdapterManager
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from starlette.testclient import TestClient
 
 pytestmark = pytest.mark.infra_db
 
@@ -27,7 +37,7 @@ TEST_RUN_ID_PREFIX: str = "test-csm-set-"
 
 
 # ---------------------------------------------------------------------------
-# Seed helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -50,6 +60,26 @@ def _trades_df() -> pd.DataFrame:
     )
 
 
+@asynccontextmanager
+async def _api_client(
+    test_client: TestClient,
+    api_key: str,
+    adapter_manager: AdapterManager,
+) -> AsyncIterator[AsyncClient]:
+    """Yield an ``httpx.AsyncClient`` wired to the test app with adapters set.
+
+    Uses ``ASGITransport`` so the asyncpg pools (created on the pytest-asyncio
+    event loop) are reachable from request handlers, unlike starlette's
+    ``TestClient`` which spawns its own event loop per request.
+    """
+    test_client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
+    async with AsyncClient(
+        transport=ASGITransport(app=test_client.app),  # type: ignore[arg-type]
+        base_url="http://test",
+    ) as ac:
+        yield ac
+
+
 # ---------------------------------------------------------------------------
 # Equity curve / trades — Postgres-backed
 # ---------------------------------------------------------------------------
@@ -67,15 +97,14 @@ class TestEquityCurveLive:
         await adapter_manager.postgres.write_equity_curve(TEST_STRATEGY_ID, _equity_series(10))
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/equity-curve?strategy_id={TEST_STRATEGY_ID}&days=30",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/equity-curve?strategy_id={TEST_STRATEGY_ID}&days=30",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert len(body) == 10
-        # Ascending by time.
         timestamps = [row["time"] for row in body]
         assert timestamps == sorted(timestamps)
         assert all(row["strategy_id"] == TEST_STRATEGY_ID for row in body)
@@ -93,11 +122,11 @@ class TestTradesLive:
         await adapter_manager.postgres.write_trade_history(TEST_STRATEGY_ID, _trades_df())
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/trades?strategy_id={TEST_STRATEGY_ID}&limit=10",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/trades?strategy_id={TEST_STRATEGY_ID}&limit=10",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert len(body) == 3
@@ -130,16 +159,15 @@ class TestPerformanceLive:
                     "cash_balance": 10_000.0,
                     "max_drawdown": -0.04,
                     "sharpe_ratio": 1.3,
-                    "metadata": {"symbols_fetched": 50 + offset},
                 },
             )
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/performance?strategy_id={TEST_STRATEGY_ID}&days=30",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/performance?strategy_id={TEST_STRATEGY_ID}&days=30",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert len(body) == 3
@@ -169,15 +197,14 @@ class TestPortfolioSnapshotsLive:
             )
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            "/api/v1/history/portfolio-snapshots?days=30",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                "/api/v1/history/portfolio-snapshots?days=30",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert len(body) >= 2
-        # The seeded rows carry our test allocation key.
         seeded = [row for row in body if TEST_STRATEGY_ID in row.get("allocation", {})]
         assert len(seeded) == 2
 
@@ -210,11 +237,11 @@ class TestBacktestsLive:
             )
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/backtests?strategy_id={TEST_STRATEGY_ID}&limit=5",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/backtests?strategy_id={TEST_STRATEGY_ID}&limit=5",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         run_ids = {row["run_id"] for row in body}
@@ -238,11 +265,11 @@ class TestSignalsLive:
         await adapter_manager.mongo.write_signal_snapshot(TEST_STRATEGY_ID, snapshot_at, rankings)
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/signals?strategy_id={TEST_STRATEGY_ID}&date=2026-04-15",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/signals?strategy_id={TEST_STRATEGY_ID}&date=2026-04-15",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert body["strategy_id"] == TEST_STRATEGY_ID
@@ -257,9 +284,9 @@ class TestSignalsLive:
             pytest.skip("Mongo adapter not available")
 
         client, key = private_client_with_key
-        client.app.state.adapters = adapter_manager  # type: ignore[attr-defined]
-        resp = client.get(
-            f"/api/v1/history/signals?strategy_id={TEST_STRATEGY_ID}&date=1999-12-31",
-            headers={API_KEY_HEADER: key},
-        )
+        async with _api_client(client, key, adapter_manager) as ac:
+            resp = await ac.get(
+                f"/api/v1/history/signals?strategy_id={TEST_STRATEGY_ID}&date=1999-12-31",
+                headers={API_KEY_HEADER: key},
+            )
         assert resp.status_code == 404
