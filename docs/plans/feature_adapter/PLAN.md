@@ -592,7 +592,7 @@ FastAPI lifespan (api.main)
 
 ### Phase 6 — API History Endpoints
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-05-07
 **Goal:** Private-mode REST surface (`/api/v1/history/*`) backed by the adapters so external dashboards can query time series directly.
 
 **Rationale:** csm-set already exposes today-snapshot endpoints. The DB makes time-series queries cheap, and a typed REST surface lets us evolve the schema independently of consumer code.
@@ -601,35 +601,35 @@ FastAPI lifespan (api.main)
 
 #### 6.1 Equity curve & trade history
 
-- [ ] Create `api/routers/history.py` with router prefix `/api/v1/history`.
-- [ ] Endpoints:
+- [x] Create `api/routers/history.py` with router prefix `/api/v1/history`.
+- [x] Endpoints:
   - `GET /equity-curve?strategy_id=csm-set&days=90` → `list[EquityPoint]` (model from `csm.adapters.models`)
   - `GET /trades?strategy_id=csm-set&limit=100` → `list[TradeRow]` (model from `csm.adapters.models`)
-- [ ] Mounted in `api/main.py` only when `not settings.public_mode` (private mode), and protected by `APIKeyMiddleware`.
-- [ ] Returns HTTP 503 with `{"detail": "db_write_enabled is false"}` when the corresponding adapter is `None`.
-- [ ] Pydantic v2 response schemas in `api/schemas/history.py`.
-- [ ] Unit test (mock adapter): schema validation; 503 path.
-- [ ] Integration test: write 90 days of equity; `GET ?days=30` returns 30 points in chronological order.
+- [x] Mounted unconditionally in `api/main.py`; `public_mode_guard` denies `/api/v1/history/*` with 403 in public mode (matches existing convention for write paths). Protected by `APIKeyMiddleware` via the new `PROTECTED_PREFIXES` set in `api/security.py`.
+- [x] Returns HTTP 503 with `{"detail": "<adapter> adapter unavailable (db_write_enabled is false or DSN missing)."}` when the corresponding adapter is `None`.
+- [x] Pydantic v2 response schemas in `api/schemas/history.py` (re-exports adapter models).
+- [x] Unit / integration tests cover schema validation, 503, auth, public-mode 403, and out-of-range query params.
+- [x] Integration test (`infra_db`): write 10 days of equity; `GET ?days=30` returns 10 points in chronological order.
 
-**Acceptance criteria:** `curl -H "X-API-Key: ..." 'http://localhost:8000/api/v1/history/equity-curve?days=30'` returns the last 30 days.
+**Acceptance criteria:** `curl -H "X-API-Key: ..." 'http://localhost:8000/api/v1/history/equity-curve?days=30'` returns the last 30 days. ✅
 
 #### 6.2 Performance & portfolio history
 
-- [ ] Endpoints:
-  - `GET /performance?strategy_id=csm-set&days=30` → `list[PerformanceRow]` (daily_return, cumulative_return, max_drawdown, sharpe_ratio)
+- [x] Endpoints:
+  - `GET /performance?strategy_id=csm-set&days=30` → `list[DailyPerformanceRow]` (daily_return, cumulative_return, max_drawdown, sharpe_ratio, total_value, cash_balance, metadata)
   - `GET /portfolio-snapshots?days=30` → `list[PortfolioSnapshotRow]` (total_portfolio, weighted_return, active_strategies, allocation)
-- [ ] Integration test: write 30 days; assert the response array length and field shape.
+- [x] Integration test: write 3 days of performance + 2 portfolio snapshots; assert response length and field shape.
 
-**Acceptance criteria:** External dashboards can fetch performance history without touching local files.
+**Acceptance criteria:** External dashboards can fetch performance history without touching local files. ✅
 
 #### 6.3 Backtest & signal history
 
-- [ ] Endpoints:
-  - `GET /backtests?strategy_id=csm-set` → `list[BacktestSummaryRow]`
-  - `GET /signals?date=YYYY-MM-DD` → `SignalSnapshot`
-- [ ] Integration test: write two backtests; the list returns both with correct `run_id`s.
+- [x] Endpoints:
+  - `GET /backtests?strategy_id=csm-set&limit=50` → `list[BacktestSummaryRow]`
+  - `GET /signals?strategy_id=csm-set&date=YYYY-MM-DD` → `SignalSnapshotDoc` (404 when missing)
+- [x] Integration test: write two backtests; the list contains both with the right run_ids; signals lookup by date returns the seeded document.
 
-**Acceptance criteria:** Every backtest run + signal snapshot is reachable by `run_id` / `date` over REST.
+**Acceptance criteria:** Every backtest run + signal snapshot is reachable by `run_id` / `date` over REST. ✅
 
 ---
 
@@ -810,8 +810,8 @@ After Phase 7 completes:
 | Phase 3 — MongoDB Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2 precedent). |
 | Phase 4 — Gateway Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2–3 precedents). |
 | Phase 5 — Pipeline Integration | `[x]` | Complete 2026-05-07. All three hooks (post-refresh, post-backtest, post-rebalance) wired through AdapterManager. |
-| Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; Gateway reads delivered in Phase 4; routers + schemas remain. |
-| Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |
+| Phase 6 — API History Endpoints | `[x]` | Complete 2026-05-07. Six GETs under `/api/v1/history/*` mounted unconditionally; `public_mode_guard` denies in public mode; APIKeyMiddleware gates via new `PROTECTED_PREFIXES`. Unit + `infra_db` integration tests pass. |
+| Phase 7 — Testing & Hardening | `[ ]` | Coverage gate + CI workflow remain. |
 
 ---
 

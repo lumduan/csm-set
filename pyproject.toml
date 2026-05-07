@@ -80,7 +80,10 @@ mypy_path = "src"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = ["--cov-fail-under=90"]
+# ``importlib`` mode lets test modules with identical basenames coexist across
+# packages (e.g. ``tests/unit/features/test_pipeline.py`` vs
+# ``tests/integration/adapters/test_pipeline.py``).
+addopts = ["--cov-fail-under=90", "--import-mode=importlib"]
 markers = [
     "infra_db: integration tests requiring quant-infra-db stack on quant-network",
 ]

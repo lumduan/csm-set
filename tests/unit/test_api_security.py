@@ -12,6 +12,7 @@ from api.logging import KeyRedactionFilter, install_key_redaction
 from api.security import (
     API_KEY_HEADER,
     PROTECTED_PATHS,
+    PROTECTED_PREFIXES,
     APIKeyMiddleware,
     is_protected_path,
 )
@@ -84,6 +85,18 @@ class TestIsProtectedPath:
         assert is_protected_path("GET", "/api/v1/portfolio/current") is False
         assert is_protected_path("GET", "/api/v1/notebooks") is False
         assert is_protected_path("GET", "/api/v1/jobs/abc123") is False
+
+    def test_history_prefix_protects_gets(self) -> None:
+        # Phase 6 — /api/v1/history/* is auth-gated for both GET and write methods
+        assert "/api/v1/history/" in PROTECTED_PREFIXES
+        assert is_protected_path("GET", "/api/v1/history/equity-curve") is True
+        assert is_protected_path("GET", "/api/v1/history/trades") is True
+        assert is_protected_path("GET", "/api/v1/history/performance") is True
+        assert is_protected_path("GET", "/api/v1/history/portfolio-snapshots") is True
+        assert is_protected_path("GET", "/api/v1/history/backtests") is True
+        assert is_protected_path("GET", "/api/v1/history/signals") is True
+        # Sibling paths must NOT inherit the prefix protection
+        assert is_protected_path("GET", "/api/v1/historylike") is False
 
     def test_health_and_docs_not_protected(self) -> None:
         assert is_protected_path("GET", "/health") is False

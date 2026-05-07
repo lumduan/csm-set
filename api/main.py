@@ -55,6 +55,11 @@ WRITE_PATHS: set[str] = {
     "/api/v1/jobs",
     "/api/v1/scheduler/run/daily_refresh",
 }
+# Phase 6 — entire path subtrees that are private-mode-only. Requests to any
+# path under one of these prefixes are 403'd by ``public_mode_guard`` when
+# ``settings.public_mode`` is true. The history surface reads from the
+# central databases, which the public deployment cannot reach.
+PRIVATE_ONLY_PREFIXES: tuple[str, ...] = ("/api/v1/history/",)
 
 
 @asynccontextmanager
@@ -119,21 +124,23 @@ async def public_mode_guard(
     request: Request,
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
-    """Block write endpoints in public mode before they hit routers."""
+    """Block write endpoints and private-only subtrees in public mode."""
 
-    if settings.public_mode and request.url.path in WRITE_PATHS:
-        return JSONResponse(
-            content={
-                "type": "tag:csm-set,2026:problem/public-mode-disabled",
-                "title": "Public mode — read only",
-                "status": 403,
-                "detail": "Disabled in public mode. Set CSM_PUBLIC_MODE=false to enable.",
-                "instance": request.url.path,
-                "request_id": get_request_id(),
-            },
-            status_code=403,
-            headers={"Content-Type": "application/problem+json"},
-        )
+    if settings.public_mode:
+        path: str = request.url.path
+        if path in WRITE_PATHS or path.startswith(PRIVATE_ONLY_PREFIXES):
+            return JSONResponse(
+                content={
+                    "type": "tag:csm-set,2026:problem/public-mode-disabled",
+                    "title": "Public mode — read only",
+                    "status": 403,
+                    "detail": "Disabled in public mode. Set CSM_PUBLIC_MODE=false to enable.",
+                    "instance": path,
+                    "request_id": get_request_id(),
+                },
+                status_code=403,
+                headers={"Content-Type": "application/problem+json"},
+            )
     return await call_next(request)
 
 
@@ -158,6 +165,13 @@ app.include_router(data_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(notebooks_router, prefix="/api/v1")
 app.include_router(scheduler_router, prefix="/api/v1")
+
+# Phase 6 — private-mode history surface. The router is always registered
+# but ``public_mode_guard`` denies ``/api/v1/history/*`` requests when
+# ``settings.public_mode`` is true (see ``WRITE_PREFIXES`` above).
+from api.routers.history import router as history_router  # noqa: E402
+
+app.include_router(history_router, prefix="/api/v1")
 
 
 @app.get(
