@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
@@ -143,7 +142,7 @@ class TestWriteDailyPerformance:
         assert args[7] == -0.05  # max_drawdown
         assert args[8] == 1.42  # sharpe_ratio
         # metadata JSONB
-        assert json.loads(args[9]) == metrics
+        assert args[9] == metrics
 
     async def test_execute_called_with_sparse_metrics(self) -> None:
         """Missing scalar keys produce None values in positional params."""
@@ -162,7 +161,7 @@ class TestWriteDailyPerformance:
         assert args[6] is None  # cash_balance
         assert args[7] is None  # max_drawdown
         assert args[8] is None  # sharpe_ratio
-        assert json.loads(args[9]) == {}
+        assert args[9] == {}
 
     async def test_raises_when_not_connected(self) -> None:
         adapter = GatewayAdapter(DSN)
@@ -197,7 +196,7 @@ class TestWritePortfolioSnapshot:
         assert args[3] == 0.008
         assert args[4] == -0.03
         assert args[5] == 1
-        assert json.loads(args[6]) == {"csm-set": 1.0}
+        assert args[6] == {"csm-set": 1.0}
 
     async def test_execute_called_with_sparse_snapshot(self) -> None:
         pool = _make_pool()
@@ -213,7 +212,7 @@ class TestWritePortfolioSnapshot:
         assert args[3] is None  # weighted_return
         assert args[4] is None  # combined_drawdown
         assert args[5] == 0  # active_strategies default
-        assert json.loads(args[6]) == {}  # allocation default
+        assert args[6] == {}  # allocation default
 
     async def test_raises_when_not_connected(self) -> None:
         adapter = GatewayAdapter(DSN)

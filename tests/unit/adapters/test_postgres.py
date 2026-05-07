@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
@@ -212,13 +211,14 @@ class TestWriteBacktestLog:
             await adapter.write_backtest_log("run-001", "csm-set", config, summary)
 
         pool.execute.assert_awaited_once()
-        sql, run_id, strategy_id, config_arg, summary_arg = pool.execute.await_args.args
+        sql, run_id, strategy_id, started_at, config_arg, summary_arg = pool.execute.await_args.args
         assert "INSERT INTO backtest_log" in sql
         assert "ON CONFLICT (run_id) DO NOTHING" in sql
         assert run_id == "run-001"
         assert strategy_id == "csm-set"
-        assert json.loads(config_arg) == config
-        assert json.loads(summary_arg) == summary
+        assert isinstance(started_at, datetime)
+        assert config_arg == config
+        assert summary_arg == summary
 
 
 class TestReads:
@@ -296,7 +296,7 @@ class TestReads:
             result = await adapter.read_backtest_log("csm-set", limit=20)
 
         sql, strategy_id, limit = pool.fetch.await_args.args
-        assert "ORDER BY created_at DESC" in sql
+        assert "ORDER BY started_at DESC" in sql
         assert strategy_id == "csm-set"
         assert limit == 20
         assert len(result) == 1

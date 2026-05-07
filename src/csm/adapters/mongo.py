@@ -19,6 +19,7 @@ For best-effort persistence, callers wrap each call in their own
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -61,6 +62,28 @@ _COLL: _Collections = _Collections()
 # Excludes the Mongo-internal ``_id`` field on every read so consumers never
 # see ObjectIds.
 _DROP_ID: dict[str, int] = {"_id": 0}
+
+
+def _sanitize_bson(value: object) -> object:
+    """Replace NaN, NA, NaT with ``None`` so the value is BSON-encodable.
+
+    Recurses into dicts and lists.  Floats that are ``NaN`` or ``±inf`` are
+    replaced with ``None``; pandas ``NA`` / ``NaT`` are likewise replaced.
+    """
+    if value is None:
+        return None
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return value
+    if isinstance(value, dict):
+        return {str(k): _sanitize_bson(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_bson(v) for v in value]
+    # pandas NA / NaT — isinstance check is deferred to avoid requiring pandas at import
+    if type(value).__name__ in ("NAType", "NaTType"):
+        return None
+    return value
 
 
 class MongoAdapter:
@@ -192,7 +215,8 @@ class MongoAdapter:
             raise KeyError("result_doc is missing required key: 'run_id'")
         coll = self._coll(_COLL.BACKTEST_RESULTS)
         run_id: object = result_doc["run_id"]
-        await coll.replace_one({"run_id": run_id}, result_doc, upsert=True)
+        sanitized = _sanitize_bson(result_doc)
+        await coll.replace_one({"run_id": run_id}, sanitized, upsert=True)  # type: ignore[arg-type]
         logger.debug("write_backtest_result run_id=%s", run_id)
 
     async def write_signal_snapshot(
@@ -219,7 +243,7 @@ class MongoAdapter:
         doc: dict[str, object] = {
             "strategy_id": strategy_id,
             "date": date,
-            "rankings": rankings,
+            "rankings": _sanitize_bson(rankings),
         }
         await coll.update_one(
             {"strategy_id": strategy_id, "date": date},
@@ -261,7 +285,7 @@ class MongoAdapter:
         }
         await coll.update_one(
             {"strategy_id": strategy_id, "version": version},
-            {"$set": doc, "$setOnInsert": {"created_at": datetime.now(tz=UTC)}},
+            {"$set": _sanitize_bson(doc), "$setOnInsert": {"created_at": datetime.now(tz=UTC)}},
             upsert=True,
         )
         logger.debug("write_model_params strategy=%s version=%s", strategy_id, version)

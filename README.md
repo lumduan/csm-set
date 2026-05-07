@@ -39,6 +39,8 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 - [What requires credentials (owner only)](#what-requires-credentials-owner-only)
 - [Build your own frontend](#build-your-own-frontend)
 - [Owner workflow](#owner-workflow)
+- [Persisting to quant-infra-db](#persisting-to-quant-infra-db)
+- [Configuration reference](#configuration-reference)
 - [Module index](#module-index)
 - [Where to find X](#where-to-find-x)
 - [Troubleshooting](#troubleshooting)
@@ -309,6 +311,74 @@ uv run pytest tests/integration/adapters/ -v -m infra_db
 Tests self-skip when DSNs are unset, so the default `uv run pytest tests/` invocation never touches the live stack.
 
 In CI, the [`infra-integration` workflow](.github/workflows/infra-integration.yml) runs this suite on push to `main` and on manual dispatch. Provide `QUANT_INFRA_COMPOSE_PATH` (defaults to `../quant-infra-db/docker-compose.yml`) so the workflow can bring up the Compose stack.
+
+---
+
+## Configuration reference
+
+All settings are read from environment variables (via `pydantic-settings`). Copy `.env.example` to `.env` and uncomment what you need.
+
+### TradingView auth
+
+| Var | Default | Purpose |
+|---|---|---|
+| `TVKIT_AUTH_TOKEN` | *unset* (anonymous) | JSON blob of TradingView session cookies. Without it, tvkit is capped at **5,000 OHLCV bars per symbol**. Set to `{"sessionid":"...", "sessionid_sign":"...", "device_t":"...", "tv_ecuid":"..."}` to lift the cap. Extract from your browser's DevTools → Application → Cookies → `tradingview.com`. Only `sessionid` is required. Leave unset for public deployments. |
+
+### Application
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_ENV` | `development` | Environment label. Controls log verbosity and dev-only behaviors. Set to `production` in deployed images. |
+| `CSM_DATA_DIR` | `./data` | Where raw/processed Parquet files live. Writable only in private mode. Gitignored. |
+| `CSM_LOG_LEVEL` | `INFO` | Python log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `CSM_PUBLIC_MODE` | `false` | When `true`, all write endpoints return 403, the scheduler is disabled, `/api/v1/history/*` is blocked, and no credentials are needed. This is the **Docker default**. When `false`, full private mode is active. |
+| `CSM_RESULTS_DIR` | `./results` | Pre-computed outputs (notebook HTML, backtest JSON, signal rankings). Tracked in git. The API serves these as static files. |
+
+### API
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_API_HOST` | `0.0.0.0` | Host interface uvicorn binds to. `0.0.0.0` = all interfaces (required for Docker). |
+| `CSM_API_PORT` | `8000` | Port the FastAPI server listens on. |
+| `CSM_API_KEY` | *unset* (auth disabled) | Secret for the `X-API-Key` header. When unset, a startup WARNING is logged and protected endpoints are **open**. When set, `/api/v1/history/*` GETs and all non-GET `/api/v1/*` endpoints require `X-API-Key: <value>`. Uses constant-time comparison via `secrets.compare_digest`. |
+
+### UI
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_UI_PORT` | `8080` | Port for the NiceGUI/FastUI dashboard (separate process from the API). |
+
+### Scheduler
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_REFRESH_CRON` | `0 18 * * 1-5` | Cron expression for the daily data refresh job. `0 18 * * 1-5` = 6:00 PM Asia/Bangkok, Monday–Friday. Ignored when `CSM_PUBLIC_MODE=true`. |
+
+### quant-infra-db write-back (opt-in)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CSM_DB_WRITE_ENABLED` | `false` | Master switch. When `false`, no adapters are constructed, pipeline hooks are no-ops, and `/api/v1/history/*` returns 503. When `true`, the three DSN vars below must be set. |
+| `CSM_DB_CSM_SET_DSN` | *unset* | Postgres DSN for `db_csm_set`. Tables: `equity_curve` (TimescaleDB hypertable), `trade_history`, `backtest_log`. |
+| `CSM_DB_GATEWAY_DSN` | *unset* | Postgres DSN for `db_gateway`. Tables: `daily_performance` (per-strategy metrics), `portfolio_snapshot` (cross-strategy aggregate). |
+| `CSM_MONGO_URI` | *unset* | MongoDB URI for `csm_logs`. Collections: `signal_snapshots`, `backtest_results`, `model_params`. |
+
+### Runtime modes
+
+```
+CSM_PUBLIC_MODE=true
+  → Scheduler off, write endpoints → 403, /api/v1/history/* blocked
+  → Zero credentials needed — the Docker Compose default
+
+CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=false  (default private)
+  → Scheduler on, writes go to local Parquet only
+  → /api/v1/history/* returns 503 (no DB adapters)
+
+CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=true + 3 DSNs set
+  → Full stack: local Parquet + mirror to quant-infra-db
+  → /api/v1/history/* serves central-DB time series
+  → Pipeline hooks write to all 3 stores (graceful per-adapter failure)
+```
 
 ---
 
