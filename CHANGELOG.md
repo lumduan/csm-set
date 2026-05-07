@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+
+- **csm-set ↔ quant-infra-db adapters.** New `src/csm/adapters/` package with
+  `PostgresAdapter` (`db_csm_set`: equity_curve, trade_history, backtest_log),
+  `MongoAdapter` (`csm_logs`: signal_snapshots, backtest_results, model_params),
+  and `GatewayAdapter` (`db_gateway`: daily_performance, portfolio_snapshot)
+  plus a graceful-degradation `AdapterManager`. Pipeline hooks (post-refresh /
+  post-backtest / post-rebalance) write through the manager so adapter
+  failures are logged but never crash csm-set. Disabled by default —
+  set `CSM_DB_WRITE_ENABLED=true` plus the three DSN env vars to enable.
+- **`/api/v1/history/*` endpoints.** Six private-mode GETs exposing the
+  central-DB history (equity curve, trades, daily performance, portfolio
+  snapshots, backtest summaries, signal snapshots), gated by `X-API-Key` and
+  the new `PROTECTED_PREFIXES` set. Returns 503 when an adapter slot is
+  unavailable (DSN missing or `CSM_DB_WRITE_ENABLED=false`), 404 when a
+  signal-snapshot document is missing, and the standard RFC 7807 error shape
+  for everything else.
+- **`infra-integration` GitHub Actions workflow.** Brings up the
+  `quant-infra-db` Compose stack, exports the DSN env vars, runs
+  `pytest tests/integration/adapters/ -v -m infra_db`, and tears the stack
+  down. Triggers: push to `main` and manual `workflow_dispatch` (with an
+  optional `compose_path` input).
+- **Coverage gate.** `[tool.coverage.report] fail_under = 90` enforced over
+  `src/csm/adapters/` and `api/` via `[tool.coverage.run].source`.
+- **Documentation.** New "Persisting to quant-infra-db" section in
+  `README.md`, adapter write-back diagram in
+  `docs/architecture/overview.md`, and one-line annotations on the new env
+  vars in `.env.example`.
 
 ## [0.7.1] — 2026-05-04
 

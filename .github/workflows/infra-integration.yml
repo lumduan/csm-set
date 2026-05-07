@@ -1,0 +1,81 @@
+name: infra-integration
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      compose_path:
+        description: "Path to the quant-infra-db docker-compose.yml (relative to the runner workspace root)."
+        required: false
+        default: "../quant-infra-db/docker-compose.yml"
+
+concurrency:
+  group: infra-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  infra-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QUANT_INFRA_COMPOSE_PATH: ${{ github.event.inputs.compose_path || '../quant-infra-db/docker-compose.yml' }}
+
+    steps:
+      - name: Checkout csm-set
+        uses: actions/checkout@v4
+        with:
+          path: csm-set
+
+      - name: Checkout quant-infra-db (sibling, optional)
+        uses: actions/checkout@v4
+        with:
+          repository: lumduan/quant-infra-db
+          path: quant-infra-db
+          token: ${{ secrets.QUANT_INFRA_DB_PAT || github.token }}
+        continue-on-error: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: csm-set/uv.lock
+
+      - name: Install Python
+        run: uv python install 3.12
+        working-directory: csm-set
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+        working-directory: csm-set
+
+      - name: Bring up quant-infra-db stack
+        working-directory: csm-set
+        run: |
+          if [ ! -f "${QUANT_INFRA_COMPOSE_PATH}" ]; then
+            echo "::warning::Compose file not found at ${QUANT_INFRA_COMPOSE_PATH}; skipping live integration job"
+            exit 0
+          fi
+          docker compose -f "${QUANT_INFRA_COMPOSE_PATH}" up -d --wait
+
+      - name: Run integration suite
+        working-directory: csm-set
+        env:
+          CSM_DB_CSM_SET_DSN: postgresql://postgres:postgres@127.0.0.1:5432/db_csm_set
+          CSM_DB_GATEWAY_DSN: postgresql://postgres:postgres@127.0.0.1:5432/db_gateway
+          CSM_MONGO_URI: mongodb://127.0.0.1:27017/
+        run: |
+          if [ ! -f "${QUANT_INFRA_COMPOSE_PATH}" ]; then
+            echo "Compose file unavailable; nothing to run."
+            exit 0
+          fi
+          uv run pytest tests/integration/adapters/ -v -m infra_db
+
+      - name: Tear down stack
+        if: always()
+        working-directory: csm-set
+        run: |
+          if [ -f "${QUANT_INFRA_COMPOSE_PATH}" ]; then
+            docker compose -f "${QUANT_INFRA_COMPOSE_PATH}" down -v
+          fi

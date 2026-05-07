@@ -160,6 +160,26 @@ The data pipeline flows top-to-bottom. In public mode, only the bottom layer (`r
                └──────────────────────────────────┘
 ```
 
+### Adapter write-back to quant-infra-db (opt-in)
+
+When `CSM_DB_WRITE_ENABLED=true` and the three DSN env vars are set, the pipeline hooks under `src/csm/adapters/hooks.py` mirror operational time series to the shared `quant-infra-db` stack. The adapters are best-effort: a failure in any single adapter is logged and the pipeline continues, so the write-back path never breaks csm-set's existing local Parquet flow.
+
+```
+csm-set → AdapterManager ──▶ PostgresAdapter ──▶ quant-postgres (db_csm_set)
+                         │                          • equity_curve
+                         │                          • trade_history
+                         │                          • backtest_log
+                         ├──▶ GatewayAdapter  ──▶ quant-postgres (db_gateway)
+                         │                          • daily_performance
+                         │                          • portfolio_snapshot
+                         └──▶ MongoAdapter    ──▶ quant-mongo    (csm_logs)
+                                                    • signal_snapshots
+                                                    • backtest_results
+                                                    • model_params
+```
+
+The same time series are exposed read-only over the private-mode REST surface at `/api/v1/history/*` (six GET endpoints, gated by `X-API-Key`). See [README § Persisting to quant-infra-db](../../README.md#persisting-to-quant-infra-db) for setup and [src/csm/adapters/](../../src/csm/adapters/) for the adapter implementation.
+
 ---
 
 ## Public-mode boundary

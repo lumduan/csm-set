@@ -256,6 +256,62 @@ Public users get the updated research on their next `git pull` or image rebuild.
 
 ---
 
+## Persisting to quant-infra-db
+
+CSM-SET can write its operational time series (equity curve, trade history, daily performance, portfolio snapshots, signal rankings, backtest results, model parameters) to the shared `quant-infra-db` Postgres + Mongo stack. This is **opt-in** — the default deployment runs entirely off the local Parquet store.
+
+### Prerequisites
+
+- The `quant-infra-db` Compose stack is running on a network reachable from the csm-set host (`quant-network` for the Compose default; any routable hostnames work).
+- `quant-postgres` exposes the `db_csm_set` database with the `equity_curve`, `trade_history`, and `backtest_log` tables, and the `db_gateway` database with the `daily_performance` and `portfolio_snapshot` tables.
+- `quant-mongo` exposes the `csm_logs` database with `signal_snapshots`, `backtest_results`, and `model_params` collections.
+- The csm-set process is running in private mode (`CSM_PUBLIC_MODE=false`) with `CSM_API_KEY` set.
+
+### Required environment variables
+
+Add the following to `.env` (or export in the shell):
+
+```bash
+CSM_DB_WRITE_ENABLED=true
+CSM_DB_CSM_SET_DSN=postgresql://postgres:<pass>@quant-postgres:5432/db_csm_set
+CSM_DB_GATEWAY_DSN=postgresql://postgres:<pass>@quant-postgres:5432/db_gateway
+CSM_MONGO_URI=mongodb://quant-mongo:27017/
+```
+
+When `CSM_DB_WRITE_ENABLED=false` (the default), the adapters are not constructed and pipeline hooks are no-ops — csm-set behaves exactly as the public deployment.
+
+### Verification
+
+```bash
+# 1. Health check shows all three stores reachable
+curl -s http://localhost:8000/health | jq '.db'
+# {
+#   "postgres": "ok",
+#   "mongo": "ok",
+#   "gateway": "ok"
+# }
+
+# 2. After a daily refresh, fetch the equity curve over REST
+curl -s -H "X-API-Key: ${CSM_API_KEY}" \
+  "http://localhost:8000/api/v1/history/equity-curve?strategy_id=csm-set&days=30" | jq '.[0]'
+```
+
+The full `/api/v1/history/*` surface is documented in the OpenAPI schema at `/api/docs`.
+
+### Running the integration test suite
+
+The marker-gated suite under `tests/integration/adapters/` exercises the live stack end-to-end. With the stack up and the DSN env vars exported:
+
+```bash
+uv run pytest tests/integration/adapters/ -v -m infra_db
+```
+
+Tests self-skip when DSNs are unset, so the default `uv run pytest tests/` invocation never touches the live stack.
+
+In CI, the [`infra-integration` workflow](.github/workflows/infra-integration.yml) runs this suite on push to `main` and on manual dispatch. Provide `QUANT_INFRA_COMPOSE_PATH` (defaults to `../quant-infra-db/docker-compose.yml`) so the workflow can bring up the Compose stack.
+
+---
+
 ## Module index
 
 | Path | Purpose |
