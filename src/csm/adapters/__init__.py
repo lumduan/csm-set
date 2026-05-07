@@ -3,9 +3,10 @@
 PostgresAdapter (db_csm_set), MongoAdapter (csm_logs), and GatewayAdapter
 (db_gateway) are coordinated by AdapterManager from FastAPI lifespan.
 
-Phase 2 ships only the ``PostgresAdapter`` slot; ``mongo`` and ``gateway``
-remain ``None`` placeholders until Phases 3 and 4. ``AdapterManager`` is the
-single coordination point referenced by the FastAPI lifespan in ``api.main``.
+Phase 2 shipped the ``PostgresAdapter`` slot. Phase 3 fills the ``MongoAdapter``
+slot. ``gateway`` remains a ``None`` placeholder until Phase 4.
+``AdapterManager`` is the single coordination point referenced by the FastAPI
+lifespan in ``api.main``.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from csm.adapters.mongo import MongoAdapter
 from csm.adapters.postgres import PostgresAdapter
 
 if TYPE_CHECKING:
@@ -27,16 +29,21 @@ class AdapterManager:
     Constructed once per app instance from ``AdapterManager.from_settings``,
     held on ``app.state.adapters`` by the FastAPI lifespan, and closed on
     shutdown. Adapters are constructed only when ``db_write_enabled`` is True
-    *and* the relevant DSN is configured. Connection failures are logged and
-    turned into ``None`` slots — the app always boots.
+    *and* the relevant DSN / URI is configured. Connection failures are logged
+    and turned into ``None`` slots — the app always boots.
 
     Attributes:
         postgres: PostgresAdapter for ``db_csm_set``, or ``None`` when disabled.
-        mongo: Reserved for ``MongoAdapter`` (Phase 3).
+        mongo: MongoAdapter for ``csm_logs``, or ``None`` when disabled.
         gateway: Reserved for ``GatewayAdapter`` (Phase 4).
     """
 
-    def __init__(self, *, postgres: PostgresAdapter | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        postgres: PostgresAdapter | None = None,
+        mongo: MongoAdapter | None = None,
+    ) -> None:
         """Initialise the manager with already-connected adapter instances.
 
         Prefer :meth:`from_settings` over direct construction in production
@@ -44,9 +51,10 @@ class AdapterManager:
 
         Args:
             postgres: Optional connected ``PostgresAdapter``.
+            mongo: Optional connected ``MongoAdapter``.
         """
         self.postgres: PostgresAdapter | None = postgres
-        self.mongo: object | None = None  # Phase 3 — MongoAdapter slot.
+        self.mongo: MongoAdapter | None = mongo
         self.gateway: object | None = None  # Phase 4 — GatewayAdapter slot.
 
     @classmethod
@@ -54,12 +62,12 @@ class AdapterManager:
         """Construct adapters per ``Settings`` flags.
 
         When ``db_write_enabled=False``, returns a manager with every slot
-        ``None``. When True, the Postgres adapter is constructed only when
-        ``db_csm_set_dsn`` is set; missing DSNs and connect failures both
-        downgrade the relevant slot to ``None`` with a logged warning.
+        ``None``. When True, each adapter is constructed only when its
+        corresponding DSN / URI is set; missing config and connect failures
+        both downgrade the relevant slot to ``None`` with a logged warning.
 
         Args:
-            settings: Application settings carrying DSN fields and the
+            settings: Application settings carrying DSN / URI fields and the
                 ``db_write_enabled`` flag.
 
         Returns:
@@ -73,9 +81,9 @@ class AdapterManager:
 
         postgres: PostgresAdapter | None = None
         if settings.db_csm_set_dsn:
-            candidate = PostgresAdapter(settings.db_csm_set_dsn)
+            pg_candidate = PostgresAdapter(settings.db_csm_set_dsn)
             try:
-                await candidate.connect()
+                await pg_candidate.connect()
             except Exception as exc:
                 logger.warning(
                     "PostgresAdapter connect failed; postgres slot disabled: %s",
@@ -83,13 +91,29 @@ class AdapterManager:
                 )
                 postgres = None
             else:
-                postgres = candidate
+                postgres = pg_candidate
         else:
             logger.warning(
                 "db_write_enabled=True but db_csm_set_dsn is not set; postgres slot disabled"
             )
 
-        return cls(postgres=postgres)
+        mongo: MongoAdapter | None = None
+        if settings.mongo_uri:
+            mongo_candidate = MongoAdapter(settings.mongo_uri)
+            try:
+                await mongo_candidate.connect()
+            except Exception as exc:
+                logger.warning(
+                    "MongoAdapter connect failed; mongo slot disabled: %s",
+                    exc,
+                )
+                mongo = None
+            else:
+                mongo = mongo_candidate
+        else:
+            logger.warning("db_write_enabled=True but mongo_uri is not set; mongo slot disabled")
+
+        return cls(postgres=postgres, mongo=mongo)
 
     async def close(self) -> None:
         """Close every live adapter. Idempotent.
@@ -103,17 +127,24 @@ class AdapterManager:
             except Exception:
                 logger.warning("PostgresAdapter close raised", exc_info=True)
             self.postgres = None
+        if self.mongo is not None:
+            try:
+                await self.mongo.close()
+            except Exception:
+                logger.warning("MongoAdapter close raised", exc_info=True)
+            self.mongo = None
 
     async def ping(self) -> dict[str, str]:
-        """Return per-adapter pool-based liveness results.
+        """Return per-adapter pool/client-based liveness results.
 
-        Only adapters with a live pool contribute keys. The returned dict is
+        Only adapters with a live client contribute keys. The returned dict is
         empty when no adapter is live, so callers can merge it into a wider
         health-status dict without overwriting absent keys.
 
         Returns:
-            Dict like ``{"postgres": "ok"}`` or ``{"postgres": "error:..."}``.
-            Empty when no adapter is currently live.
+            Dict like ``{"postgres": "ok", "mongo": "ok"}`` with values either
+            ``"ok"`` or ``"error:<msg>"``. Empty when no adapter is currently
+            live.
         """
         results: dict[str, str] = {}
         if self.postgres is not None:
@@ -123,7 +154,14 @@ class AdapterManager:
                 results["postgres"] = f"error:{exc}"
             else:
                 results["postgres"] = "ok" if ok else "error:select_1_failed"
+        if self.mongo is not None:
+            try:
+                ok_mongo: bool = await self.mongo.ping()
+            except Exception as exc:
+                results["mongo"] = f"error:{exc}"
+            else:
+                results["mongo"] = "ok" if ok_mongo else "error:ping_failed"
         return results
 
 
-__all__: list[str] = ["AdapterManager", "PostgresAdapter"]
+__all__: list[str] = ["AdapterManager", "MongoAdapter", "PostgresAdapter"]

@@ -379,39 +379,43 @@ FastAPI lifespan (api.main)
 
 ### Phase 3 — MongoDB Adapter (`csm_logs`)
 
-**Status:** `[ ]` Not started
+**Status:** `[x]` Complete — 2026-05-07
 **Goal:** Schema-less write-back for `backtest_results`, `signal_snapshots`, `model_params` via `motor`.
+
+> **Scope note (recorded 2026-05-07):** Phase 3 was extended with one user-approved deviation:
+>
+> - **Read methods pulled forward from Phase 6** — in addition to the three writes, `MongoAdapter` ships `read_backtest_result`, `read_signal_snapshot`, `read_model_params`, and `list_backtest_results` plus frozen Pydantic models (`BacktestResultDoc`, `SignalSnapshotDoc`, `ModelParamsDoc`, `BacktestSummaryRow`). Phase 6 will only need to add routers + response schemas; the Mongo surface is owned here. Mirrors the Phase 2 precedent.
 
 **Rationale:** Mongo is the right home for variable-shape documents (full backtest result payloads, ranking arrays, config snapshots). Keeping these out of Postgres avoids schema churn each time we add a metric.
 
 #### 3.1 `MongoAdapter` base
 
-- [ ] Implement `src/csm/adapters/mongo.py`:
+- [x] Implement `src/csm/adapters/mongo.py`:
   ```python
   class MongoAdapter:
       def __init__(self, uri: str, db_name: str = "csm_logs") -> None: ...
       async def connect(self) -> None: ...      # motor.AsyncIOMotorClient
       async def close(self) -> None: ...
   ```
-- [ ] Unit test: instantiation does not raise; `connect` / `close` are idempotent.
+- [x] Unit test: instantiation does not raise; `connect` / `close` are idempotent.
 
-**Acceptance criteria:** `uv run mypy src/csm/adapters/mongo.py` clean.
+**Acceptance criteria:** `uv run mypy src/csm/adapters/mongo.py` clean. ✅
 
 #### 3.2 `write_backtest_result`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_backtest_result(self, result_doc: dict[str, object]) -> None:
       """Upsert one document into csm_logs.backtest_results, keyed on run_id."""
   ```
-- [ ] Document shape: `{strategy_id, run_id, created_at, metrics, config, equity_curve, trades}`.
-- [ ] `replace_one({"run_id": ...}, doc, upsert=True)`.
-- [ ] Unit test: mock motor; assert filter uses `run_id`.
-- [ ] Integration test: insert; `find_one({"strategy_id": ...})` returns it.
+- [x] Document shape: `{strategy_id, run_id, created_at, metrics, config, equity_curve, trades}`.
+- [x] `replace_one({"run_id": ...}, doc, upsert=True)`.
+- [x] Unit test: mock motor; assert filter uses `run_id`.
+- [x] Integration test: insert; `find_one({"strategy_id": ...})` returns it.
 
 #### 3.3 `write_signal_snapshot`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_signal_snapshot(
       self,
@@ -421,13 +425,13 @@ FastAPI lifespan (api.main)
   ) -> None:
       """Upsert keyed on (strategy_id, date)."""
   ```
-- [ ] Map `latest_ranking.json` (already produced by csm-set) → document.
-- [ ] Unit test: 20-symbol rankings produce a single document.
-- [ ] Integration test: write two consecutive days; query by `date` returns the right one.
+- [x] Map `latest_ranking.json` (already produced by csm-set) → document.
+- [x] Unit test: 20-symbol rankings produce a single document.
+- [x] Integration test: write two consecutive days; query by `date` returns the right one.
 
 #### 3.4 `write_model_params`
 
-- [ ] Method signature:
+- [x] Method signature:
   ```python
   async def write_model_params(
       self,
@@ -437,10 +441,10 @@ FastAPI lifespan (api.main)
   ) -> None:
       """Upsert keyed on (strategy_id, version)."""
   ```
-- [ ] Captures the live config snapshot (formation period, top-quintile threshold, regime settings).
-- [ ] Integration test: write; `find_one({"version": ...})` returns the same params.
+- [x] Captures the live config snapshot (formation period, top-quintile threshold, regime settings).
+- [x] Integration test: write; `find_one({"version": ...})` returns the same params.
 
-**Acceptance criteria:** `csm_logs` carries the config used for every live-test run.
+**Acceptance criteria:** `csm_logs` carries the config used for every live-test run. ✅
 
 ---
 
@@ -508,7 +512,7 @@ FastAPI lifespan (api.main)
 
 #### 5.1 `AdapterManager` (central coordinator)
 
-> **Status:** Skeleton + Postgres slot delivered in Phase 2 (2026-05-07). Mongo and Gateway slots are reserved as `object | None` placeholders and become typed `MongoAdapter | None` / `GatewayAdapter | None` when their phases ship. Pipeline-hook items 5.2–5.4 below remain pending.
+> **Status:** Skeleton + Postgres slot delivered in Phase 2 (2026-05-07). Mongo slot delivered and typed `MongoAdapter | None` in Phase 3 (2026-05-07). Gateway slot remains reserved as `object | None` placeholder until Phase 4. Pipeline-hook items 5.2–5.4 below remain pending.
 
 - [x] Implement `AdapterManager` in `src/csm/adapters/__init__.py` (Phase 2):
   ```python
@@ -791,10 +795,10 @@ After Phase 7 completes:
 |---|---|---|
 | Phase 1 — Connection & Config | `[x]` | Complete 2026-05-06 |
 | Phase 2 — PostgreSQL Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods + Phase 5.1 AdapterManager skeleton (user-approved scope deviation). |
-| Phase 3 — MongoDB Adapter | `[ ]` | Blocked on Phase 1.3 |
-| Phase 4 — Gateway Adapter | `[ ]` | Blocked on Phases 2–4 |
-| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phase 2; 5.2–5.4 hooks pending. |
-| Phase 6 — API History Endpoints | `[ ]` | Adapter reads delivered in Phase 2; routers + schemas remain. |
+| Phase 3 — MongoDB Adapter | `[x]` | Complete 2026-05-07. Includes Phase 6 read methods (user-approved scope deviation, mirrors Phase 2 precedent). |
+| Phase 4 — Gateway Adapter | `[ ]` | Blocked on Phase 3 |
+| Phase 5 — Pipeline Integration | `[~]` | Partial — 5.1 AdapterManager done in Phases 2–3 (Postgres + Mongo slots both wired); 5.2–5.4 hooks pending. |
+| Phase 6 — API History Endpoints | `[ ]` | Postgres reads delivered in Phase 2; Mongo reads delivered in Phase 3; routers + schemas remain. |
 | Phase 7 — Testing & Hardening | `[ ]` | Blocked on Phase 6 |
 
 ---
