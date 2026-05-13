@@ -3,42 +3,47 @@
 # =============================================================================
 #
 # Purpose:
-#   Override file for the project owner.  Disables public mode so data
-#   fetching and export are enabled, mounts writable data/ and results/
-#   directories, and forwards TVKIT_AUTH_TOKEN from the host environment for
-#   tvkit cookie-based authentication.  Restricts CORS to local development
-#   origins.
+#   Override file for the project owner.  Disables public mode so APScheduler
+#   activates (daily fetch + signal refresh per CSM_REFRESH_CRON), mounts
+#   writable data/ and results/ directories, and loads CSM_* settings from
+#   the project .env file.  Defaults to anonymous (free-tier) tvkit
+#   fetching — leave TVKIT_AUTH_TOKEN unset in .env for 5,000-bar/symbol cap
+#   (plenty for 600-bar daily refresh).
 #
 # Invocation:
-#   docker compose -f docker-compose.yml -f docker-compose.private.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.private.yml up -d
 #
 #   This MUST be used with the base docker-compose.yml.  Docker Compose
 #   merges the two files — this file only provides overrides, not a
 #   standalone service definition.
 #
 # What each override does:
-#   CSM_PUBLIC_MODE=false           Enable write endpoints and data fetch
-#   TVKIT_AUTH_TOKEN                JSON cookie blob — forwarded from the host
-#                                   environment (do not hard-code; export it
-#                                   in your shell or .env file before invoking
-#                                   docker compose)
+#   env_file: .env                  Load CSM_REFRESH_CRON, CSM_LOG_LEVEL, etc.
+#                                   from the project .env (base compose has no
+#                                   env_file directive, so these wouldn't
+#                                   otherwise reach the container)
+#   CSM_PUBLIC_MODE=false           Enable write endpoints, data fetch, and
+#                                   activate APScheduler
+#   CSM_DB_WRITE_ENABLED=false      Parquet-only mode — no quant-postgres or
+#                                   quant-mongo write-back on this host
 #   CSM_CORS_ALLOW_ORIGINS          Restrict CORS to local React/Next.js dev
 #                                   servers instead of open wildcard
 #   ./data:/app/data                Writable mount for OHLCV parquet files
-#   ./results:/app/results          Writable mount for export_results.py output
+#   ./results:/app/results          Writable mount for export_results.py and
+#                                   the daily-refresh marker
 #
 # Owner workflow after booting with this override:
-#   docker exec csm uv run python scripts/fetch_history.py
-#   docker exec csm uv run python scripts/export_results.py
-#   git add results/static/ && git commit -m "chore: refresh research artefacts"
-#   git push
+#   # Daily refresh runs automatically per CSM_REFRESH_CRON (default 18:00 BKK
+#   # Mon–Fri).  To force a manual refresh:
+#   docker exec csm-set-csm-1 uv run python scripts/refresh_daily.py
 # =============================================================================
 
 services:
   csm:
+    env_file: .env
     environment:
       CSM_PUBLIC_MODE: "false"
-      TVKIT_AUTH_TOKEN: "${TVKIT_AUTH_TOKEN:?TVKIT_AUTH_TOKEN must be exported (JSON cookie blob)}"
+      CSM_DB_WRITE_ENABLED: "false"
       CSM_CORS_ALLOW_ORIGINS: "http://localhost:3000,http://localhost:5173"
     volumes:
       - ./data:/app/data
