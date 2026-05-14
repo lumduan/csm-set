@@ -24,8 +24,10 @@
 #                                   otherwise reach the container)
 #   CSM_PUBLIC_MODE=false           Enable write endpoints, data fetch, and
 #                                   activate APScheduler
-#   CSM_DB_WRITE_ENABLED=false      Parquet-only mode — no quant-postgres or
-#                                   quant-mongo write-back on this host
+#   CSM_DB_WRITE_ENABLED            Host-controlled via .env. Set to "true" on
+#                                   hosts that have quant-infra-db reachable
+#                                   on the quant-network; leave "false" or
+#                                   unset for parquet-only deployments.
 #   CSM_CORS_ALLOW_ORIGINS          Restrict CORS to local React/Next.js dev
 #                                   servers instead of open wildcard
 #   ./data:/app/data                Writable mount for OHLCV parquet files
@@ -43,7 +45,6 @@ services:
     env_file: .env
     environment:
       CSM_PUBLIC_MODE: "false"
-      CSM_DB_WRITE_ENABLED: "false"
       CSM_CORS_ALLOW_ORIGINS: "http://localhost:3000,http://localhost:5173"
     volumes:
       - ./data:/app/data
