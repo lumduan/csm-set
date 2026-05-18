@@ -22,6 +22,66 @@ if TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+# Standard crontab numbering: 0=Sun, 1=Mon, …, 6=Sat (and 7 = Sun).
+# APScheduler's CronTrigger numeric numbering is 0=Mon, …, 6=Sun — so passing a
+# raw crontab field through ``from_crontab`` silently shifts every weekday by one.
+# We translate numeric tokens to APScheduler's name form (``mon`` … ``sun``)
+# before constructing the trigger.
+_STANDARD_DOW_NAMES: tuple[str, ...] = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+
+
+def _convert_dow_token(tok: str) -> str:
+    """Map a single crontab day-of-week token (digit or name) to a day name."""
+
+    tok = tok.strip().lower()
+    if tok.isdigit():
+        return _STANDARD_DOW_NAMES[int(tok) % 7]
+    return tok
+
+
+def _convert_dow_atom(atom: str) -> str:
+    """Convert one comma-separated atom — possibly a range or step expression."""
+
+    if atom in ("*", "?"):
+        return atom
+    step = ""
+    base = atom
+    if "/" in atom:
+        base, step_val = atom.split("/", 1)
+        step = f"/{step_val}"
+    if "-" in base:
+        lo, hi = base.split("-", 1)
+        return f"{_convert_dow_token(lo)}-{_convert_dow_token(hi)}{step}"
+    return f"{_convert_dow_token(base)}{step}"
+
+
+def _standard_dow_to_apscheduler(field: str) -> str:
+    """Translate a standard-crontab day_of_week field to APScheduler form."""
+
+    return ",".join(_convert_dow_atom(a) for a in field.split(","))
+
+
+def _trigger_from_standard_crontab(expr: str, timezone: str) -> CronTrigger:
+    """Parse a 5-field standard crontab into a :class:`CronTrigger`.
+
+    Equivalent to :meth:`CronTrigger.from_crontab` but correctly maps the
+    day_of_week numbering. See module-level comment for the rationale.
+    """
+
+    fields = expr.split()
+    if len(fields) != 5:
+        msg = f"Expected 5-field crontab expression, got {len(fields)}: {expr!r}"
+        raise ValueError(msg)
+    minute, hour, day, month, dow = fields
+    return CronTrigger(
+        minute=minute,
+        hour=hour,
+        day=day,
+        month=month,
+        day_of_week=_standard_dow_to_apscheduler(dow),
+        timezone=timezone,
+    )
+
 
 async def daily_refresh(
     settings: Settings,
@@ -109,7 +169,9 @@ def create_scheduler(
 
     scheduler.add_job(
         _job_wrapper,
-        trigger=CronTrigger.from_crontab(settings.refresh_cron, timezone="Asia/Bangkok"),
+        trigger=_trigger_from_standard_crontab(
+            settings.refresh_cron, timezone="Asia/Bangkok"
+        ),
         id="daily_refresh",
         replace_existing=True,
         misfire_grace_time=3600,

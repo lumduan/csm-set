@@ -68,7 +68,12 @@ class TestCreateSchedulerConfig:
         field_map = {f.name: str(f) for f in trigger.fields}
         assert field_map["minute"] == "0"
         assert field_map["hour"] == "18"
-        assert field_map["day_of_week"] == "1-5"
+        # APScheduler's numeric day_of_week uses 0=Mon..6=Sun, which would
+        # silently shift the standard-crontab "1-5" by one day. The scheduler
+        # translates the day_of_week field to day-name form (``mon-fri``) so
+        # the resulting trigger fires on the calendar weekdays the operator
+        # specified (Mon-Fri).
+        assert field_map["day_of_week"] == "mon-fri"
 
     def test_misfire_policies(self, settings_override: Settings, mock_store: MagicMock) -> None:
         scheduler = create_scheduler(settings_override, mock_store)
