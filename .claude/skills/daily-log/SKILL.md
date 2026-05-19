@@ -59,14 +59,15 @@ Pull the row at `<target> 00:00:00+00` (the gateway writes one row per trading d
 - `combined_drawdown` → portfolio DD (for circuit-breaker buffer)
 - `equity_curve` row count and latest value → Notes section
 
-### 4. Load closing prices for the 9 held symbols
+### 4. Load closing prices for the currently held symbols
 
-Read `data/processed/prices_latest.parquet` with pandas. Pull the last two rows for the held tickers:
+**Do not hard-code the held set.** The portfolio composition changes at every monthly rebalance — read the symbol list (and shares + avg cost) from the prior daily log's Portfolio Snapshot table. After parsing, prefix each ticker with `SET:` to match the parquet column names.
 
 ```bash
 uv run python - <<'PY'
-import pandas as pd
-syms = ['SET:DELTA','SET:IRPC','SET:PTTGC','SET:NEX','SET:AGE','SET:HANA','SET:GUNKUL','SET:INSET','SET:JTS']
+import pandas as pd, sys
+# syms is parsed from the prior log's Portfolio Snapshot table — pass via argv or inline
+syms = [f"SET:{s}" for s in sys.argv[1:]]
 df = pd.read_parquet('data/processed/prices_latest.parquet')[syms]
 last2 = df.iloc[-2:].T
 last2.columns = ['prev','today']
@@ -75,10 +76,12 @@ last2['chg_pct'] = last2['chg'] / last2['prev'] * 100
 print(last2.to_string())
 print('today date:', df.index[-1])
 print('prev date:', df.index[-2])
-PY
+PY DELTA IRPC PTTGC NEX AGE HANA GUNKUL INSET JTS  # ← replace with symbols parsed from prior log
 ```
 
-Use these for the Portfolio Snapshot last-price column **and** the Day-over-Day Change table.
+If a parsed symbol is missing from the parquet columns, stop and tell the user — a renamed/delisted ticker needs human review before the report can be written.
+
+Use these prices for the Portfolio Snapshot last-price column **and** the Day-over-Day Change table.
 
 ### 5. Fetch SET Index context via tvkit
 
@@ -111,19 +114,15 @@ Regime is **BULL** when close > SMA200, **BEAR** otherwise.
 
 ### 6. Carry stable values from the prior log
 
-These do **not** change between rebalances and must be read from the prior daily log's Portfolio Snapshot table — **do not recompute**:
+These do **not** change between rebalances and must be read from the prior daily log — **do not recompute or assume**. They reset at each monthly rebalance (last trading day of month), so every value here must be parsed fresh from the most recent daily log:
 
-- Shares + avg cost for each of 9 positions
-- Cash: **37,699.71 THB**
-- Total Cost Basis: **960,686.43 THB** (commission-inclusive — 860 THB over Σ share×cost)
-- Sector groupings:
-  - Energy & Utilities = IRPC + AGE + GUNKUL
-  - Information & Communication Technology = INSET + JTS
-  - Electronic Components = DELTA + HANA
-  - Petrochemicals & Chemicals = PTTGC
-  - Automotive = NEX
+- **Held symbols, shares, and avg cost** — parse the Portfolio Snapshot table (one row per position). The number of positions can vary (typically 8–12 after a rebalance).
+- **Cash balance** — read from the prior log's summary metrics table ("Remaining Cash"). Constant between rebalances.
+- **Total Cost Basis** — read from the prior log's summary metrics table. Commission-inclusive; typically a few hundred THB above `Σ shares × avg_cost`. Constant between rebalances.
+- **Sector groupings** — parse the prior log's Sector Concentration table. The mapping (which symbols belong to which sector group) is fixed for the current holding period and resets at rebalance. Prior logs may group a symbol differently from the SET-official classification — preserve the prior log's grouping verbatim.
+- **Live-test start NAV** — `1,000,000 THB` (truly constant; only resets if a new live test starts).
 
-These stay stable until the May 29 rebalance.
+Sanity-check that the rebalance date hasn't passed without an updated log: if today is after the last trading day of the current month and the prior log still references pre-rebalance positions, stop and tell the user — a rebalance log is needed before any further daily log can be written.
 
 ### 7. Compute derived values
 
@@ -133,16 +132,16 @@ For each position:
 - `U.PL = MV − cost`
 - `U.PL % = U.PL / cost × 100`
 
-Portfolio level:
+Portfolio level (let `COST_BASIS` and `CASH` be the values parsed in step 6):
 - `Total MV = Σ position MVs`
-- `Unrealized P/L = Total MV − 960,686.43` (THB)
-- `U.PL % (snapshot) = Unrealized P/L / 960,686.43 × 100` ← uses commission-inclusive cost basis
-- `Total NAV = Total MV + 37,699.71` → must equal `total_value` from `daily_performance`
+- `Unrealized P/L = Total MV − COST_BASIS` (THB)
+- `U.PL % (snapshot) = Unrealized P/L / COST_BASIS × 100` ← uses commission-inclusive cost basis from prior log
+- `Total NAV = Total MV + CASH` → must equal `total_value` from `daily_performance`
 - `Total Return on NAV = (Total NAV − 1,000,000) / 1,000,000 × 100` ← matches `cumulative_return`
 - `Portfolio MV change = today MV − prior log MV` (THB and %)
 
 Sector concentration:
-- For each of the 5 sectors: `sector MV = Σ symbol MVs in sector`; `% of NAV = sector MV / Total NAV × 100`
+- For each sector in the prior log's Sector Concentration table: `sector MV = Σ symbol MVs in sector`; `% of NAV = sector MV / Total NAV × 100`
 - Cap is **35%** — flag in Risk Notes if any sector approaches.
 
 Regime cushion: `(SET_close − SMA200) / SMA200 × 100`.
@@ -166,11 +165,11 @@ Output to `docs/live-test/daily/<target>.md`. Mirror the section order in the mo
 1. Title: `# Daily Log — <date> (<Weekday>)`
 2. Header block: `**As of:**` / `**Phase:**` / `**Day:**` N / `**Status:**`
 3. `## Execution Summary` — typically "No trades today" until rebalance
-4. `## Portfolio Snapshot` — 9-row position table + summary metrics table
-5. `## Day-over-Day Change (vs <Prior Weekday> <Prior Date>)` — 9-row delta table + gainers/losers/flat tally + 1 narrative paragraph
+4. `## Portfolio Snapshot` — N-row position table (N = held positions from prior log) + summary metrics table
+5. `## Day-over-Day Change (vs <Prior Weekday> <Prior Date>)` — N-row delta table + gainers/losers/flat tally + 1 narrative paragraph
 6. `## Market Context` — SET/SMA200/regime table
 7. `## Regime State` — bullet list + 1 narrative paragraph including 5-day SET trend
-8. `## Sector Concentration` — 5-row sector table + 1 narrative paragraph
+8. `## Sector Concentration` — sector table (rows = sectors from prior log) + 1 narrative paragraph
 9. `## Risk Notes` — numbered list (typically 8–12 items)
 10. `## Notes` — bulleted list with refresh receipts and meta
 
@@ -185,7 +184,8 @@ Output to `docs/live-test/daily/<target>.md`. Mirror the section order in the mo
 
 - `Σ position MV` must equal Portfolio Snapshot's `Total Market Value`.
 - `Total NAV` must equal `total_value` from `db_gateway.daily_performance` for the target row.
-- Per-symbol `U.PL %` computed against `shares × avg_cost` (NOT the commission-inclusive 960,686.43 — that's only for the portfolio-level row).
+- Per-symbol `U.PL %` computed against `shares × avg_cost` (NOT the commission-inclusive `COST_BASIS` — that's only for the portfolio-level row).
+- Position count matches the prior log's count (unless today is the rebalance execution day).
 - No sector > 35% cap.
 - Day counter incremented by exactly 1 vs prior log.
 - Day-over-day close prices in the table match the prices parquet exactly.
@@ -211,10 +211,11 @@ Output: commit SHA, output file path, NAV close + day change, cumulative %, one-
 ## Notes
 
 - The skill is intentionally `disable-model-invocation: true` because it writes files, commits, and pushes — only the user should trigger it.
-- **Cost basis is 960,686.43 THB** (commission-inclusive). Do not recompute it from `Σ shares × avg_cost` — that produces 959,823.00 (~860 THB short). The discrepancy is the May-5 execution commissions and is locked in until the next rebalance.
-- **Cash is 37,699.71 THB**, constant through the May 29 rebalance. Use the value from the prior daily log to stay safe.
-- **Sector groupings come from the prior log**, not from a SET-classification lookup. The prior logs group IRPC under "Energy & Utilities" (not the SET-official Petrochemicals & Chemicals); preserve that grouping for week-to-week consistency.
-- The two portfolio-level percentages will diverge slightly once Total MV moves: **U.PL %** uses commission-inclusive cost basis (960,686.43); **Total Return on NAV** uses the 1,000,000 starting NAV. Report both — the prior log's snapshot table shows both lines.
+- **Never hard-code symbols, shares, avg costs, cash, total cost basis, or sector groupings.** All of these reset at every monthly rebalance — read them fresh from the prior daily log's Portfolio Snapshot, summary metrics, and Sector Concentration tables on every run.
+- **Total Cost Basis is commission-inclusive** and will not equal `Σ shares × avg_cost` from the position table (typically a few hundred THB higher due to execution commissions). Use the value printed in the prior log's summary metrics row, not a re-derivation.
+- **Sector groupings come from the prior log**, not from a SET-classification lookup. Prior logs sometimes group a symbol differently from the SET-official sector (e.g. IRPC has historically been grouped under "Energy & Utilities" instead of the official Petrochemicals & Chemicals). Preserve the prior log's grouping for continuity.
+- The two portfolio-level percentages will diverge slightly once Total MV moves: **U.PL %** uses commission-inclusive cost basis; **Total Return on NAV** uses the 1,000,000 starting NAV. Report both — the prior log's snapshot table shows both lines.
 - If the cron schedule looks suspicious (next-run timestamp wrong, container restart since last firing, manual triggers, etc.), call it out as Risk Note #1. The cron historically misfired due to `CronTrigger.from_crontab` day-of-week numbering; commit `7be6762` introduced `_trigger_from_standard_crontab()` to fix it.
 - Data fetched via tvkit (TradingView, free tier) — always disclaim in the final Notes bullet.
 - If a daily refresh failed (`failures > 0` in the job result) or is partial, stop and tell the user — do not write a report on incomplete data.
+- **On rebalance execution day** (first trading day of each month, when the trade list from the prior month's last-trading-day plan is executed at ATO), the position table will change — new symbols enter, old ones exit, cash/cost basis update. The skill still works: parse positions/cash/cost basis from the **post-execution** rebalance log (which a human writes), then resume normal daily logs from the next session.
