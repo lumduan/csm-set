@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
+from csm.live import (
+    LivePortfolioConfig,
+    LivePortfolioMetrics,
+    compute_live_portfolio_metrics,
+    load_live_portfolio,
+)
 from csm.research.ranking import CrossSectionalRanker
-from csm.risk.metrics import PerformanceMetrics
 
 if TYPE_CHECKING:
     from csm.adapters import AdapterManager
@@ -27,12 +33,14 @@ if TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger(__name__)
 DEFAULT_STRATEGY_ID: str = "csm-set"
+DEFAULT_LIVE_PORTFOLIO_PATH: Path = Path("configs/live_portfolio.yaml")
 
 
 async def run_post_refresh_hook(
     manager: AdapterManager,
     store: ParquetStore,
     summary: dict[str, Any] | None = None,
+    live_portfolio_path: Path | None = None,
 ) -> None:
     """Write equity curve, signal snapshot, daily performance, and portfolio
     snapshot after a successful daily refresh.
@@ -40,38 +48,62 @@ async def run_post_refresh_hook(
     Each adapter write is independently ``try/except``-wrapped so a
     Postgres outage does not block Mongo or Gateway writes.
 
+    Writes split by table semantics:
+
+    - ``db_csm_set.equity_curve`` receives the synthetic equal-weight
+      universe NAV (cumulative product of cross-sectional mean returns).
+      This is a historical benchmark series, not the live portfolio.
+    - ``db_gateway.daily_performance`` and
+      ``db_gateway.portfolio_snapshot`` receive the *actual* live
+      paper-trading portfolio NAV when ``configs/live_portfolio.yaml`` is
+      present. When the config is missing, the gateway writes are
+      skipped (we never write synthetic data into the live-portfolio
+      tables — see commit message of the fix for the rationale).
+
     Args:
         manager: The shared ``AdapterManager`` (each slot may be ``None``).
         store: ``ParquetStore`` from which ``prices_latest`` and
             ``features_latest`` are loaded.
         summary: Optional dict from the refresh run with keys
             ``symbols_fetched``, ``failures``, ``duration_seconds``.
+        live_portfolio_path: Optional override for the live-portfolio config
+            path. Defaults to ``configs/live_portfolio.yaml`` relative to
+            cwd.
     """
     strategy_id: str = DEFAULT_STRATEGY_ID
     today: datetime = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    portfolio_path: Path = (
+        live_portfolio_path if live_portfolio_path is not None else DEFAULT_LIVE_PORTFOLIO_PATH
+    )
+
+    # ---------------------------------------------------------------
+    # Load prices_latest once — shared by equity_curve (synthetic universe
+    # NAV) and the live-portfolio NAV reconstruction.
+    # ---------------------------------------------------------------
+    prices: pd.DataFrame = pd.DataFrame()
+    if (
+        manager.postgres is not None
+        or manager.gateway is not None
+    ):
+        try:
+            prices = store.load("prices_latest")
+        except Exception:
+            logger.warning("post-refresh hook: failed to load prices_latest", exc_info=True)
+            prices = pd.DataFrame()
 
     # ---------------------------------------------------------------
     # 1. Equity curve → Postgres db_csm_set.equity_curve
     #    Synthetic equal-weight universe NAV computed from prices_latest.
     # ---------------------------------------------------------------
     equity_series: pd.Series | None = None
-    metrics: dict[str, float] = {}
-
-    if manager.postgres is not None or manager.gateway is not None:
-        try:
-            prices: pd.DataFrame = store.load("prices_latest")
-        except Exception:
-            logger.warning("post-refresh hook: failed to load prices_latest", exc_info=True)
-            prices = pd.DataFrame()
-
-        if not prices.empty and len(prices.columns) > 0 and len(prices) > 1:
-            daily_returns: pd.Series = prices.pct_change().mean(axis=1).dropna()
-            if not daily_returns.empty:
-                equity_series = (1.0 + daily_returns).cumprod() * 100.0
-                if equity_series.index.tz is None:
-                    equity_series.index = equity_series.index.tz_localize("UTC")
-                elif str(equity_series.index.tz) != "UTC":
-                    equity_series.index = equity_series.index.tz_convert("UTC")
+    if not prices.empty and len(prices.columns) > 0 and len(prices) > 1:
+        daily_returns: pd.Series = prices.pct_change().mean(axis=1).dropna()
+        if not daily_returns.empty:
+            equity_series = (1.0 + daily_returns).cumprod() * 100.0
+            if equity_series.index.tz is None:
+                equity_series.index = equity_series.index.tz_localize("UTC")
+            elif str(equity_series.index.tz) != "UTC":
+                equity_series.index = equity_series.index.tz_convert("UTC")
 
     if manager.postgres is not None and equity_series is not None:
         try:
@@ -114,61 +146,62 @@ async def run_post_refresh_hook(
             logger.warning("post-refresh hook: write_signal_snapshot failed", exc_info=True)
 
     # ---------------------------------------------------------------
-    # 3. Compute performance metrics → shared by daily_performance and
-    #    portfolio_snapshot Gateway writes below.
+    # 3. Load live-portfolio config and compute the actual paper portfolio
+    #    NAV. When the config is missing or the metrics cannot be derived
+    #    (e.g. prices_latest empty), the gateway writes below are skipped.
     # ---------------------------------------------------------------
-    if equity_series is not None and len(equity_series) > 1:
+    live_config: LivePortfolioConfig | None = None
+    live_metrics: LivePortfolioMetrics | None = None
+    if manager.gateway is not None:
         try:
-            pm = PerformanceMetrics()
-            metrics = pm.summary(equity_series)
+            live_config = load_live_portfolio(portfolio_path)
         except Exception:
-            logger.warning("post-refresh hook: PerformanceMetrics.summary failed", exc_info=True)
+            logger.warning(
+                "post-refresh hook: failed to load live_portfolio config from %s",
+                portfolio_path,
+                exc_info=True,
+            )
+        if live_config is not None and not prices.empty:
+            try:
+                live_metrics = compute_live_portfolio_metrics(live_config, prices)
+            except Exception:
+                logger.warning(
+                    "post-refresh hook: compute_live_portfolio_metrics failed",
+                    exc_info=True,
+                )
 
     # ---------------------------------------------------------------
     # 4. Daily performance → Gateway db_gateway.daily_performance
+    #    Skipped when live_metrics is None (no live config or no prices)
+    #    so we never write synthetic equity into the live-portfolio table.
     # ---------------------------------------------------------------
-    if manager.gateway is not None:
+    if manager.gateway is not None and live_metrics is not None:
         try:
-            latest_nav: float = (
-                float(equity_series.iloc[-1])
-                if equity_series is not None and not equity_series.empty
-                else 100.0
-            )
-            daily_return: float = (
-                float(equity_series.pct_change().iloc[-1])
-                if equity_series is not None and len(equity_series) > 1
-                else 0.0
-            )
-            cumulative_return: float = latest_nav / 100.0 - 1.0
-            gateway_metrics: dict[str, object] = {
-                "daily_return": daily_return,
-                "cumulative_return": cumulative_return,
-                "total_value": latest_nav,
-                "cash_balance": 0.0,
-                "max_drawdown": metrics.get("max_drawdown", 0.0),
-                "sharpe_ratio": metrics.get("sharpe", 0.0),
-                "symbols_fetched": (summary or {}).get("symbols_fetched", 0),
-                "failures": (summary or {}).get("failures", 0),
-                "duration_seconds": (summary or {}).get("duration_seconds", 0.0),
-            }
+            gateway_metrics: dict[str, object] = live_metrics.as_dict()
+            gateway_metrics["symbols_fetched"] = (summary or {}).get("symbols_fetched", 0)
+            gateway_metrics["failures"] = (summary or {}).get("failures", 0)
+            gateway_metrics["duration_seconds"] = (summary or {}).get("duration_seconds", 0.0)
             await manager.gateway.write_daily_performance(strategy_id, today, gateway_metrics)
         except Exception:
             logger.warning("post-refresh hook: write_daily_performance failed", exc_info=True)
+    elif manager.gateway is not None:
+        logger.info(
+            "post-refresh hook: skipping daily_performance write — no live portfolio "
+            "metrics available (config=%s, prices_empty=%s)",
+            portfolio_path if live_config is None else "loaded",
+            prices.empty,
+        )
 
     # ---------------------------------------------------------------
     # 5. Portfolio snapshot → Gateway db_gateway.portfolio_snapshot
+    #    Same live-metrics gating as daily_performance.
     # ---------------------------------------------------------------
-    if manager.gateway is not None:
+    if manager.gateway is not None and live_metrics is not None:
         try:
-            latest_nav_val: float = (
-                float(equity_series.iloc[-1])
-                if equity_series is not None and not equity_series.empty
-                else 100.0
-            )
             snapshot: dict[str, object] = {
-                "total_portfolio": latest_nav_val,
-                "weighted_return": (summary or {}).get("weighted_return", 0.0),
-                "combined_drawdown": metrics.get("max_drawdown", 0.0),
+                "total_portfolio": live_metrics.total_value,
+                "weighted_return": live_metrics.daily_return,
+                "combined_drawdown": live_metrics.max_drawdown,
                 "active_strategies": 1,
                 "allocation": {strategy_id: 1.0},
             }

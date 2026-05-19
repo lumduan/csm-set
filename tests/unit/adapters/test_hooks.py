@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import textwrap
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
@@ -130,6 +132,39 @@ def _make_store(
     return store
 
 
+def _write_live_portfolio_yaml(tmp_path: Path) -> Path:
+    """Write a synthetic live-portfolio config aligned with ``_make_synthetic_prices``.
+
+    Uses bare symbol names (``A``, ``B``…) so the loader prepends ``SET:`` and
+    looks them up in the corresponding parquet columns — which the synthetic
+    prices fixture matches when columns are renamed to the ``SET:`` form.
+    """
+    yaml_text: str = textwrap.dedent(
+        """
+        strategy_id: csm-set
+        entry_date: "2026-05-01"
+        starting_nav: 1000.0
+        cash: 100.0
+        positions:
+          - {symbol: "SET:A", shares: 1.0, avg_cost: 100.0}
+          - {symbol: "SET:B", shares: 1.0, avg_cost: 100.0}
+          - {symbol: "SET:C", shares: 1.0, avg_cost: 100.0}
+          - {symbol: "SET:D", shares: 1.0, avg_cost: 100.0}
+          - {symbol: "SET:E", shares: 1.0, avg_cost: 100.0}
+        """
+    ).strip()
+    path: Path = tmp_path / "live_portfolio.yaml"
+    path.write_text(yaml_text, encoding="utf-8")
+    return path
+
+
+def _make_synthetic_prices_set_columns() -> pd.DataFrame:
+    """Same shape as ``_make_synthetic_prices`` but columns are ``SET:`` prefixed."""
+    df: pd.DataFrame = _make_synthetic_prices()
+    df.columns = [f"SET:{c}" for c in df.columns]
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Post-refresh hook tests
 # ---------------------------------------------------------------------------
@@ -139,17 +174,18 @@ class TestPostRefreshHook:
     """Tests for ``run_post_refresh_hook``."""
 
     @pytest.mark.asyncio
-    async def test_calls_all_four_writes_when_all_adapters_live(self) -> None:
+    async def test_calls_all_four_writes_when_all_adapters_live(self, tmp_path: Path) -> None:
         pg = _make_pg()
         mongo = _make_mongo()
         gw = _make_gateway()
         manager = _make_manager(postgres=pg, mongo=mongo, gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
         summary = {"symbols_fetched": 5, "failures": 0, "duration_seconds": 1.5}
-        await run_post_refresh_hook(manager, store, summary=summary)
+        await run_post_refresh_hook(manager, store, summary=summary, live_portfolio_path=live_path)
 
         pg.write_equity_curve.assert_called_once()
         call_args = pg.write_equity_curve.call_args
@@ -238,13 +274,14 @@ class TestPostRefreshHook:
         assert str(series.index.tz) == "UTC"
 
     @pytest.mark.asyncio
-    async def test_writes_daily_performance_with_metric_fields(self) -> None:
+    async def test_writes_daily_performance_with_metric_fields(self, tmp_path: Path) -> None:
         gw = _make_gateway()
         manager = _make_manager(gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
-        await run_post_refresh_hook(manager, store)
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         gw.write_daily_performance.assert_called_once()
         call_kwargs = gw.write_daily_performance.call_args
@@ -258,15 +295,18 @@ class TestPostRefreshHook:
         assert "total_value" in metrics_arg
         assert "max_drawdown" in metrics_arg
         assert "sharpe_ratio" in metrics_arg
+        assert "positions_count" in metrics_arg
+        assert "daily_pnl" in metrics_arg
 
     @pytest.mark.asyncio
-    async def test_writes_portfolio_snapshot_with_allocation(self) -> None:
+    async def test_writes_portfolio_snapshot_with_allocation(self, tmp_path: Path) -> None:
         gw = _make_gateway()
         manager = _make_manager(gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
-        await run_post_refresh_hook(manager, store)
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         gw.write_portfolio_snapshot.assert_called_once()
         call_kwargs = gw.write_portfolio_snapshot.call_args
@@ -277,20 +317,71 @@ class TestPostRefreshHook:
         assert "csm-set" in snapshot_arg.get("allocation", {})
 
     @pytest.mark.asyncio
-    async def test_forwards_refresh_summary_to_gateway_metrics(self) -> None:
+    async def test_forwards_refresh_summary_to_gateway_metrics(self, tmp_path: Path) -> None:
         gw = _make_gateway()
         manager = _make_manager(gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
         summary = {"symbols_fetched": 42, "failures": 3, "duration_seconds": 12.5}
 
-        await run_post_refresh_hook(manager, store, summary=summary)
+        await run_post_refresh_hook(
+            manager, store, summary=summary, live_portfolio_path=live_path
+        )
 
         gw.write_daily_performance.assert_called_once()
         metrics_arg = gw.write_daily_performance.call_args[0][2]
         assert metrics_arg.get("symbols_fetched") == 42
         assert metrics_arg.get("failures") == 3
         assert metrics_arg.get("duration_seconds") == 12.5
+
+    @pytest.mark.asyncio
+    async def test_skips_gateway_writes_when_live_config_missing(self, tmp_path: Path) -> None:
+        """Without a live portfolio config the gateway writes are skipped.
+
+        Prevents the synthetic universe NAV from being written into the
+        ``daily_performance`` / ``portfolio_snapshot`` tables.
+        """
+        gw = _make_gateway()
+        manager = _make_manager(gateway=gw)
+        prices = _make_synthetic_prices_set_columns()
+        store = _make_store(prices=prices)
+        missing_path = tmp_path / "does_not_exist.yaml"
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=missing_path)
+
+        gw.write_daily_performance.assert_not_called()
+        gw.write_portfolio_snapshot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_daily_performance_uses_live_portfolio_nav(self, tmp_path: Path) -> None:
+        """Daily performance carries the live portfolio NAV, not the synthetic one."""
+        gw = _make_gateway()
+        manager = _make_manager(gateway=gw)
+        prices = _make_synthetic_prices_set_columns()
+        store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        metrics_arg = gw.write_daily_performance.call_args[0][2]
+        # Live NAV = 5 positions x ~latest close + 100 cash; synthetic universe
+        # equity is ~100. Anything above 200 confirms the live path was used.
+        assert float(metrics_arg["total_value"]) > 200.0
+        assert metrics_arg["positions_count"] == 5
+
+    @pytest.mark.asyncio
+    async def test_portfolio_snapshot_uses_live_portfolio_nav(self, tmp_path: Path) -> None:
+        gw = _make_gateway()
+        manager = _make_manager(gateway=gw)
+        prices = _make_synthetic_prices_set_columns()
+        store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        snapshot_arg = gw.write_portfolio_snapshot.call_args[0][1]
+        assert float(snapshot_arg["total_portfolio"]) > 200.0
 
 
 # ---------------------------------------------------------------------------
@@ -471,17 +562,20 @@ class TestErrorIsolation:
     """Tests verifying one adapter failure never blocks others."""
 
     @pytest.mark.asyncio
-    async def test_postgres_failure_does_not_block_mongo_and_gateway(self) -> None:
+    async def test_postgres_failure_does_not_block_mongo_and_gateway(
+        self, tmp_path: Path
+    ) -> None:
         pg = _make_pg()
         pg.write_equity_curve.side_effect = RuntimeError("postgres down")
         mongo = _make_mongo()
         gw = _make_gateway()
         manager = _make_manager(postgres=pg, mongo=mongo, gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
-        await run_post_refresh_hook(manager, store)
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         # Postgres failed, but others should have been called
         pg.write_equity_curve.assert_called_once()
@@ -504,7 +598,9 @@ class TestErrorIsolation:
         mongo.write_model_params.assert_called_once()  # different method, still called
 
     @pytest.mark.asyncio
-    async def test_logs_warnings_for_each_failure(self, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_logs_warnings_for_each_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         pg = _make_pg()
         pg.write_equity_curve.side_effect = RuntimeError("pg down")
         mongo = _make_mongo()
@@ -512,12 +608,13 @@ class TestErrorIsolation:
         gw = _make_gateway()
         gw.write_daily_performance.side_effect = RuntimeError("gw down")
         manager = _make_manager(postgres=pg, mongo=mongo, gateway=gw)
-        prices = _make_synthetic_prices()
+        prices = _make_synthetic_prices_set_columns()
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
         with caplog.at_level(logging.WARNING, logger="csm.adapters.hooks"):
-            await run_post_refresh_hook(manager, store)
+            await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         warnings = [rec.message for rec in caplog.records]
         assert any("write_equity_curve failed" in m for m in warnings)

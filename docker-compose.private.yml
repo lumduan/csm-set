@@ -33,6 +33,9 @@
 #   ./data:/app/data                Writable mount for OHLCV parquet files
 #   ./results:/app/results          Writable mount for export_results.py and
 #                                   the daily-refresh marker
+#   ./configs:/app/configs:ro       Read-only mount so the daily-refresh hook
+#                                   can load configs/live_portfolio.yaml for
+#                                   live-portfolio NAV reconstruction
 #
 # Owner workflow after booting with this override:
 #   # Daily refresh runs automatically per CSM_REFRESH_CRON (default 18:00 BKK
@@ -49,6 +52,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./results:/app/results
+      - ./configs:/app/configs:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
