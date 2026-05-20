@@ -12,6 +12,22 @@
 # Symbols may be written either bare (``DELTA``) or prefixed (``SET:DELTA``);
 # the loader prepends ``SET:`` when missing to match the parquet column
 # format.
+#
+# avg_cost convention
+# -------------------
+# ``avg_cost`` is the **commission-inclusive average cost per share**, stored
+# at 4 decimals.  This matches the broker's internal precision and lets the
+# daily-log per-symbol ``%U.PL`` reproduce the broker statement exactly:
+#
+#     %U.PL = (shares * close_price) / (shares * avg_cost) - 1
+#
+# Brokers in Thailand display ``avg_cost`` rounded to 2 decimals on screen but
+# compute ``%U.PL`` against the unrounded value.  When recording a fresh
+# rebalance, take ``avg_cost`` from the broker's executed-trade confirmation
+# (price + commission + VAT, divided by shares) rather than the on-screen
+# rounded display.  The loader's NAV / drawdown math does not read
+# ``avg_cost`` (only ``shares`` and ``cash``), so this field exists solely to
+# drive the daily-log %U.PL calculation.
 
 strategy_id: csm-set
 entry_date: "2026-05-05"
@@ -20,28 +36,28 @@ cash: 37699.71
 positions:
   - symbol: DELTA
     shares: 300
-    avg_cost: 319.51
+    avg_cost: 319.5178
   - symbol: IRPC
     shares: 56600
-    avg_cost: 2.30
+    avg_cost: 2.3037
   - symbol: PTTGC
     shares: 3000
-    avg_cost: 41.07
+    avg_cost: 41.0672
   - symbol: NEX
     shares: 99000
-    avg_cost: 1.01
+    avg_cost: 1.0116
   - symbol: AGE
     shares: 80600
-    avg_cost: 1.26
+    avg_cost: 1.2621
   - symbol: HANA
     shares: 3000
-    avg_cost: 35.81
+    avg_cost: 35.8070
   - symbol: GUNKUL
     shares: 30800
-    avg_cost: 2.92
+    avg_cost: 2.9246
   - symbol: INSET
     shares: 42000
-    avg_cost: 3.08
+    avg_cost: 3.0848
   - symbol: JTS
     shares: 1900
-    avg_cost: 43.32
+    avg_cost: 43.3207
