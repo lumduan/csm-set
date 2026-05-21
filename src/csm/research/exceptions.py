@@ -9,4 +9,8 @@ class BacktestError(ResearchError):
     """Raised when the backtest engine encounters an unrecoverable error."""
 
 
-__all__: list[str] = ["BacktestError", "ResearchError"]
+class ReportError(ResearchError):
+    """Raised when strategy-report construction receives invalid inputs."""
+
+
+__all__: list[str] = ["BacktestError", "ReportError", "ResearchError"]

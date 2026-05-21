@@ -325,9 +325,7 @@ class TestPostRefreshHook:
         live_path = _write_live_portfolio_yaml(tmp_path)
         summary = {"symbols_fetched": 42, "failures": 3, "duration_seconds": 12.5}
 
-        await run_post_refresh_hook(
-            manager, store, summary=summary, live_portfolio_path=live_path
-        )
+        await run_post_refresh_hook(manager, store, summary=summary, live_portfolio_path=live_path)
 
         gw.write_daily_performance.assert_called_once()
         metrics_arg = gw.write_daily_performance.call_args[0][2]
@@ -562,9 +560,7 @@ class TestErrorIsolation:
     """Tests verifying one adapter failure never blocks others."""
 
     @pytest.mark.asyncio
-    async def test_postgres_failure_does_not_block_mongo_and_gateway(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_postgres_failure_does_not_block_mongo_and_gateway(self, tmp_path: Path) -> None:
         pg = _make_pg()
         pg.write_equity_curve.side_effect = RuntimeError("postgres down")
         mongo = _make_mongo()

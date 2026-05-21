@@ -11,20 +11,29 @@ only need to null-check each slot before calling.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
+from csm.config.settings import Settings, get_settings
+from csm.data.benchmark import BenchmarkLoader
+from csm.data.exceptions import BenchmarkUnavailableError
+from csm.execution.trade_pairing import ClosedTrade
 from csm.live import (
     LivePortfolioConfig,
     LivePortfolioMetrics,
     compute_live_portfolio_metrics,
     load_live_portfolio,
 )
+from csm.research.exceptions import ReportError
 from csm.research.ranking import CrossSectionalRanker
+from csm.research.strategy_report import build_strategy_report
+from csm.research.strategy_report_models import StrategyReport
 
 if TYPE_CHECKING:
     from csm.adapters import AdapterManager
@@ -81,10 +90,7 @@ async def run_post_refresh_hook(
     # NAV) and the live-portfolio NAV reconstruction.
     # ---------------------------------------------------------------
     prices: pd.DataFrame = pd.DataFrame()
-    if (
-        manager.postgres is not None
-        or manager.gateway is not None
-    ):
+    if manager.postgres is not None or manager.gateway is not None:
         try:
             prices = store.load("prices_latest")
         except Exception:
@@ -169,6 +175,26 @@ async def run_post_refresh_hook(
                     "post-refresh hook: compute_live_portfolio_metrics failed",
                     exc_info=True,
                 )
+
+    # ---------------------------------------------------------------
+    # 3b. Build per-strategy report (Phase 1 of feature-strategies-report-
+    #     metrics). Failures are non-fatal — the daily-performance write
+    #     below still runs without the report block.
+    # ---------------------------------------------------------------
+    if live_metrics is not None and live_config is not None and not prices.empty:
+        report: StrategyReport | None = await _build_strategy_report_safe(
+            live_config=live_config,
+            live_metrics=live_metrics,
+            prices=prices,
+            store=store,
+        )
+        if report is not None:
+            live_metrics = replace(live_metrics, report=report)
+            await _persist_closed_trades_safe(
+                manager=manager,
+                strategy_id=strategy_id,
+                trades=[],  # Phase 1: trade-pairing requires historical fill stream
+            )
 
     # ---------------------------------------------------------------
     # 4. Daily performance → Gateway db_gateway.daily_performance
@@ -312,6 +338,142 @@ async def run_post_rebalance_hook(
             await manager.postgres.write_trade_history(strategy_id, trades)
         except Exception:
             logger.warning("post-rebalance hook: write_trade_history failed", exc_info=True)
+
+
+async def _build_strategy_report_safe(
+    *,
+    live_config: LivePortfolioConfig,
+    live_metrics: LivePortfolioMetrics,
+    prices: pd.DataFrame,
+    store: ParquetStore,
+) -> StrategyReport | None:
+    """Build a :class:`StrategyReport` from the live config + prices panel.
+
+    Failures (empty inputs, missing benchmark column, builder errors) are
+    caught and logged at WARNING. The caller proceeds without the report.
+    """
+
+    try:
+        equity_series: pd.Series = _reconstruct_live_equity(live_config=live_config, prices=prices)
+    except Exception:
+        logger.warning(
+            "post-refresh hook: failed to reconstruct live equity series for report",
+            exc_info=True,
+        )
+        return None
+    if equity_series.empty:
+        logger.info("post-refresh hook: empty live equity series — skipping report build")
+        return None
+
+    settings: Settings = get_settings()
+    benchmark_series: pd.Series | None = None
+    try:
+        benchmark_series = await BenchmarkLoader(settings=settings, store=store).load(
+            initial_capital=Decimal(str(live_config.starting_nav))
+        )
+    except BenchmarkUnavailableError as exc:
+        logger.warning(
+            "post-refresh hook: benchmark unavailable (%s) — report will omit benchmark",
+            exc,
+        )
+    except Exception:
+        logger.warning("post-refresh hook: BenchmarkLoader.load raised unexpectedly", exc_info=True)
+
+    try:
+        as_of: datetime = live_metrics.snapshot_time
+        if as_of.tzinfo is None:
+            as_of = as_of.replace(tzinfo=UTC)
+        return build_strategy_report(
+            trades=[],
+            equity=equity_series,
+            initial_capital=Decimal(str(live_config.starting_nav)),
+            as_of=as_of,
+            benchmark=benchmark_series,
+        )
+    except ReportError:
+        logger.warning("post-refresh hook: build_strategy_report rejected inputs", exc_info=True)
+    except Exception:
+        logger.warning(
+            "post-refresh hook: build_strategy_report failed unexpectedly", exc_info=True
+        )
+    return None
+
+
+def _reconstruct_live_equity(
+    *, live_config: LivePortfolioConfig, prices: pd.DataFrame
+) -> pd.Series:
+    """Reprice the live config across the full prices panel to derive a NAV series.
+
+    The returned series spans from ``entry_date`` onward and is tz-aware UTC.
+    """
+
+    symbols: list[str] = [p.qualified_symbol for p in live_config.positions]
+    missing: list[str] = [s for s in symbols if s not in prices.columns]
+    if missing:
+        logger.warning("live equity reconstruction: missing symbols %s", missing)
+        return pd.Series(dtype="float64")
+
+    entry_ts: pd.Timestamp = pd.Timestamp(live_config.entry_date)
+    index_tz: Any = prices.index.tz
+    if index_tz is not None:
+        entry_ts = (
+            entry_ts.tz_localize(index_tz) if entry_ts.tz is None else entry_ts.tz_convert(index_tz)
+        )
+    panel: pd.DataFrame = prices.loc[prices.index >= entry_ts, symbols]
+    if panel.empty:
+        return pd.Series(dtype="float64")
+    shares: pd.Series = pd.Series(
+        {p.qualified_symbol: float(p.shares) for p in live_config.positions},
+        dtype="float64",
+    )
+    market_value: pd.Series = panel.mul(shares, axis=1).sum(axis=1)
+    nav: pd.Series = market_value + float(live_config.cash)
+    if nav.index.tz is None:
+        nav.index = nav.index.tz_localize("UTC")
+    elif str(nav.index.tz) != "UTC":
+        nav.index = nav.index.tz_convert("UTC")
+    nav.name = "equity"
+    return nav
+
+
+async def _persist_closed_trades_safe(
+    *,
+    manager: AdapterManager,
+    strategy_id: str,
+    trades: list[ClosedTrade],
+) -> None:
+    """Persist closed-trade rows to ``db_csm_set.trade_history``.
+
+    Soft-skip: writes are best-effort. Failures (e.g. the new columns
+    ``entry_price``, ``exit_price``, ``realized_pnl``, ``duration_bars`` not
+    yet present on the table — those land in ROADMAP Phase 2) are logged at
+    WARNING and never propagate. Empty input is a no-op.
+    """
+
+    if manager.postgres is None or not trades:
+        return
+    rows: pd.DataFrame = pd.DataFrame(
+        [
+            {
+                "time": t.exit_time,
+                "symbol": t.symbol,
+                "side": t.side,
+                "quantity": float(t.qty),
+                "price": float(t.exit_price),
+                "commission": float(t.commission),
+            }
+            for t in trades
+        ]
+    )
+    try:
+        n: int = await manager.postgres.write_trade_history(strategy_id, rows)
+        logger.info("post-refresh hook: wrote %d closed-trade rows", n)
+    except Exception:
+        logger.warning(
+            "post-refresh hook: write_trade_history rejected closed-trade rows "
+            "(likely awaiting Phase 2 schema migration)",
+            exc_info=True,
+        )
 
 
 __all__: list[str] = [

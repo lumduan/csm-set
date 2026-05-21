@@ -21,7 +21,12 @@ class StoreError(DataError):
     """Raised when reading from or writing to the parquet store fails."""
 
 
+class BenchmarkUnavailableError(DataError):
+    """Raised when the configured benchmark symbol is missing from the prices store."""
+
+
 __all__: list[str] = [
+    "BenchmarkUnavailableError",
     "DataAccessError",
     "DataError",
     "FetchError",

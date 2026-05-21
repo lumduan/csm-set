@@ -32,6 +32,7 @@ from api.schemas.history import (
     EquityPoint,
     PortfolioSnapshotRow,
     SignalSnapshotDoc,
+    StrategyReportResponse,
     TradeRow,
 )
 from csm.adapters import AdapterManager
@@ -271,6 +272,53 @@ async def get_signal_snapshot(
             detail=f"No signal snapshot for strategy_id={strategy_id!r} date={date_.isoformat()}.",
         )
     return doc
+
+
+@router.get(
+    "/strategy-report",
+    response_model=StrategyReportResponse,
+    summary="Most-recent persisted strategy report",
+    description=(
+        "Return the latest ``extended_data.report`` block recorded against the "
+        "strategy in ``db_gateway.daily_performance``. Phase 1 of "
+        "``feature-strategies-report-metrics`` — the dashboard's local "
+        "fallback when the gateway service is unreachable."
+    ),
+    responses={
+        **_ADAPTER_DOWN_RESPONSES,
+        **_AUTH_RESPONSES,
+        404: {
+            "description": "No strategy report has been persisted for this strategy.",
+            "model": ProblemDetail,
+        },
+    },
+)
+async def get_strategy_report(
+    strategy_id: str = Query(
+        default=DEFAULT_STRATEGY_ID,
+        description="Strategy identifier.",
+        examples=["csm-set"],
+    ),
+    manager: AdapterManager = Depends(get_adapter_manager),
+) -> StrategyReportResponse:
+    """Read the latest persisted strategy report for ``strategy_id``."""
+
+    gw = _require(manager.gateway, "gateway")
+    rows: list[DailyPerformanceRow] = await gw.read_daily_performance(strategy_id, days=30)
+    for row in reversed(rows):
+        metadata: dict[str, object] = row.metadata or {}
+        extended_data: object = metadata.get("extended_data")
+        if not isinstance(extended_data, dict):
+            continue
+        report_obj: object = extended_data.get("report")
+        if isinstance(report_obj, dict):
+            return StrategyReportResponse(
+                strategy_id=strategy_id, as_of=row.time, report=report_obj
+            )
+    raise HTTPException(
+        status_code=404,
+        detail=f"No strategy report found for strategy_id={strategy_id!r}.",
+    )
 
 
 __all__: list[str] = ["router"]
