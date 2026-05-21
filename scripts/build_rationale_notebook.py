@@ -820,7 +820,6 @@ md("""---
 # ============================================================
 nb.cells = cells
 
-import sys
 out = "notebooks/05_live_portfolio_rationale.ipynb"
 nbf.write(nb, out)
 print("OK", out)

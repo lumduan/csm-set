@@ -166,6 +166,34 @@ def test_db_write_enabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.db_write_enabled is True
 
 
+def test_benchmark_symbol_defaults_to_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """benchmark_symbol defaults to ``^SET.BK`` when CSM_BENCHMARK_SYMBOL is not set."""
+    monkeypatch.delenv("CSM_BENCHMARK_SYMBOL", raising=False)
+    s = Settings()
+    assert s.benchmark_symbol == "^SET.BK"
+
+
+def test_benchmark_symbol_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """benchmark_symbol can be overridden by CSM_BENCHMARK_SYMBOL."""
+    monkeypatch.setenv("CSM_BENCHMARK_SYMBOL", "SET:S50")
+    s = Settings()
+    assert s.benchmark_symbol == "SET:S50"
+
+
+def test_report_enable_public_defaults_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    """report_enable_public defaults to True when CSM_REPORT_ENABLE_PUBLIC is not set."""
+    monkeypatch.delenv("CSM_REPORT_ENABLE_PUBLIC", raising=False)
+    s = Settings()
+    assert s.report_enable_public is True
+
+
+def test_report_enable_public_false_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """report_enable_public can be disabled via CSM_REPORT_ENABLE_PUBLIC=false."""
+    monkeypatch.setenv("CSM_REPORT_ENABLE_PUBLIC", "false")
+    s = Settings()
+    assert s.report_enable_public is False
+
+
 def test_db_dsn_fields_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """DB DSN fields read correctly from environment variables."""
     monkeypatch.setenv("CSM_DB_CSM_SET_DSN", "postgresql://user:pass@host:5432/db_csm_set")

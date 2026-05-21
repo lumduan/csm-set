@@ -1,7 +1,15 @@
 """Data-layer exports for csm-set."""
 
+from csm.data.benchmark import BenchmarkLoader
 from csm.data.cleaner import PriceCleaner
-from csm.data.exceptions import DataAccessError, DataError, FetchError, StoreError, UniverseError
+from csm.data.exceptions import (
+    BenchmarkUnavailableError,
+    DataAccessError,
+    DataError,
+    FetchError,
+    StoreError,
+    UniverseError,
+)
 from csm.data.loader import OHLCVLoader
 from csm.data.store import ParquetStore
 from csm.data.symbol_filter import (
@@ -14,6 +22,8 @@ from csm.data.symbol_filter import (
 from csm.data.universe import UniverseBuilder
 
 __all__: list[str] = [
+    "BenchmarkLoader",
+    "BenchmarkUnavailableError",
     "DataAccessError",
     "DataError",
     "DEFAULT_SECURITY_TYPES",

@@ -148,6 +148,23 @@ class Settings(BaseSettings):
         default=False,
         description="Enable DB write-back after pipeline events when True.",
     )
+    benchmark_symbol: str = Field(
+        default="^SET.BK",
+        description=(
+            "Buy-and-hold benchmark symbol used by the per-strategy report's "
+            "benchmark_equity_curve and benchmark_comparison sections. The column "
+            "of this name must be present in the local prices store; if absent, "
+            "the report is emitted without benchmark fields."
+        ),
+    )
+    report_enable_public: bool = Field(
+        default=True,
+        description=(
+            "When True (default), include the per-strategy report payload in the "
+            "public results/static/ export. Owner mode only — public mode is "
+            "read-only and never builds the report at runtime."
+        ),
+    )
 
     @field_validator("tvkit_adjustment")
     @classmethod

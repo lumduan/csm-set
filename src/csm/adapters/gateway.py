@@ -18,6 +18,7 @@ For best-effort persistence, callers wrap each call in their own
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -204,6 +205,10 @@ class GatewayAdapter:
             asyncpg.PostgresError: On database error.
         """
         pool = self._require_pool()
+        extended: object = metrics.get("extended_data", {})
+        has_report: bool = isinstance(extended, dict) and bool(extended.get("report"))
+        payload_bytes: int = len(json.dumps(metrics, default=str))
+        logger.info("posted daily report (%d bytes, report=%s)", payload_bytes, has_report)
         await pool.execute(
             _SQL.UPSERT_DAILY_PERFORMANCE,
             date,

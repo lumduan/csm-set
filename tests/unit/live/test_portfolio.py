@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 import textwrap
+from dataclasses import replace
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
@@ -11,10 +14,12 @@ import pytest
 
 from csm.live.portfolio import (
     LivePortfolioConfig,
+    LivePortfolioMetrics,
     LivePosition,
     compute_live_portfolio_metrics,
     load_live_portfolio,
 )
+from csm.research.strategy_report import build_strategy_report
 
 
 @pytest.fixture()
@@ -128,9 +133,7 @@ class TestComputeLivePortfolioMetrics:
         assert math.isclose(m.total_value, expected_nav, rel_tol=1e-9)
         assert m.positions_count == 2
 
-    def test_daily_return_and_pnl_against_previous_day(
-        self, cfg: LivePortfolioConfig
-    ) -> None:
+    def test_daily_return_and_pnl_against_previous_day(self, cfg: LivePortfolioConfig) -> None:
         prices: pd.DataFrame = _make_prices(
             [
                 ("2026-05-05", 319.0, 2.30),
@@ -156,9 +159,7 @@ class TestComputeLivePortfolioMetrics:
         m = compute_live_portfolio_metrics(cfg, prices)
         assert m is not None
         nav_today: float = 300 * 319.0 + 56_600 * 2.32 + 37_699.71
-        assert math.isclose(
-            m.cumulative_return, nav_today / cfg.starting_nav - 1.0, rel_tol=1e-9
-        )
+        assert math.isclose(m.cumulative_return, nav_today / cfg.starting_nav - 1.0, rel_tol=1e-9)
 
     def test_max_drawdown_uses_starting_nav_anchor(self, cfg: LivePortfolioConfig) -> None:
         """The drawdown calc anchors at ``starting_nav`` so it never reports a
@@ -193,3 +194,35 @@ class TestComputeLivePortfolioMetrics:
         m = compute_live_portfolio_metrics(cfg, _make_prices(rows))
         assert m is not None
         assert m.sharpe_ratio != 0.0
+
+
+def test_live_portfolio_metrics_as_dict_embeds_report() -> None:
+    """When `report` is set via ``dataclasses.replace``, ``as_dict()`` exposes it."""
+    metrics: LivePortfolioMetrics = LivePortfolioMetrics(
+        snapshot_time=datetime(2026, 5, 20, tzinfo=UTC),
+        total_value=1_010_000.0,
+        cash_balance=37_699.71,
+        daily_return=0.001,
+        cumulative_return=0.01,
+        max_drawdown=-0.05,
+        sharpe_ratio=1.2,
+        daily_pnl=1_000.0,
+        positions_count=2,
+    )
+    assert metrics.report is None
+    assert "extended_data" not in metrics.as_dict()
+
+    equity = pd.Series(
+        [1_000_000.0, 1_010_000.0],
+        index=pd.date_range("2026-05-19", periods=2, freq="D", tz="UTC"),
+    )
+    report = build_strategy_report(
+        trades=[],
+        equity=equity,
+        initial_capital=Decimal("1000000"),
+        as_of=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    enriched: LivePortfolioMetrics = replace(metrics, report=report)
+    payload = enriched.as_dict()
+    assert "extended_data" in payload
+    assert Decimal(payload["extended_data"]["report"]["headline"]["total_pnl"]) == Decimal("10000")

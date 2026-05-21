@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from csm.research.strategy_report_models import StrategyReport
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 TRADING_DAYS_PER_YEAR: int = 252
@@ -64,7 +66,13 @@ class LivePortfolioConfig:
 
 @dataclass(frozen=True)
 class LivePortfolioMetrics:
-    """Computed live portfolio metrics for one trading day."""
+    """Computed live portfolio metrics for one trading day.
+
+    ``report`` carries the optional :class:`StrategyReport` payload (Phase 1
+    of feature-strategies-report-metrics). When present, it is embedded
+    under ``extended_data.report`` in :meth:`as_dict` so it lands in the
+    gateway ``daily_performance.metadata`` JSONB column verbatim.
+    """
 
     snapshot_time: datetime
     total_value: float
@@ -75,10 +83,16 @@ class LivePortfolioMetrics:
     sharpe_ratio: float
     daily_pnl: float
     positions_count: int
+    report: StrategyReport | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        """Return a plain dict shaped for the gateway write methods."""
-        return {
+        """Return a plain dict shaped for the gateway write methods.
+
+        Existing scalar fields are preserved verbatim; the optional
+        :class:`StrategyReport` (when present) is appended under
+        ``extended_data.report``.
+        """
+        payload: dict[str, Any] = {
             "daily_return": self.daily_return,
             "cumulative_return": self.cumulative_return,
             "total_value": self.total_value,
@@ -88,6 +102,9 @@ class LivePortfolioMetrics:
             "daily_pnl": round(self.daily_pnl, 2),
             "positions_count": self.positions_count,
         }
+        if self.report is not None:
+            payload["extended_data"] = {"report": self.report.model_dump(mode="json")}
+        return payload
 
 
 def load_live_portfolio(path: Path) -> LivePortfolioConfig | None:
@@ -127,9 +144,7 @@ def load_live_portfolio(path: Path) -> LivePortfolioConfig | None:
         for p in positions_raw
     )
     entry_raw: Any = raw["entry_date"]
-    entry: date = (
-        entry_raw if isinstance(entry_raw, date) else date.fromisoformat(str(entry_raw))
-    )
+    entry: date = entry_raw if isinstance(entry_raw, date) else date.fromisoformat(str(entry_raw))
     return LivePortfolioConfig(
         strategy_id=str(raw["strategy_id"]),
         entry_date=entry,
@@ -167,7 +182,9 @@ def compute_live_portfolio_metrics(
     entry_ts: pd.Timestamp = pd.Timestamp(config.entry_date)
     index_tz: Any = prices.index.tz
     if index_tz is not None:
-        entry_ts = entry_ts.tz_localize(index_tz) if entry_ts.tz is None else entry_ts.tz_convert(index_tz)
+        entry_ts = (
+            entry_ts.tz_localize(index_tz) if entry_ts.tz is None else entry_ts.tz_convert(index_tz)
+        )
     panel: pd.DataFrame = prices.loc[prices.index >= entry_ts, symbols]
     if panel.empty:
         logger.warning(

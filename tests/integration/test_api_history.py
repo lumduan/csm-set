@@ -440,3 +440,91 @@ class TestSignals:
         _install_adapters(client, mongo=_stub_mongo(read_signal_snapshot=None))
         resp = client.get("/api/v1/history/signals", headers={API_KEY_HEADER: key})
         assert resp.status_code == 422
+
+
+class TestStrategyReport:
+    """Endpoint added in Phase 1 of feature-strategies-report-metrics."""
+
+    def test_strategy_report_public_mode_returns_403(self, public_client: TestClient) -> None:
+        resp = public_client.get("/api/v1/history/strategy-report")
+        assert resp.status_code == 403
+
+    def test_strategy_report_503_when_gateway_none(
+        self, private_client_with_key: tuple[TestClient, str]
+    ) -> None:
+        client, key = private_client_with_key
+        _install_adapters(client)
+        resp = client.get(
+            "/api/v1/history/strategy-report",
+            headers={API_KEY_HEADER: key},
+        )
+        assert resp.status_code == 503
+        assert "gateway" in resp.json()["detail"]
+
+    def test_strategy_report_returns_latest_report_block(
+        self, private_client_with_key: tuple[TestClient, str]
+    ) -> None:
+        client, key = private_client_with_key
+        report_payload = {
+            "as_of": "2026-05-20T00:00:00+00:00",
+            "currency": "THB",
+            "initial_capital": "1000000",
+            "headline": {"total_pnl": "10000"},
+        }
+        rows = [
+            DailyPerformanceRow(
+                time=_FIXED_TIME,
+                strategy_id="csm-set",
+                daily_return=0.0,
+                cumulative_return=0.01,
+                total_value=1_010_000.0,
+                cash_balance=10_000.0,
+                max_drawdown=-0.02,
+                sharpe_ratio=1.0,
+                metadata={"extended_data": {"report": report_payload}},
+            )
+        ]
+        _install_adapters(client, gateway=_stub_gateway(read_daily_performance=rows))
+        resp = client.get(
+            "/api/v1/history/strategy-report",
+            headers={API_KEY_HEADER: key},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["strategy_id"] == "csm-set"
+        assert body["report"]["headline"]["total_pnl"] == "10000"
+
+    def test_strategy_report_404_when_no_report_in_metadata(
+        self, private_client_with_key: tuple[TestClient, str]
+    ) -> None:
+        client, key = private_client_with_key
+        rows = [
+            DailyPerformanceRow(
+                time=_FIXED_TIME,
+                strategy_id="csm-set",
+                daily_return=0.0,
+                cumulative_return=0.01,
+                total_value=1_010_000.0,
+                cash_balance=10_000.0,
+                max_drawdown=-0.02,
+                sharpe_ratio=1.0,
+                metadata={"symbols_fetched": 50},
+            )
+        ]
+        _install_adapters(client, gateway=_stub_gateway(read_daily_performance=rows))
+        resp = client.get(
+            "/api/v1/history/strategy-report",
+            headers={API_KEY_HEADER: key},
+        )
+        assert resp.status_code == 404
+
+    def test_strategy_report_404_when_no_rows(
+        self, private_client_with_key: tuple[TestClient, str]
+    ) -> None:
+        client, key = private_client_with_key
+        _install_adapters(client, gateway=_stub_gateway(read_daily_performance=[]))
+        resp = client.get(
+            "/api/v1/history/strategy-report",
+            headers={API_KEY_HEADER: key},
+        )
+        assert resp.status_code == 404

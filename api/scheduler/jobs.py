@@ -169,9 +169,7 @@ def create_scheduler(
 
     scheduler.add_job(
         _job_wrapper,
-        trigger=_trigger_from_standard_crontab(
-            settings.refresh_cron, timezone="Asia/Bangkok"
-        ),
+        trigger=_trigger_from_standard_crontab(settings.refresh_cron, timezone="Asia/Bangkok"),
         id="daily_refresh",
         replace_existing=True,
         misfire_grace_time=3600,
