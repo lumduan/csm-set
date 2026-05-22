@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
+from csm.adapters.gateway_client import GatewayWriteError
+from csm.adapters.payload import DEFAULT_STRATEGY_TYPE, build_ingestion_payload
 from csm.config.settings import Settings, get_settings
 from csm.data.benchmark import BenchmarkLoader
 from csm.data.exceptions import BenchmarkUnavailableError
@@ -90,7 +92,7 @@ async def run_post_refresh_hook(
     # NAV) and the live-portfolio NAV reconstruction.
     # ---------------------------------------------------------------
     prices: pd.DataFrame = pd.DataFrame()
-    if manager.postgres is not None or manager.gateway is not None:
+    if manager.postgres is not None or manager.gateway_client is not None:
         try:
             prices = store.load("prices_latest")
         except Exception:
@@ -158,7 +160,7 @@ async def run_post_refresh_hook(
     # ---------------------------------------------------------------
     live_config: LivePortfolioConfig | None = None
     live_metrics: LivePortfolioMetrics | None = None
-    if manager.gateway is not None:
+    if manager.gateway_client is not None:
         try:
             live_config = load_live_portfolio(portfolio_path)
         except Exception:
@@ -197,43 +199,43 @@ async def run_post_refresh_hook(
             )
 
     # ---------------------------------------------------------------
-    # 4. Daily performance → Gateway db_gateway.daily_performance
-    #    Skipped when live_metrics is None (no live config or no prices)
-    #    so we never write synthetic equity into the live-portfolio table.
+    # 4. Daily report → Gateway HTTP ingestion contract.
+    #    POST /api/v1/ingest/daily-report carries strategy_metadata,
+    #    performance_metrics, current_exposure, and (when built) the
+    #    StrategyReport under extended_data.report. The gateway atomically
+    #    UPSERTs into db_gateway.daily_performance and
+    #    db_gateway.strategy_report_snapshot, then auto-emits the
+    #    portfolio_snapshot row when every active strategy has reported
+    #    for the day — so we no longer need a separate snapshot write.
     # ---------------------------------------------------------------
-    if manager.gateway is not None and live_metrics is not None:
+    if manager.gateway_client is not None and live_metrics is not None:
         try:
-            gateway_metrics: dict[str, object] = live_metrics.as_dict()
-            gateway_metrics["symbols_fetched"] = (summary or {}).get("symbols_fetched", 0)
-            gateway_metrics["failures"] = (summary or {}).get("failures", 0)
-            gateway_metrics["duration_seconds"] = (summary or {}).get("duration_seconds", 0.0)
-            await manager.gateway.write_daily_performance(strategy_id, today, gateway_metrics)
+            curve: pd.Series = (
+                equity_series if equity_series is not None else pd.Series(dtype="float64")
+            )
+            payload: dict[str, object] = build_ingestion_payload(
+                strategy_id=strategy_id,
+                strategy_type=DEFAULT_STRATEGY_TYPE,
+                last_updated=today,
+                live_metrics=live_metrics,
+                equity_curve=curve,
+                report=live_metrics.report,
+            )
+            await manager.gateway_client.post_daily_report(payload)
+        except GatewayWriteError:
+            logger.warning("post-refresh hook: gateway daily-report POST failed", exc_info=True)
         except Exception:
-            logger.warning("post-refresh hook: write_daily_performance failed", exc_info=True)
-    elif manager.gateway is not None:
+            logger.warning(
+                "post-refresh hook: unexpected error building/posting daily report",
+                exc_info=True,
+            )
+    elif manager.gateway_client is not None:
         logger.info(
-            "post-refresh hook: skipping daily_performance write — no live portfolio "
+            "post-refresh hook: skipping daily-report POST — no live portfolio "
             "metrics available (config=%s, prices_empty=%s)",
             portfolio_path if live_config is None else "loaded",
             prices.empty,
         )
-
-    # ---------------------------------------------------------------
-    # 5. Portfolio snapshot → Gateway db_gateway.portfolio_snapshot
-    #    Same live-metrics gating as daily_performance.
-    # ---------------------------------------------------------------
-    if manager.gateway is not None and live_metrics is not None:
-        try:
-            snapshot: dict[str, object] = {
-                "total_portfolio": live_metrics.total_value,
-                "weighted_return": live_metrics.daily_return,
-                "combined_drawdown": live_metrics.max_drawdown,
-                "active_strategies": 1,
-                "allocation": {strategy_id: 1.0},
-            }
-            await manager.gateway.write_portfolio_snapshot(today, snapshot)
-        except Exception:
-            logger.warning("post-refresh hook: write_portfolio_snapshot failed", exc_info=True)
 
 
 async def run_post_backtest_hook(

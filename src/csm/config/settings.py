@@ -138,7 +138,30 @@ class Settings(BaseSettings):
     )
     db_gateway_dsn: str | None = Field(
         default=None,
-        description="PostgreSQL DSN for the db_gateway database (cross-strategy aggregation).",
+        description=(
+            "PostgreSQL DSN for the db_gateway database. Used by the read-only "
+            "GatewayAdapter methods (read_daily_performance, read_portfolio_snapshots). "
+            "The write-side path now goes through gateway_base_url / gateway_api_key; "
+            "this DSN is retained only for history-read code paths."
+        ),
+    )
+    gateway_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL of the API Gateway used for write-back via the standard "
+            "ingestion contract POST /api/v1/ingest/daily-report. "
+            "Required for live write-back; absent means the HTTP write path is "
+            "disabled and no daily report is posted. Example: "
+            "http://quant-api-gateway:8000."
+        ),
+    )
+    gateway_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared INTERNAL_API_KEY presented as the X-API-Key header when "
+            "posting daily reports to the gateway. Required when "
+            "gateway_base_url is set."
+        ),
     )
     mongo_uri: str | None = Field(
         default=None,

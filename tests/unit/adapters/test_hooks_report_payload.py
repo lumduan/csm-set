@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
@@ -14,11 +15,10 @@ from csm.adapters.hooks import run_post_refresh_hook
 from csm.data.store import ParquetStore
 
 
-def _make_gw() -> AsyncMock:
-    gw: AsyncMock = AsyncMock()
-    gw.write_daily_performance = AsyncMock()
-    gw.write_portfolio_snapshot = AsyncMock()
-    return gw
+def _make_gateway_client() -> AsyncMock:
+    gc: AsyncMock = AsyncMock()
+    gc.post_daily_report = AsyncMock()
+    return gc
 
 
 def _make_pg() -> AsyncMock:
@@ -64,23 +64,23 @@ def _write_yaml(tmp_path: Path) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_daily_performance_payload_includes_extended_data_report(
+async def test_daily_report_payload_includes_extended_data_report(
     tmp_path: Path,
 ) -> None:
-    gw: AsyncMock = _make_gw()
+    gc: AsyncMock = _make_gateway_client()
     pg: AsyncMock = _make_pg()
-    manager: AdapterManager = AdapterManager(postgres=pg, gateway=gw, mongo=None)
+    manager: AdapterManager = AdapterManager(postgres=pg, gateway_client=gc, mongo=None)
     prices: pd.DataFrame = _make_prices()
     store: MagicMock = _make_store(prices)
     live_path: Path = _write_yaml(tmp_path)
 
     await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
-    gw.write_daily_performance.assert_called_once()
-    metrics: dict = gw.write_daily_performance.call_args[0][2]
-    assert "extended_data" in metrics
-    assert "report" in metrics["extended_data"]
-    report_dict: dict = metrics["extended_data"]["report"]
+    gc.post_daily_report.assert_called_once()
+    payload: dict[str, Any] = gc.post_daily_report.call_args[0][0]
+    assert "extended_data" in payload
+    assert "report" in payload["extended_data"]
+    report_dict: dict[str, Any] = payload["extended_data"]["report"]
     assert "headline" in report_dict
     assert "risk_adjusted" in report_dict
     # Decimal-as-string contract
@@ -88,36 +88,34 @@ async def test_daily_performance_payload_includes_extended_data_report(
 
 
 @pytest.mark.asyncio
-async def test_daily_performance_payload_omits_report_when_no_prices(
-    tmp_path: Path,
-) -> None:
-    gw: AsyncMock = _make_gw()
+async def test_daily_report_payload_omits_when_no_prices(tmp_path: Path) -> None:
+    gc: AsyncMock = _make_gateway_client()
     pg: AsyncMock = _make_pg()
-    manager: AdapterManager = AdapterManager(postgres=pg, gateway=gw, mongo=None)
-    # Empty prices → live_metrics is None → no report
+    manager: AdapterManager = AdapterManager(postgres=pg, gateway_client=gc, mongo=None)
+    # Empty prices → live_metrics is None → no POST
     store: MagicMock = _make_store(pd.DataFrame())
     live_path: Path = _write_yaml(tmp_path)
 
     await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
-    gw.write_daily_performance.assert_not_called()
+    gc.post_daily_report.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_daily_performance_payload_omits_benchmark_when_column_missing(
+async def test_daily_report_payload_omits_benchmark_when_column_missing(
     tmp_path: Path,
 ) -> None:
     """When ``^SET.BK`` is absent from prices_latest, the report still ships,
     just with no benchmark_comparison/benchmark_equity_curve."""
-    gw: AsyncMock = _make_gw()
+    gc: AsyncMock = _make_gateway_client()
     pg: AsyncMock = _make_pg()
-    manager: AdapterManager = AdapterManager(postgres=pg, gateway=gw, mongo=None)
+    manager: AdapterManager = AdapterManager(postgres=pg, gateway_client=gc, mongo=None)
     prices: pd.DataFrame = _make_prices().drop(columns=["^SET.BK"])
     store: MagicMock = _make_store(prices)
     live_path: Path = _write_yaml(tmp_path)
 
     await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
-    gw.write_daily_performance.assert_called_once()
-    report: dict = gw.write_daily_performance.call_args[0][2]["extended_data"]["report"]
+    gc.post_daily_report.assert_called_once()
+    report: dict[str, Any] = gc.post_daily_report.call_args[0][0]["extended_data"]["report"]
     assert report.get("benchmark_comparison") is None
     assert report.get("benchmark_equity_curve") == []

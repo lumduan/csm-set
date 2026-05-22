@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from csm.adapters.gateway import GatewayAdapter
+from csm.adapters.gateway_client import GatewayClient
 from csm.adapters.mongo import MongoAdapter
 from csm.adapters.postgres import PostgresAdapter
 
@@ -36,7 +37,11 @@ class AdapterManager:
     Attributes:
         postgres: PostgresAdapter for ``db_csm_set``, or ``None`` when disabled.
         mongo: MongoAdapter for ``csm_logs``, or ``None`` when disabled.
-        gateway: Reserved for ``GatewayAdapter`` (Phase 4).
+        gateway: Read-only ``GatewayAdapter`` for ``db_gateway`` history
+            queries, or ``None`` when no DSN is configured. Writes go via
+            ``gateway_client`` instead.
+        gateway_client: HTTP client posting to the gateway's standard
+            ingestion contract, or ``None`` when not configured.
     """
 
     def __init__(
@@ -45,6 +50,7 @@ class AdapterManager:
         postgres: PostgresAdapter | None = None,
         mongo: MongoAdapter | None = None,
         gateway: GatewayAdapter | None = None,
+        gateway_client: GatewayClient | None = None,
     ) -> None:
         """Initialise the manager with already-connected adapter instances.
 
@@ -54,11 +60,13 @@ class AdapterManager:
         Args:
             postgres: Optional connected ``PostgresAdapter``.
             mongo: Optional connected ``MongoAdapter``.
-            gateway: Optional connected ``GatewayAdapter``.
+            gateway: Optional connected ``GatewayAdapter`` (read-only path).
+            gateway_client: Optional :class:`GatewayClient` (HTTP write path).
         """
         self.postgres: PostgresAdapter | None = postgres
         self.mongo: MongoAdapter | None = mongo
         self.gateway: GatewayAdapter | None = gateway
+        self.gateway_client: GatewayClient | None = gateway_client
 
     @classmethod
     async def from_settings(cls, settings: Settings) -> AdapterManager:
@@ -130,11 +138,31 @@ class AdapterManager:
             else:
                 gateway = gw_candidate
         else:
+            logger.info("db_gateway_dsn is not set; legacy read-only GatewayAdapter slot disabled")
+
+        gateway_client: GatewayClient | None = None
+        if settings.gateway_base_url and settings.gateway_api_key is not None:
+            gateway_client = GatewayClient(
+                base_url=settings.gateway_base_url,
+                api_key=settings.gateway_api_key.get_secret_value(),
+            )
+        elif settings.gateway_base_url and settings.gateway_api_key is None:
             logger.warning(
-                "db_write_enabled=True but db_gateway_dsn is not set; gateway slot disabled"
+                "gateway_base_url is set but gateway_api_key is not; "
+                "HTTP write-back disabled — no daily reports will be posted"
+            )
+        else:
+            logger.warning(
+                "db_write_enabled=True but gateway_base_url is not set; "
+                "HTTP write-back disabled — no daily reports will be posted"
             )
 
-        return cls(postgres=postgres, mongo=mongo, gateway=gateway)
+        return cls(
+            postgres=postgres,
+            mongo=mongo,
+            gateway=gateway,
+            gateway_client=gateway_client,
+        )
 
     async def close(self) -> None:
         """Close every live adapter. Idempotent.
@@ -160,6 +188,12 @@ class AdapterManager:
             except Exception:
                 logger.warning("GatewayAdapter close raised", exc_info=True)
             self.gateway = None
+        if self.gateway_client is not None:
+            try:
+                await self.gateway_client.close()
+            except Exception:
+                logger.warning("GatewayClient close raised", exc_info=True)
+            self.gateway_client = None
 
     async def ping(self) -> dict[str, str]:
         """Return per-adapter pool/client-based liveness results.
@@ -198,4 +232,10 @@ class AdapterManager:
         return results
 
 
-__all__: list[str] = ["AdapterManager", "GatewayAdapter", "MongoAdapter", "PostgresAdapter"]
+__all__: list[str] = [
+    "AdapterManager",
+    "GatewayAdapter",
+    "GatewayClient",
+    "MongoAdapter",
+    "PostgresAdapter",
+]
