@@ -61,15 +61,15 @@ async def run_post_refresh_hook(
 
     Writes split by table semantics:
 
-    - ``db_csm_set.equity_curve`` receives the synthetic equal-weight
-      universe NAV (cumulative product of cross-sectional mean returns).
-      This is a historical benchmark series, not the live portfolio.
+    - ``db_csm_set.equity_curve`` receives the *actual* live paper-trading
+      portfolio NAV series (reconstructed from ``live_portfolio.yaml``
+      positions × ``prices_latest``). When the config is missing, the
+      equity-curve write is skipped.
     - ``db_gateway.daily_performance`` and
-      ``db_gateway.portfolio_snapshot`` receive the *actual* live
-      paper-trading portfolio NAV when ``configs/live_portfolio.yaml`` is
-      present. When the config is missing, the gateway writes are
-      skipped (we never write synthetic data into the live-portfolio
-      tables — see commit message of the fix for the rationale).
+      ``db_gateway.portfolio_snapshot`` receive the same live
+      paper-trading portfolio metrics via the gateway ingestion contract.
+      When the config is missing, the gateway writes are skipped as well
+      (we never write synthetic data into any live-portfolio tables).
 
     Args:
         manager: The shared ``AdapterManager`` (each slot may be ``None``).
@@ -100,24 +100,11 @@ async def run_post_refresh_hook(
             prices = pd.DataFrame()
 
     # ---------------------------------------------------------------
-    # 1. Equity curve → Postgres db_csm_set.equity_curve
-    #    Synthetic equal-weight universe NAV computed from prices_latest.
+    # 1. Live equity curve — declared here, computed in section 3b
+    #    after live_portfolio metrics are available.  The old synthetic
+    #    equal-weight universe NAV is intentionally *not* written.
     # ---------------------------------------------------------------
     equity_series: pd.Series | None = None
-    if not prices.empty and len(prices.columns) > 0 and len(prices) > 1:
-        daily_returns: pd.Series = prices.pct_change().mean(axis=1).dropna()
-        if not daily_returns.empty:
-            equity_series = (1.0 + daily_returns).cumprod() * 100.0
-            if equity_series.index.tz is None:
-                equity_series.index = equity_series.index.tz_localize("UTC")
-            elif str(equity_series.index.tz) != "UTC":
-                equity_series.index = equity_series.index.tz_convert("UTC")
-
-    if manager.postgres is not None and equity_series is not None:
-        try:
-            await manager.postgres.write_equity_curve(strategy_id, equity_series)
-        except Exception:
-            logger.warning("post-refresh hook: write_equity_curve failed", exc_info=True)
 
     # ---------------------------------------------------------------
     # 2. Signal snapshot → Mongo csm_logs.signal_snapshots
@@ -157,10 +144,12 @@ async def run_post_refresh_hook(
     # 3. Load live-portfolio config and compute the actual paper portfolio
     #    NAV. When the config is missing or the metrics cannot be derived
     #    (e.g. prices_latest empty), the gateway writes below are skipped.
+    #    Live config is loaded when either Postgres (equity curve) or
+    #    gateway (daily report) is configured — both need it.
     # ---------------------------------------------------------------
     live_config: LivePortfolioConfig | None = None
     live_metrics: LivePortfolioMetrics | None = None
-    if manager.gateway_client is not None:
+    if manager.gateway_client is not None or manager.postgres is not None:
         try:
             live_config = load_live_portfolio(portfolio_path)
         except Exception:
@@ -197,6 +186,34 @@ async def run_post_refresh_hook(
                 strategy_id=strategy_id,
                 trades=[],  # Phase 1: trade-pairing requires historical fill stream
             )
+
+    # ---------------------------------------------------------------
+    # 3c. Live equity curve → Postgres db_csm_set.equity_curve
+    #     Reconstruct the actual live portfolio NAV series from the
+    #     live_portfolio config and prices_latest.  The series is
+    #     reconstructed whenever config + prices are available so it
+    #     can feed BOTH the Postgres write AND the gateway payload below.
+    # ---------------------------------------------------------------
+    if live_config is not None and not prices.empty:
+        try:
+            equity_series = _reconstruct_live_equity(
+                live_config=live_config, prices=prices
+            )
+        except Exception:
+            logger.warning(
+                "post-refresh hook: _reconstruct_live_equity failed", exc_info=True
+            )
+        if (
+            manager.postgres is not None
+            and equity_series is not None
+            and not equity_series.empty
+        ):
+            try:
+                await manager.postgres.write_equity_curve(strategy_id, equity_series)
+            except Exception:
+                logger.warning(
+                    "post-refresh hook: write_equity_curve failed", exc_info=True
+                )
 
     # ---------------------------------------------------------------
     # 4. Daily report → Gateway HTTP ingestion contract.

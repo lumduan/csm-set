@@ -242,14 +242,19 @@ class TestPostRefreshHook:
         assert any("failed to load prices_latest" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_localizes_tz_naive_index_to_utc(self) -> None:
+    async def test_localizes_tz_naive_index_to_utc(self, tmp_path: Path) -> None:
         pg = _make_pg()
         manager = _make_manager(postgres=pg)
         dates = pd.date_range("2026-05-01", periods=10, freq="B")  # tz-naive
-        prices = pd.DataFrame({"A": [100.0 + i * 1.0 for i in range(10)]}, index=dates)
+        symbols = ["SET:A", "SET:B", "SET:C", "SET:D", "SET:E"]
+        prices = pd.DataFrame(
+            {s: [100.0 + i * 1.0 + j * 0.1 for i in range(10)] for j, s in enumerate(symbols)},
+            index=dates,
+        )
         store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
-        await run_post_refresh_hook(manager, store)
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         pg.write_equity_curve.assert_called_once()
         series = pg.write_equity_curve.call_args[0][1]
@@ -257,14 +262,19 @@ class TestPostRefreshHook:
         assert str(series.index.tz) == "UTC"
 
     @pytest.mark.asyncio
-    async def test_converts_non_utc_tz_to_utc(self) -> None:
+    async def test_converts_non_utc_tz_to_utc(self, tmp_path: Path) -> None:
         pg = _make_pg()
         manager = _make_manager(postgres=pg)
         dates = pd.date_range("2026-05-01", periods=10, freq="B", tz="Asia/Bangkok")
-        prices = pd.DataFrame({"A": [100.0 + i * 1.0 for i in range(10)]}, index=dates)
+        symbols = ["SET:A", "SET:B", "SET:C", "SET:D", "SET:E"]
+        prices = pd.DataFrame(
+            {s: [100.0 + i * 1.0 + j * 0.1 for i in range(10)] for j, s in enumerate(symbols)},
+            index=dates,
+        )
         store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
 
-        await run_post_refresh_hook(manager, store)
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
         pg.write_equity_curve.assert_called_once()
         series = pg.write_equity_curve.call_args[0][1]
