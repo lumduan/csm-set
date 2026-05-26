@@ -177,7 +177,13 @@ async def _fetch_batch_with_retry(
 
 
 def _held_symbols_from_config(path: Path) -> list[str]:
-    """Return the sorted, bare-symbol list of held positions, or empty.
+    """Return the sorted, qualified-symbol list of held positions, or empty.
+
+    Uses ``LivePosition.qualified_symbol`` so each name carries the ``SET:``
+    prefix — the same form used by ``universe_latest.parquet`` and required by
+    the tvkit loader. Stripping the prefix here causes tvkit to fail every
+    held fetch and the merged ``fetched`` dict to use keys that downstream
+    NAV-reconstruction lookups can't find.
 
     Tolerates a missing or malformed config file by logging and returning an
     empty list — the held-priority phase is best-effort.
@@ -195,7 +201,7 @@ def _held_symbols_from_config(path: Path) -> list[str]:
         return []
     if config is None:
         return []
-    return sorted({pos.symbol.split(":", 1)[-1] for pos in config.positions})
+    return sorted({pos.qualified_symbol for pos in config.positions})
 
 
 async def daily_refresh(

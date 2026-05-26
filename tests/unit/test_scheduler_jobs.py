@@ -308,13 +308,20 @@ class TestDailyRefreshResilience:
         settings_override: Settings,
         mock_store: MagicMock,
     ) -> None:
-        """Held batch must run before universe; universe call must exclude held names."""
-        # Universe symbols: ["A", "B"]; held: ["A", "X"] (X is outside the universe).
+        """Held batch must run before universe; universe call must exclude held names.
+
+        Mirrors production: ``universe_latest.parquet`` stores SET-prefixed
+        symbols and held positions resolve to the same prefixed form via
+        ``LivePosition.qualified_symbol``.
+        """
+        # Universe stores prefixed names (production reality).
+        mock_store.load.return_value = pd.DataFrame({"symbol": ["SET:A", "SET:B"]})
         with (
             patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch(
                 "api.scheduler.jobs.load_live_portfolio",
+                # Bare names in YAML are common; qualified_symbol prefixes them.
                 return_value=_held_config("A", "X"),
             ),
             patch("api.scheduler.jobs._sleep", new=AsyncMock()),
@@ -322,8 +329,8 @@ class TestDailyRefreshResilience:
             mock_loader = MockLoader.return_value
             mock_loader.fetch_batch = AsyncMock(
                 side_effect=[
-                    {"A": _ohlcv_frame(100.0), "X": _ohlcv_frame(50.0)},  # held
-                    {"B": _ohlcv_frame(200.0)},  # universe (excluding held)
+                    {"SET:A": _ohlcv_frame(100.0), "SET:X": _ohlcv_frame(50.0)},  # held
+                    {"SET:B": _ohlcv_frame(200.0)},  # universe (excluding held)
                 ]
             )
 
@@ -331,14 +338,14 @@ class TestDailyRefreshResilience:
 
         calls = mock_loader.fetch_batch.call_args_list
         assert len(calls) == 2, "Expected one held-phase call and one universe call"
-        # First call is the held batch — sorted bare-symbol list.
-        assert calls[0].kwargs["symbols"] == ["A", "X"]
+        # First call is the held batch — sorted, SET-prefixed names.
+        assert calls[0].kwargs["symbols"] == ["SET:A", "SET:X"]
         # Second call is the universe sweep, with held names removed.
-        assert calls[1].kwargs["symbols"] == ["B"]
+        assert calls[1].kwargs["symbols"] == ["SET:B"]
 
         assert result["held_symbols_fetched"] == 2
         assert result["held_symbols_failed"] == 0
-        # Both universe-only symbols + the held-only "X" all counted.
+        # Universe-only "SET:B" + both held "SET:A", "SET:X" all counted.
         assert result["symbols_fetched"] == 3
 
     async def test_daily_refresh_held_failure_still_runs_universe(
@@ -347,20 +354,22 @@ class TestDailyRefreshResilience:
         mock_store: MagicMock,
     ) -> None:
         """Held batch exhausts retries; universe phase + hook still run."""
+        mock_store.load.return_value = pd.DataFrame({"symbol": ["SET:A", "SET:B"]})
         with (
             patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch(
                 "api.scheduler.jobs.load_live_portfolio",
-                return_value=_held_config("X"),  # "X" never succeeds
+                # "X" → qualified_symbol "SET:X", which never succeeds.
+                return_value=_held_config("X"),
             ),
             patch("api.scheduler.jobs._sleep", new=AsyncMock()),
         ):
             mock_loader = MockLoader.return_value
             mock_loader.fetch_batch = AsyncMock(
                 side_effect=lambda symbols, **_: (
-                    {}  # held batch: nothing ever succeeds for "X"
-                    if symbols == ["X"]
+                    {}  # held batch: nothing ever succeeds for "SET:X"
+                    if symbols == ["SET:X"]
                     else {s: _ohlcv_frame(100.0) for s in symbols}  # universe: full success
                 )
             )
@@ -377,7 +386,7 @@ class TestDailyRefreshResilience:
         assert result["held_symbols_fetched"] == 0
         assert result["held_symbols_failed"] == 1
         # Universe still completed.
-        assert result["symbols_fetched"] == 2  # "A" and "B"
+        assert result["symbols_fetched"] == 2  # "SET:A" and "SET:B"
         # Hook was still called despite the held failure — it will internally
         # skip the gateway POST when compute_live_portfolio_metrics returns None.
         hook_mock.assert_awaited_once()
