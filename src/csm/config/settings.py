@@ -111,6 +111,32 @@ class Settings(BaseSettings):
         default="0 18 * * 1-5",
         description="Cron schedule for owner-side refresh jobs.",
     )
+    refresh_held_max_attempts: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "Total outer-loop attempts for the held-symbols batch in daily_refresh "
+            "(1 initial + N-1 retries). Held symbols are critical for NAV "
+            "reconstruction, so this defaults higher than the universe sweep."
+        ),
+    )
+    refresh_universe_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Total outer-loop attempts for the universe sweep in daily_refresh "
+            "(1 initial + N-1 retries)."
+        ),
+    )
+    refresh_retry_delay_secs: int = Field(
+        default=60,
+        ge=0,
+        description=(
+            "Base backoff (seconds) between outer-loop retries in daily_refresh. "
+            "Each subsequent retry doubles the wait (60s → 120s → 240s) with "
+            "±20% jitter to let TradingView's connection pool recover."
+        ),
+    )
     tvkit_adjustment: str = Field(
         default="dividends",
         description=(

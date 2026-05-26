@@ -7,6 +7,8 @@ runner contract, marker file writing, and failure-safe wrapper behaviour.
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -17,6 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
+from csm.live.portfolio import LivePortfolioConfig, LivePosition
 
 
 @pytest.fixture
@@ -86,6 +89,22 @@ class TestCreateSchedulerConfig:
 
 class TestDailyRefreshRunner:
     """validate the refactored runner contract and marker file behaviour."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_from_resilience_features(self) -> Generator[None, None, None]:
+        """Skip Phase 1 (held symbols) and short-circuit retry sleeps.
+
+        These legacy tests pre-date the held-priority / outer-retry features
+        and use ``mock_store`` symbols ("A", "B") that intentionally diverge
+        from the real ``configs/live_portfolio.yaml``. Patching
+        ``load_live_portfolio`` keeps them focused on the universe path, and
+        patching ``_sleep`` keeps retry-bearing tests like
+        ``test_tracks_failures`` from waiting on real backoff windows."""
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+        ):
+            yield
 
     @pytest.fixture
     def fetched_data(self) -> dict[str, pd.DataFrame]:
@@ -217,3 +236,216 @@ class TestSchedulerWrapper:
         with patch("api.scheduler.jobs.daily_refresh", side_effect=RuntimeError("boom")):
             # The wrapper must not propagate the exception.
             await wrapper()
+
+
+def _ohlcv_frame(close_price: float = 100.0) -> pd.DataFrame:
+    """Build a minimal OHLCV frame for fetch_batch mocks."""
+    dates = pd.date_range("2024-01-01", periods=5, freq="B", tz="Asia/Bangkok")
+    return pd.DataFrame(
+        {
+            "open": [close_price] * 5,
+            "high": [close_price * 1.01] * 5,
+            "low": [close_price * 0.99] * 5,
+            "close": [close_price] * 5,
+            "volume": [1_000_000.0] * 5,
+        },
+        index=dates,
+    )
+
+
+def _held_config(*symbols: str) -> LivePortfolioConfig:
+    """Build a LivePortfolioConfig with the given bare symbols as positions."""
+    return LivePortfolioConfig(
+        strategy_id="test",
+        entry_date=date(2026, 5, 5),
+        starting_nav=1_000_000.0,
+        cash=0.0,
+        positions=tuple(LivePosition(symbol=s, shares=100.0, avg_cost=100.0) for s in symbols),
+    )
+
+
+class TestDailyRefreshResilience:
+    """A+C: outer-loop retry on failed symbols + held-symbols-first priority."""
+
+    async def test_daily_refresh_retries_failed_symbols(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+    ) -> None:
+        """Attempt 1 fails one symbol; retry recovers it. ``retry_attempts_used == 1``."""
+        with (
+            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()) as mock_sleep,
+        ):
+            mock_loader = MockLoader.return_value
+            mock_loader.fetch_batch = AsyncMock(
+                side_effect=[
+                    {"A": _ohlcv_frame(100.0)},  # universe attempt 1: B missing
+                    {"B": _ohlcv_frame(200.0)},  # universe retry of just ["B"]
+                ]
+            )
+
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+        assert result["symbols_fetched"] == 2
+        assert result["failures"] == 0
+        assert result["retry_attempts_used"] == 1
+        # Retry call must request only the failed subset.
+        second_call = mock_loader.fetch_batch.call_args_list[1]
+        assert second_call.kwargs["symbols"] == ["B"]
+        # The sleep happened once (before the retry).
+        mock_sleep.assert_awaited_once()
+
+        marker_path = settings_override.results_dir / ".tmp" / "last_refresh.json"
+        marker = json.loads(marker_path.read_text())
+        assert marker["retry_attempts_used"] == 1
+        assert marker["failures"] == 0
+
+    async def test_daily_refresh_fetches_held_symbols_first(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+    ) -> None:
+        """Held batch must run before universe; universe call must exclude held names."""
+        # Universe symbols: ["A", "B"]; held: ["A", "X"] (X is outside the universe).
+        with (
+            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch(
+                "api.scheduler.jobs.load_live_portfolio",
+                return_value=_held_config("A", "X"),
+            ),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+        ):
+            mock_loader = MockLoader.return_value
+            mock_loader.fetch_batch = AsyncMock(
+                side_effect=[
+                    {"A": _ohlcv_frame(100.0), "X": _ohlcv_frame(50.0)},  # held
+                    {"B": _ohlcv_frame(200.0)},  # universe (excluding held)
+                ]
+            )
+
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+        calls = mock_loader.fetch_batch.call_args_list
+        assert len(calls) == 2, "Expected one held-phase call and one universe call"
+        # First call is the held batch — sorted bare-symbol list.
+        assert calls[0].kwargs["symbols"] == ["A", "X"]
+        # Second call is the universe sweep, with held names removed.
+        assert calls[1].kwargs["symbols"] == ["B"]
+
+        assert result["held_symbols_fetched"] == 2
+        assert result["held_symbols_failed"] == 0
+        # Both universe-only symbols + the held-only "X" all counted.
+        assert result["symbols_fetched"] == 3
+
+    async def test_daily_refresh_held_failure_still_runs_universe(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+    ) -> None:
+        """Held batch exhausts retries; universe phase + hook still run."""
+        with (
+            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch(
+                "api.scheduler.jobs.load_live_portfolio",
+                return_value=_held_config("X"),  # "X" never succeeds
+            ),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+        ):
+            mock_loader = MockLoader.return_value
+            mock_loader.fetch_batch = AsyncMock(
+                side_effect=lambda symbols, **_: (
+                    {}  # held batch: nothing ever succeeds for "X"
+                    if symbols == ["X"]
+                    else {s: _ohlcv_frame(100.0) for s in symbols}  # universe: full success
+                )
+            )
+
+            hook_mock = AsyncMock()
+            with patch("csm.adapters.hooks.run_post_refresh_hook", new=hook_mock):
+                # Pass a sentinel non-None adapters so the hook is invoked.
+                result = await daily_refresh(
+                    settings=settings_override,
+                    store=mock_store,
+                    adapters=MagicMock(),
+                )
+
+        assert result["held_symbols_fetched"] == 0
+        assert result["held_symbols_failed"] == 1
+        # Universe still completed.
+        assert result["symbols_fetched"] == 2  # "A" and "B"
+        # Hook was still called despite the held failure — it will internally
+        # skip the gateway POST when compute_live_portfolio_metrics returns None.
+        hook_mock.assert_awaited_once()
+
+        marker_path = settings_override.results_dir / ".tmp" / "last_refresh.json"
+        marker = json.loads(marker_path.read_text())
+        assert marker["held_symbols_failed"] == 1
+        # Held batch was retried up to its max-attempts setting.
+        assert marker["retry_attempts_used"] >= settings_override.refresh_held_max_attempts - 1
+
+    async def test_daily_refresh_no_live_portfolio_config(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+    ) -> None:
+        """No YAML → held phase skipped; single universe fetch_batch runs."""
+        with (
+            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+        ):
+            mock_loader = MockLoader.return_value
+            mock_loader.fetch_batch = AsyncMock(
+                return_value={
+                    "A": _ohlcv_frame(100.0),
+                    "B": _ohlcv_frame(200.0),
+                }
+            )
+
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+        # Exactly one batch — the universe sweep.
+        assert mock_loader.fetch_batch.await_count == 1
+        assert mock_loader.fetch_batch.call_args.kwargs["symbols"] == ["A", "B"]
+        assert result["held_symbols_fetched"] == 0
+        assert result["held_symbols_failed"] == 0
+        assert result["retry_attempts_used"] == 0
+
+    async def test_marker_file_extended_fields(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+    ) -> None:
+        """Marker file contains the new fields AND preserves the original four."""
+        with (
+            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+        ):
+            mock_loader = MockLoader.return_value
+            mock_loader.fetch_batch = AsyncMock(
+                return_value={
+                    "A": _ohlcv_frame(100.0),
+                    "B": _ohlcv_frame(200.0),
+                }
+            )
+
+            await daily_refresh(settings=settings_override, store=mock_store)
+
+        marker_path = settings_override.results_dir / ".tmp" / "last_refresh.json"
+        marker = json.loads(marker_path.read_text())
+        # Original keys preserved verbatim.
+        for key in ("timestamp", "symbols_fetched", "duration_seconds", "failures"):
+            assert key in marker, f"original key {key!r} missing from marker file"
+        # New keys present.
+        for key in (
+            "held_symbols_fetched",
+            "held_symbols_failed",
+            "retry_attempts_used",
+        ):
+            assert key in marker, f"new key {key!r} missing from marker file"
