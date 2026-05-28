@@ -22,5 +22,8 @@
       "WebFetch(domain:pypi.org)"
     ],
     "deny": []
+  },
+  "enabledPlugins": {
+    "github@claude-plugins-official": true
   }
 }
