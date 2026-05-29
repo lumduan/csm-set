@@ -26,8 +26,9 @@
 
 - [x] A.1 Environment Lock
 - [x] A.2 Configuration
-- [ ] A.3 Infrastructure Check (container healthy — 72h stability period started 2026-05-04)
+- [x] A.3 Infrastructure Check (19/19 May sessions refreshed; scheduler cron bug fixed `7be6762` and validated — 3 consecutive clean unattended fires May 21/22/25; see [events/2026-05-18-scheduler-cron-misfire.md](events/2026-05-18-scheduler-cron-misfire.md))
 - [x] A.4 Baseline Reporting (research report complete — 132 symbols ranked, top 10 buy list ready)
+- First monthly review committed: [monthly/2026-05.md](monthly/2026-05.md)
 
 ## Everyday Job Summary
 
@@ -53,13 +54,13 @@ These are the **only exit mechanisms tested in the 15-year backtest** (207 rebal
 
 ## Key Metrics at a Glance
 
-_Last updated: 2026-05-04_
+_Last updated: 2026-05-29_
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Cumulative Return | 0.00% | Positive | — |
-| NAV | 1,000,000 THB | — | — |
-| Sharpe Ratio | N/A | >= 0.5 | — |
-| Max Drawdown | 0.00% | > -15% | — |
-| Data Completeness | 100% (1/1 days) | >= 95% | OK |
-| System Uptime | Container healthy @ 8100 | >= 99% | OK |
+| Cumulative Return | +0.33% | Positive | OK |
+| NAV | 1,003,342.71 THB | — | — |
+| Sharpe Ratio | 0.91 (annualized, n=18) | >= 0.5 | OK (small-sample) |
+| Max Drawdown | -4.60% (May 19) | > -15% | OK |
+| Data Completeness | 100% (19/19 days) | >= 95% | OK |
+| System Uptime | Container healthy @ 8100; scheduler validated | >= 99% | OK |
