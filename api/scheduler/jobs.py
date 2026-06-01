@@ -16,7 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from csm.config.settings import Settings
-from csm.data.loader import OHLCVLoader
+from csm.data.sources import OHLCVSource, build_ohlcv_loader
 from csm.data.store import ParquetStore
 from csm.features.pipeline import FeaturePipeline
 from csm.live.portfolio import load_live_portfolio
@@ -97,7 +97,7 @@ def _trigger_from_standard_crontab(expr: str, timezone: str) -> CronTrigger:
 
 
 async def _fetch_batch_with_retry(
-    loader: OHLCVLoader,
+    loader: OHLCVSource,
     symbols: list[str],
     *,
     max_attempts: int,
@@ -220,7 +220,7 @@ async def daily_refresh(
     symbols: list[str] = (
         universe["symbol"].astype(str).tolist() if "symbol" in universe.columns else []
     )
-    loader: OHLCVLoader = OHLCVLoader(settings=settings)
+    loader: OHLCVSource = build_ohlcv_loader(settings)
 
     held_symbols: list[str] = _held_symbols_from_config(DEFAULT_LIVE_PORTFOLIO_PATH)
     held_set: set[str] = set(held_symbols)

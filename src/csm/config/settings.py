@@ -3,6 +3,7 @@
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
 
 from pydantic import (
     BaseModel,
@@ -10,6 +11,7 @@ from pydantic import (
     Field,
     SecretStr,
     field_validator,
+    model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -214,6 +216,43 @@ class Settings(BaseSettings):
             "read-only and never builds the report at runtime."
         ),
     )
+    ohlcv_source: str = Field(
+        default="parquet",
+        description=(
+            "OHLCV acquisition source for the owner-side daily refresh. "
+            "'parquet' (default) — fetch from tvkit and persist the local Parquet "
+            "store, the unchanged legacy behaviour. 'db' — read pre-fetched bars "
+            "from the Market Data Engine read API instead of touching tvkit "
+            "(no tvkit cookie required in csm-set). See feature-market-data-engine "
+            "Phase 3."
+        ),
+    )
+    market_data_engine_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL of the Market Data Engine read API, used when "
+            "ohlcv_source='db'. Inside quant-network use the service hostname, "
+            "e.g. http://quant-marketdata-engine:8000; for host-local dev use "
+            "http://localhost:8300. Required when ohlcv_source='db'; ignored "
+            "otherwise."
+        ),
+    )
+    market_data_engine_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared secret presented as the X-API-Key header to the Market Data "
+            "Engine read API. Optional — the engine only enforces it when its own "
+            "MARKETDATA_ENGINE_API_KEY is set. Never logged."
+        ),
+    )
+
+    @field_validator("ohlcv_source")
+    @classmethod
+    def _validate_ohlcv_source(cls, value: str) -> str:
+        allowed: set[str] = {"parquet", "db"}
+        if value not in allowed:
+            raise ValueError(f"ohlcv_source must be one of {sorted(allowed)!r}, got {value!r}")
+        return value
 
     @field_validator("tvkit_adjustment")
     @classmethod
@@ -252,6 +291,17 @@ class Settings(BaseSettings):
         # Run full structural validation now — discard the model, keep the raw string.
         TradingViewCookies.model_validate(payload)
         return value
+
+    @model_validator(mode="after")
+    def _require_engine_url_for_db_source(self) -> Self:
+        """Fail fast if ``ohlcv_source='db'`` without a Market Data Engine URL."""
+        if self.ohlcv_source == "db" and not self.market_data_engine_base_url:
+            raise ValueError(
+                "CSM_MARKET_DATA_ENGINE_BASE_URL is required when CSM_OHLCV_SOURCE='db' "
+                "(e.g. http://quant-marketdata-engine:8000 in-cluster or "
+                "http://localhost:8300 for host-local dev)."
+            )
+        return self
 
     @property
     def tvkit_cookies(self) -> TradingViewCookies | None:

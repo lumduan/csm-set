@@ -139,7 +139,7 @@ class TestDailyRefreshRunner:
         fetched_data: dict[str, pd.DataFrame],
     ) -> None:
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
@@ -160,7 +160,7 @@ class TestDailyRefreshRunner:
         fetched_data: dict[str, pd.DataFrame],
     ) -> None:
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
@@ -183,7 +183,7 @@ class TestDailyRefreshRunner:
         fetched_data: dict[str, pd.DataFrame],
     ) -> None:
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
@@ -205,7 +205,7 @@ class TestDailyRefreshRunner:
         """Failures count = requested symbols - successfully fetched."""
         partial = {"A": fetched_data["A"]}
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
@@ -274,7 +274,7 @@ class TestDailyRefreshResilience:
     ) -> None:
         """Attempt 1 fails one symbol; retry recovers it. ``retry_attempts_used == 1``."""
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
             patch("api.scheduler.jobs._sleep", new=AsyncMock()) as mock_sleep,
@@ -317,7 +317,7 @@ class TestDailyRefreshResilience:
         # Universe stores prefixed names (production reality).
         mock_store.load.return_value = pd.DataFrame({"symbol": ["SET:A", "SET:B"]})
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch(
                 "api.scheduler.jobs.load_live_portfolio",
@@ -356,7 +356,7 @@ class TestDailyRefreshResilience:
         """Held batch exhausts retries; universe phase + hook still run."""
         mock_store.load.return_value = pd.DataFrame({"symbol": ["SET:A", "SET:B"]})
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch(
                 "api.scheduler.jobs.load_live_portfolio",
@@ -404,7 +404,7 @@ class TestDailyRefreshResilience:
     ) -> None:
         """No YAML → held phase skipped; single universe fetch_batch runs."""
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
         ):
@@ -432,7 +432,7 @@ class TestDailyRefreshResilience:
     ) -> None:
         """Marker file contains the new fields AND preserves the original four."""
         with (
-            patch("api.scheduler.jobs.OHLCVLoader") as MockLoader,
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
         ):

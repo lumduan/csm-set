@@ -13,6 +13,10 @@ class FetchError(DataError):
     """Raised when a tvkit fetch fails after all retries."""
 
 
+class EngineReadError(DataError):
+    """Raised when reading OHLCV from the Market Data Engine fails."""
+
+
 class UniverseError(DataError):
     """Raised when universe construction fails or produces an empty result."""
 
@@ -29,6 +33,7 @@ __all__: list[str] = [
     "BenchmarkUnavailableError",
     "DataAccessError",
     "DataError",
+    "EngineReadError",
     "FetchError",
     "StoreError",
     "UniverseError",

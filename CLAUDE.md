@@ -90,6 +90,25 @@ RequestIDMiddleware → AccessLogMiddleware → APIKeyMiddleware → public_mode
 - `AdapterManager` (in `app.state.adapters`) is constructed once in `lifespan` and owns the Postgres/Mongo/gateway pools. `await adapters.close()` and `scheduler.shutdown(wait=False)` run on shutdown.
 - The APScheduler scheduler is created via `api.scheduler.jobs.create_scheduler` only in private mode; it owns the daily refresh job.
 
+### OHLCV source (`CSM_OHLCV_SOURCE`)
+
+The owner-side daily refresh acquires OHLCV through a small factory
+(`csm.data.sources.build_ohlcv_loader`) selected by `CSM_OHLCV_SOURCE`:
+
+- **`parquet`** (default): the unchanged legacy path — `OHLCVLoader` fetches tvkit and
+  persists the local Parquet store. Requires `TVKIT_AUTH_TOKEN`.
+- **`db`**: `MarketDataEngineLoader` reads pre-fetched bars from the **Market Data Engine**
+  (`quant-marketdata-engine`, host `:8300`) over HTTP via
+  `csm.adapters.market_data_engine_client`. csm-set holds **no tvkit cookie** on this path.
+  Requires `CSM_MARKET_DATA_ENGINE_BASE_URL` (e.g. `http://quant-marketdata-engine:8000`
+  in-cluster, `http://localhost:8300` for dev); `CSM_MARKET_DATA_ENGINE_API_KEY` is optional
+  (only when the engine sets its own key).
+
+Both loaders return the identical DataFrame shape (`open/high/low/close/volume` floats,
+`Asia/Bangkok` `datetime` index), so downstream logic is source-agnostic. Default is
+unchanged behaviour; rollback = leave the flag unset / `parquet`. This is Phase 3 of
+`feature-market-data-engine`.
+
 ### Adapters and storage
 
 - **Parquet (PyArrow)** is the durable store for all tabular data in `data/` (gitignored) and `results/static/` (tracked). Partition by date where feasible; set column dtypes explicitly on read.
