@@ -3,6 +3,7 @@
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
 
 from pydantic import (
     BaseModel,
@@ -10,6 +11,7 @@ from pydantic import (
     Field,
     SecretStr,
     field_validator,
+    model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -111,6 +113,32 @@ class Settings(BaseSettings):
         default="0 18 * * 1-5",
         description="Cron schedule for owner-side refresh jobs.",
     )
+    refresh_held_max_attempts: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "Total outer-loop attempts for the held-symbols batch in daily_refresh "
+            "(1 initial + N-1 retries). Held symbols are critical for NAV "
+            "reconstruction, so this defaults higher than the universe sweep."
+        ),
+    )
+    refresh_universe_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Total outer-loop attempts for the universe sweep in daily_refresh "
+            "(1 initial + N-1 retries)."
+        ),
+    )
+    refresh_retry_delay_secs: int = Field(
+        default=60,
+        ge=0,
+        description=(
+            "Base backoff (seconds) between outer-loop retries in daily_refresh. "
+            "Each subsequent retry doubles the wait (60s → 120s → 240s) with "
+            "±20% jitter to let TradingView's connection pool recover."
+        ),
+    )
     tvkit_adjustment: str = Field(
         default="dividends",
         description=(
@@ -138,7 +166,30 @@ class Settings(BaseSettings):
     )
     db_gateway_dsn: str | None = Field(
         default=None,
-        description="PostgreSQL DSN for the db_gateway database (cross-strategy aggregation).",
+        description=(
+            "PostgreSQL DSN for the db_gateway database. Used by the read-only "
+            "GatewayAdapter methods (read_daily_performance, read_portfolio_snapshots). "
+            "The write-side path now goes through gateway_base_url / gateway_api_key; "
+            "this DSN is retained only for history-read code paths."
+        ),
+    )
+    gateway_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL of the API Gateway used for write-back via the standard "
+            "ingestion contract POST /api/v1/ingest/daily-report. "
+            "Required for live write-back; absent means the HTTP write path is "
+            "disabled and no daily report is posted. Example: "
+            "http://quant-api-gateway:8000."
+        ),
+    )
+    gateway_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared INTERNAL_API_KEY presented as the X-API-Key header when "
+            "posting daily reports to the gateway. Required when "
+            "gateway_base_url is set."
+        ),
     )
     mongo_uri: str | None = Field(
         default=None,
@@ -148,6 +199,60 @@ class Settings(BaseSettings):
         default=False,
         description="Enable DB write-back after pipeline events when True.",
     )
+    benchmark_symbol: str = Field(
+        default="^SET.BK",
+        description=(
+            "Buy-and-hold benchmark symbol used by the per-strategy report's "
+            "benchmark_equity_curve and benchmark_comparison sections. The column "
+            "of this name must be present in the local prices store; if absent, "
+            "the report is emitted without benchmark fields."
+        ),
+    )
+    report_enable_public: bool = Field(
+        default=True,
+        description=(
+            "When True (default), include the per-strategy report payload in the "
+            "public results/static/ export. Owner mode only — public mode is "
+            "read-only and never builds the report at runtime."
+        ),
+    )
+    ohlcv_source: str = Field(
+        default="db",
+        description=(
+            "OHLCV acquisition source for the owner-side daily refresh. "
+            "'db' (default) — read pre-fetched bars from the Market Data Engine "
+            "read API instead of touching tvkit (no tvkit cookie required in "
+            "csm-set). 'parquet' — fetch from tvkit and persist the local Parquet "
+            "store (DEPRECATED legacy path; kept for rollback). See "
+            "feature-market-data-engine Phase 5."
+        ),
+    )
+    market_data_engine_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL of the Market Data Engine read API, used when "
+            "ohlcv_source='db'. Inside quant-network use the service hostname, "
+            "e.g. http://quant-marketdata-engine:8000; for host-local dev use "
+            "http://localhost:8300. Required when ohlcv_source='db'; ignored "
+            "otherwise."
+        ),
+    )
+    market_data_engine_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared secret presented as the X-API-Key header to the Market Data "
+            "Engine read API. Optional — the engine only enforces it when its own "
+            "MARKETDATA_ENGINE_API_KEY is set. Never logged."
+        ),
+    )
+
+    @field_validator("ohlcv_source")
+    @classmethod
+    def _validate_ohlcv_source(cls, value: str) -> str:
+        allowed: set[str] = {"parquet", "db"}
+        if value not in allowed:
+            raise ValueError(f"ohlcv_source must be one of {sorted(allowed)!r}, got {value!r}")
+        return value
 
     @field_validator("tvkit_adjustment")
     @classmethod
@@ -186,6 +291,17 @@ class Settings(BaseSettings):
         # Run full structural validation now — discard the model, keep the raw string.
         TradingViewCookies.model_validate(payload)
         return value
+
+    @model_validator(mode="after")
+    def _require_engine_url_for_db_source(self) -> Self:
+        """Fail fast if ``ohlcv_source='db'`` without a Market Data Engine URL."""
+        if self.ohlcv_source == "db" and not self.market_data_engine_base_url:
+            raise ValueError(
+                "CSM_MARKET_DATA_ENGINE_BASE_URL is required when CSM_OHLCV_SOURCE='db' "
+                "(e.g. http://quant-marketdata-engine:8000 in-cluster or "
+                "http://localhost:8300 for host-local dev)."
+            )
+        return self
 
     @property
     def tvkit_cookies(self) -> TradingViewCookies | None:

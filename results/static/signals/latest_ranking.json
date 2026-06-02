@@ -1,0 +1,931 @@
+{
+  "schema_version": "1.0",
+  "as_of": "2026-04-30",
+  "description": "Cross-sectional momentum ranking. No raw price data.",
+  "rankings": [
+    {
+      "symbol": "SET:3BBIF",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.39186742901802063,
+      "rank_pct": 0.6439393939393939
+    },
+    {
+      "symbol": "SET:AAI",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.6983687877655029,
+      "rank_pct": 0.20454545454545456
+    },
+    {
+      "symbol": "SET:AAV",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6823961138725281,
+      "rank_pct": 0.2196969696969697
+    },
+    {
+      "symbol": "SET:ACE",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.13465650379657745,
+      "rank_pct": 0.42424242424242425
+    },
+    {
+      "symbol": "SET:ADVANC",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.7786977887153625,
+      "rank_pct": 0.7878787878787878
+    },
+    {
+      "symbol": "SET:ADVICE",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.638405442237854,
+      "rank_pct": 0.7424242424242424
+    },
+    {
+      "symbol": "SET:AGE",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.6789122819900513,
+      "rank_pct": 0.9696969696969697
+    },
+    {
+      "symbol": "SET:AIE",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.14010338485240936,
+      "rank_pct": 0.5227272727272727
+    },
+    {
+      "symbol": "SET:AJ",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.7126638889312744,
+      "rank_pct": 0.7651515151515151
+    },
+    {
+      "symbol": "SET:ALT",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8644332885742188,
+      "rank_pct": 0.8333333333333334
+    },
+    {
+      "symbol": "SET:AMATA",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8556756377220154,
+      "rank_pct": 0.8257575757575758
+    },
+    {
+      "symbol": "SET:AOT",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.7678698301315308,
+      "rank_pct": 0.7803030303030303
+    },
+    {
+      "symbol": "SET:AP",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.13015863299369812,
+      "rank_pct": 0.5151515151515151
+    },
+    {
+      "symbol": "SET:AS",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9079400897026062,
+      "rank_pct": 0.8712121212121212
+    },
+    {
+      "symbol": "SET:AURA",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.760861873626709,
+      "rank_pct": 0.1893939393939394
+    },
+    {
+      "symbol": "SET:AWC",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.2943769693374634,
+      "rank_pct": 0.3484848484848485
+    },
+    {
+      "symbol": "SET:BA",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6651017665863037,
+      "rank_pct": 0.22727272727272727
+    },
+    {
+      "symbol": "SET:BAM",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.3478521406650543,
+      "rank_pct": 0.6136363636363636
+    },
+    {
+      "symbol": "SET:BANPU",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8665345311164856,
+      "rank_pct": 0.8409090909090909
+    },
+    {
+      "symbol": "SET:BBGI",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9031289219856262,
+      "rank_pct": 0.8636363636363636
+    },
+    {
+      "symbol": "SET:BBIK",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.205140471458435,
+      "rank_pct": 0.12878787878787878
+    },
+    {
+      "symbol": "SET:BBL",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5477585196495056,
+      "rank_pct": 0.696969696969697
+    },
+    {
+      "symbol": "SET:BCH",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.3786195516586304,
+      "rank_pct": 0.09848484848484848
+    },
+    {
+      "symbol": "SET:BCP",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.20089901983737946,
+      "rank_pct": 0.553030303030303
+    },
+    {
+      "symbol": "SET:BCPG",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.015618140809237957,
+      "rank_pct": 0.44696969696969696
+    },
+    {
+      "symbol": "SET:BDMS",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.7818470001220703,
+      "rank_pct": 0.17424242424242425
+    },
+    {
+      "symbol": "SET:BEC",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.1684467792510986,
+      "rank_pct": 0.03787878787878788
+    },
+    {
+      "symbol": "SET:BEM",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.2965543866157532,
+      "rank_pct": 0.3409090909090909
+    },
+    {
+      "symbol": "SET:BGRIM",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.2245272845029831,
+      "rank_pct": 0.5681818181818182
+    },
+    {
+      "symbol": "SET:BH",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.1843288540840149,
+      "rank_pct": 0.4090909090909091
+    },
+    {
+      "symbol": "SET:BJC",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.6743078231811523,
+      "rank_pct": 0.06818181818181818
+    },
+    {
+      "symbol": "SET:BLA",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5142722129821777,
+      "rank_pct": 0.6818181818181818
+    },
+    {
+      "symbol": "SET:BPP",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.6454648971557617,
+      "rank_pct": 0.9545454545454546
+    },
+    {
+      "symbol": "SET:BTG",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.2867256700992584,
+      "rank_pct": 0.5909090909090909
+    },
+    {
+      "symbol": "SET:BTS",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.5949795246124268,
+      "rank_pct": 0.011363636363636364
+    },
+    {
+      "symbol": "SET:BTSGIF",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.34211465716362,
+      "rank_pct": 0.32575757575757575
+    },
+    {
+      "symbol": "SET:CBG",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.6905440092086792,
+      "rank_pct": 0.06060606060606061
+    },
+    {
+      "symbol": "SET:CCET",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.3400348126888275,
+      "rank_pct": 0.3333333333333333
+    },
+    {
+      "symbol": "SET:CENTEL",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.6527770757675171,
+      "rank_pct": 0.75
+    },
+    {
+      "symbol": "SET:CHAYO",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.0627832412719727,
+      "rank_pct": 0.05303030303030303
+    },
+    {
+      "symbol": "SET:CHG",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6258310675621033,
+      "rank_pct": 0.23484848484848486
+    },
+    {
+      "symbol": "SET:CK",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.04438989982008934,
+      "rank_pct": 0.4696969696969697
+    },
+    {
+      "symbol": "SET:CKP",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.49941518902778625,
+      "rank_pct": 0.2878787878787879
+    },
+    {
+      "symbol": "SET:COCOCO",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.3829724192619324,
+      "rank_pct": 0.30303030303030304
+    },
+    {
+      "symbol": "SET:COM7",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.28329041600227356,
+      "rank_pct": 0.5833333333333334
+    },
+    {
+      "symbol": "SET:CPALL",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.45576903223991394,
+      "rank_pct": 0.29545454545454547
+    },
+    {
+      "symbol": "SET:CPAXT",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.5683085918426514,
+      "rank_pct": 0.07575757575757576
+    },
+    {
+      "symbol": "SET:CPF",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.7393178343772888,
+      "rank_pct": 0.19696969696969696
+    },
+    {
+      "symbol": "SET:CPN",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8067864179611206,
+      "rank_pct": 0.803030303030303
+    },
+    {
+      "symbol": "SET:CPNREIT",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.11740018427371979,
+      "rank_pct": 0.4318181818181818
+    },
+    {
+      "symbol": "SET:CRC",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.7951632738113403,
+      "rank_pct": 0.16666666666666666
+    },
+    {
+      "symbol": "SET:DCC",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6847113370895386,
+      "rank_pct": 0.21212121212121213
+    },
+    {
+      "symbol": "SET:DELTA",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 2.365635871887207,
+      "rank_pct": 0.9962121212121212
+    },
+    {
+      "symbol": "SET:DIF",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.567535400390625,
+      "rank_pct": 0.7045454545454546
+    },
+    {
+      "symbol": "SET:DITTO",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.11939872801303864,
+      "rank_pct": 0.5
+    },
+    {
+      "symbol": "SET:DMT",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.351822167634964,
+      "rank_pct": 0.6212121212121212
+    },
+    {
+      "symbol": "SET:DOHOME",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.1594833135604858,
+      "rank_pct": 0.13636363636363635
+    },
+    {
+      "symbol": "SET:EA",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8869466781616211,
+      "rank_pct": 0.8560606060606061
+    },
+    {
+      "symbol": "SET:EASTW",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.1411411762237549,
+      "rank_pct": 0.9090909090909091
+    },
+    {
+      "symbol": "SET:EGCO",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.4461701214313507,
+      "rank_pct": 0.6590909090909091
+    },
+    {
+      "symbol": "SET:EPG",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8097378015518188,
+      "rank_pct": 0.8106060606060606
+    },
+    {
+      "symbol": "SET:ERW",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.0652160495519638,
+      "rank_pct": 0.4772727272727273
+    },
+    {
+      "symbol": "SET:FM",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.1973397433757782,
+      "rank_pct": 0.5454545454545454
+    },
+    {
+      "symbol": "SET:FORTH",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.29394635558128357,
+      "rank_pct": 0.3560606060606061
+    },
+    {
+      "symbol": "SET:FTREIT",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.38511842489242554,
+      "rank_pct": 0.6287878787878788
+    },
+    {
+      "symbol": "SET:GFPT",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.03785054758191109,
+      "rank_pct": 0.4621212121212121
+    },
+    {
+      "symbol": "SET:GLOBAL",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.21990744769573212,
+      "rank_pct": 0.38636363636363635
+    },
+    {
+      "symbol": "SET:GPSC",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.6361659169197083,
+      "rank_pct": 0.7348484848484849
+    },
+    {
+      "symbol": "SET:GULF",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5836266875267029,
+      "rank_pct": 0.7121212121212122
+    },
+    {
+      "symbol": "SET:GUNKUL",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.4057188034057617,
+      "rank_pct": 0.946969696969697
+    },
+    {
+      "symbol": "SET:HANA",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.6776145696640015,
+      "rank_pct": 0.9621212121212122
+    },
+    {
+      "symbol": "SET:HMPRO",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.1582542657852173,
+      "rank_pct": 0.14393939393939395
+    },
+    {
+      "symbol": "SET:HUMAN",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.0955018997192383,
+      "rank_pct": 0.045454545454545456
+    },
+    {
+      "symbol": "SET:ICHI",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.1214965209364891,
+      "rank_pct": 0.5075757575757576
+    },
+    {
+      "symbol": "SET:INET",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.5339799523353577,
+      "rank_pct": 0.2727272727272727
+    },
+    {
+      "symbol": "SET:INETREIT",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9887841939926147,
+      "rank_pct": 0.8939393939393939
+    },
+    {
+      "symbol": "SET:INSET",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.4044259786605835,
+      "rank_pct": 0.9393939393939394
+    },
+    {
+      "symbol": "SET:IRPC",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 2.365635871887207,
+      "rank_pct": 0.9962121212121212
+    },
+    {
+      "symbol": "SET:ITC",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.08983230590820312,
+      "rank_pct": 0.49242424242424243
+    },
+    {
+      "symbol": "SET:ITEL",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.27286389470100403,
+      "rank_pct": 0.36363636363636365
+    },
+    {
+      "symbol": "SET:IVL",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5337704420089722,
+      "rank_pct": 0.6893939393939394
+    },
+    {
+      "symbol": "SET:JAS",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6121604442596436,
+      "rank_pct": 0.25
+    },
+    {
+      "symbol": "SET:JMART",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.5081095099449158,
+      "rank_pct": 0.2803030303030303
+    },
+    {
+      "symbol": "SET:JMT",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.2142670154571533,
+      "rank_pct": 0.12121212121212122
+    },
+    {
+      "symbol": "SET:JTS",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.3993375301361084,
+      "rank_pct": 0.9318181818181818
+    },
+    {
+      "symbol": "SET:KAMART",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.24954812228679657,
+      "rank_pct": 0.3787878787878788
+    },
+    {
+      "symbol": "SET:KBANK",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.6563804745674133,
+      "rank_pct": 0.7575757575757576
+    },
+    {
+      "symbol": "SET:KCE",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9871914982795715,
+      "rank_pct": 0.8863636363636364
+    },
+    {
+      "symbol": "SET:KGI",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.023465871810913086,
+      "rank_pct": 0.45454545454545453
+    },
+    {
+      "symbol": "SET:KKP",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9897276163101196,
+      "rank_pct": 0.9015151515151515
+    },
+    {
+      "symbol": "SET:KSL",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5019521713256836,
+      "rank_pct": 0.6666666666666666
+    },
+    {
+      "symbol": "SET:KTB",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.270975112915039,
+      "rank_pct": 0.9242424242424242
+    },
+    {
+      "symbol": "SET:KTC",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.5563035011291504,
+      "rank_pct": 0.08333333333333333
+    },
+    {
+      "symbol": "SET:LH",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.546199381351471,
+      "rank_pct": 0.26515151515151514
+    },
+    {
+      "symbol": "SET:LHFG",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8537279963493347,
+      "rank_pct": 0.8181818181818182
+    },
+    {
+      "symbol": "SET:LHHOTEL",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.20831499993801117,
+      "rank_pct": 0.3939393939393939
+    },
+    {
+      "symbol": "SET:M",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.1608239710330963,
+      "rank_pct": 0.5303030303030303
+    },
+    {
+      "symbol": "SET:MAJOR",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.0129060745239258,
+      "rank_pct": 0.1590909090909091
+    },
+    {
+      "symbol": "SET:MALEE",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.3744630813598633,
+      "rank_pct": 0.10606060606060606
+    },
+    {
+      "symbol": "SET:MASTER",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.5949795246124268,
+      "rank_pct": 0.011363636363636364
+    },
+    {
+      "symbol": "SET:MBK",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.18296201527118683,
+      "rank_pct": 0.5378787878787878
+    },
+    {
+      "symbol": "SET:MC",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.3191755712032318,
+      "rank_pct": 0.6060606060606061
+    },
+    {
+      "symbol": "SET:MCOT",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.9293057918548584,
+      "rank_pct": 0.8787878787878788
+    },
+    {
+      "symbol": "SET:MEGA",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.5119895935058594,
+      "rank_pct": 0.6742424242424242
+    },
+    {
+      "symbol": "SET:MINT",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.6198509931564331,
+      "rank_pct": 0.24242424242424243
+    },
+    {
+      "symbol": "SET:MTC",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.3959285020828247,
+      "rank_pct": 0.09090909090909091
+    },
+    {
+      "symbol": "SET:NCAP",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.40737253427505493,
+      "rank_pct": 0.6515151515151515
+    },
+    {
+      "symbol": "SET:NER",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.2495175451040268,
+      "rank_pct": 0.5757575757575758
+    },
+    {
+      "symbol": "SET:NEX",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.9240334033966064,
+      "rank_pct": 0.9772727272727273
+    },
+    {
+      "symbol": "SET:NOBLE",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.06378647685050964,
+      "rank_pct": 0.4393939393939394
+    },
+    {
+      "symbol": "SET:NYT",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.590286135673523,
+      "rank_pct": 0.7196969696969697
+    },
+    {
+      "symbol": "SET:OKJ",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.4102892875671387,
+      "rank_pct": 0.030303030303030304
+    },
+    {
+      "symbol": "SET:ONEE",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.20658443868160248,
+      "rank_pct": 0.5606060606060606
+    },
+    {
+      "symbol": "SET:OR",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": -0.13807223737239838,
+      "rank_pct": 0.4166666666666667
+    },
+    {
+      "symbol": "SET:ORI",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.24964995682239532,
+      "rank_pct": 0.3712121212121212
+    },
+    {
+      "symbol": "SET:OSP",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.0683499127626419,
+      "rank_pct": 0.48484848484848486
+    },
+    {
+      "symbol": "SET:PAF",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.2050040066242218,
+      "rank_pct": 0.4015151515151515
+    },
+    {
+      "symbol": "SET:PCE",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.35335105657577515,
+      "rank_pct": 0.3106060606060606
+    },
+    {
+      "symbol": "SET:PLANB",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.2627629041671753,
+      "rank_pct": 0.11363636363636363
+    },
+    {
+      "symbol": "SET:PLAT",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -0.7692387700080872,
+      "rank_pct": 0.18181818181818182
+    },
+    {
+      "symbol": "SET:PLUS",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -2.5821802616119385,
+      "rank_pct": 0.022727272727272728
+    },
+    {
+      "symbol": "SET:PR9",
+      "sector": "UNKNOWN",
+      "quintile": 1,
+      "z_score": -1.144223928451538,
+      "rank_pct": 0.15151515151515152
+    },
+    {
+      "symbol": "SET:PRM",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.7832765579223633,
+      "rank_pct": 0.7954545454545454
+    },
+    {
+      "symbol": "SET:PSL",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.6128701567649841,
+      "rank_pct": 0.7272727272727273
+    },
+    {
+      "symbol": "SET:PTG",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.7631937265396118,
+      "rank_pct": 0.7727272727272727
+    },
+    {
+      "symbol": "SET:PTT",
+      "sector": "UNKNOWN",
+      "quintile": 3,
+      "z_score": 0.29093894362449646,
+      "rank_pct": 0.5984848484848485
+    },
+    {
+      "symbol": "SET:PTTEP",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 1.2402722835540771,
+      "rank_pct": 0.9166666666666666
+    },
+    {
+      "symbol": "SET:PTTGC",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 2.007293701171875,
+      "rank_pct": 0.9848484848484849
+    },
+    {
+      "symbol": "SET:QH",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.34720316529273987,
+      "rank_pct": 0.3181818181818182
+    },
+    {
+      "symbol": "SET:RATCH",
+      "sector": "UNKNOWN",
+      "quintile": 4,
+      "z_score": 0.38540083169937134,
+      "rank_pct": 0.6363636363636364
+    },
+    {
+      "symbol": "SET:RBF",
+      "sector": "UNKNOWN",
+      "quintile": 2,
+      "z_score": -0.5656367540359497,
+      "rank_pct": 0.25757575757575757
+    },
+    {
+      "symbol": "SET:RCL",
+      "sector": "UNKNOWN",
+      "quintile": 5,
+      "z_score": 0.8698133230209351,
+      "rank_pct": 0.8484848484848485
+    }
+  ]
+}

@@ -39,7 +39,7 @@ jobs:
 
       - name: Health check
         run: |
-          curl --retry 5 --retry-delay 3 --retry-all-errors -fsS http://localhost:8000/health
+          curl --retry 5 --retry-delay 3 --retry-all-errors -fsS http://localhost:8100/health
 
       - name: Smoke — read endpoints (200)
         run: |
@@ -51,7 +51,7 @@ jobs:
           )
           for path in "${endpoints[@]}"; do
             echo "=== GET $path ==="
-            status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$path")
+            status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8100$path")
             if [ "$status" != "200" ]; then
               echo "FAIL: expected 200, got $status"
               exit 1
@@ -61,7 +61,7 @@ jobs:
 
       - name: Smoke — write endpoint blocked (403)
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/data/refresh)
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8100/api/v1/data/refresh)
           if [ "$status" != "403" ]; then
             echo "FAIL: expected 403, got $status"
             exit 1

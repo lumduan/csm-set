@@ -64,6 +64,7 @@ Thumbs.db
 # results/ IS committed — do not ignore
 # Temporary export artifacts only
 results/.tmp/
+.tmp/
 
 # Environment — credentials must never be committed
 .env

@@ -1,4 +1,6 @@
-"""Drawdown analysis helpers."""
+"""Drawdown and run-up analysis helpers."""
+
+from __future__ import annotations
 
 import logging
 
@@ -8,7 +10,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class DrawdownAnalyzer:
-    """Compute drawdown series and recovery episodes."""
+    """Compute drawdown / run-up series and their episode tables."""
 
     def max_drawdown(self, equity_curve: pd.Series) -> float:
         """Return the maximum drawdown as a negative float."""
@@ -75,6 +77,93 @@ class DrawdownAnalyzer:
                 )
                 in_drawdown = False
         return pd.DataFrame(rows)
+
+    def runup_curve(self, equity_curve: pd.Series) -> pd.Series:
+        """Return the run-up (above-trough) curve as a fraction of the running trough.
+
+        Mirror of :meth:`underwater_curve` with the running minimum replacing
+        the running maximum: each point measures how far above the
+        running-trough the equity has risen.
+        """
+
+        return equity_curve / equity_curve.cummin() - 1.0
+
+    def runup_episodes(self, equity_curve: pd.Series) -> pd.DataFrame:
+        """Identify run-up episodes — peaks above the running trough.
+
+        Mirrors :meth:`recovery_periods` with the underwater sign inverted.
+        A run-up episode begins when the equity rises above the most recent
+        trough and ends when the equity returns to that trough (or below).
+
+        Args:
+            equity_curve: Monotonically-indexed equity series. Empty input
+                returns an empty DataFrame with the documented columns.
+
+        Returns:
+            DataFrame with columns ``start``, ``peak``, ``end``, ``height``,
+            ``duration_days``, ``height_months``. ``height`` is the
+            fractional peak-over-trough excursion.
+        """
+
+        runup: pd.Series = self.runup_curve(equity_curve)
+        rows: list[dict[str, object]] = []
+        in_runup: bool = False
+        start: pd.Timestamp | None = None
+        peak_time: pd.Timestamp | None = None
+        peak_height: float = 0.0
+        for date, value in runup.items():
+            if value > 0.0 and not in_runup:
+                in_runup = True
+                start = pd.Timestamp(date)
+                peak_time = pd.Timestamp(date)
+                peak_height = float(value)
+            elif value > peak_height and in_runup:
+                peak_time = pd.Timestamp(date)
+                peak_height = float(value)
+            elif value <= 0.0 and in_runup and start is not None and peak_time is not None:
+                end: pd.Timestamp = pd.Timestamp(date)
+                duration_days = int((end - start).days)
+                rows.append(
+                    {
+                        "start": start,
+                        "peak": peak_time,
+                        "end": end,
+                        "height": peak_height,
+                        "duration_days": duration_days,
+                        "height_months": round(duration_days / 30.5, 1),
+                    }
+                )
+                in_runup = False
+        return pd.DataFrame(rows)
+
+    def max_runup(self, equity_curve: pd.Series) -> float:
+        """Maximum run-up as a positive fraction; ``0.0`` on empty or all-falling input."""
+
+        runup: pd.Series = self.runup_curve(equity_curve)
+        if runup.empty:
+            return 0.0
+        return float(runup.max())
+
+    def max_runup_pct(self, equity_curve: pd.Series) -> float:
+        """Alias for :meth:`max_runup` (kept for parity with `max_drawdown` semantics)."""
+
+        return self.max_runup(equity_curve)
+
+    def avg_runup_duration(self, equity_curve: pd.Series) -> float:
+        """Mean ``duration_days`` across detected run-up episodes; ``0.0`` when none."""
+
+        episodes: pd.DataFrame = self.runup_episodes(equity_curve)
+        if episodes.empty:
+            return 0.0
+        return float(episodes["duration_days"].mean())
+
+    def avg_runup_pct(self, equity_curve: pd.Series) -> float:
+        """Mean ``height`` across detected run-up episodes; ``0.0`` when none."""
+
+        episodes: pd.DataFrame = self.runup_episodes(equity_curve)
+        if episodes.empty:
+            return 0.0
+        return float(episodes["height"].mean())
 
 
 __all__: list[str] = ["DrawdownAnalyzer"]

@@ -1,19 +1,21 @@
-"""GatewayAdapter for db_gateway write-back and history reads (Phase 4).
+"""GatewayAdapter — read-only history adapter for ``db_gateway``.
 
-Owns an ``asyncpg`` connection pool and exposes idempotent write methods for
-the two ``db_gateway`` tables (``daily_performance``, ``portfolio_snapshot``)
-plus typed read methods returning frozen Pydantic models.
+Owns an ``asyncpg`` connection pool and exposes typed read methods returning
+frozen Pydantic models. The schemas themselves are owned by the
+``quant-infra-db`` stack and are not declared here.
 
-The schemas themselves are owned by the ``quant-infra-db`` stack and are not
-declared here — ``GatewayAdapter`` only writes against existing tables.
+Write-back to ``db_gateway`` now goes through the documented HTTP ingestion
+contract (``POST /api/v1/ingest/daily-report``), implemented by
+:class:`csm.adapters.gateway_client.GatewayClient`. This adapter retains
+only the history-read code path.
 
 Lifecycle:
 
 >>> async with GatewayAdapter(dsn) as gw:  # doctest: +SKIP
-...     await gw.write_daily_performance("csm-set", today, metrics)
+...     rows = await gw.read_daily_performance("csm-set")
 
-For best-effort persistence, callers wrap each call in their own
-``try/except`` and log a warning on failure (see PLAN.md Phase 5 hooks).
+For best-effort reads, callers wrap each call in their own
+``try/except`` and log a warning on failure.
 """
 
 from __future__ import annotations
@@ -39,32 +41,6 @@ class _GatewaySQL:
     each ``INSERT``.
     """
 
-    UPSERT_DAILY_PERFORMANCE: str = (
-        "INSERT INTO daily_performance "
-        "(time, strategy_id, daily_return, cumulative_return, total_value, "
-        "cash_balance, max_drawdown, sharpe_ratio, metadata) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) "
-        "ON CONFLICT (time, strategy_id) DO UPDATE SET "
-        "daily_return = EXCLUDED.daily_return, "
-        "cumulative_return = EXCLUDED.cumulative_return, "
-        "total_value = EXCLUDED.total_value, "
-        "cash_balance = EXCLUDED.cash_balance, "
-        "max_drawdown = EXCLUDED.max_drawdown, "
-        "sharpe_ratio = EXCLUDED.sharpe_ratio, "
-        "metadata = EXCLUDED.metadata"
-    )
-    UPSERT_PORTFOLIO_SNAPSHOT: str = (
-        "INSERT INTO portfolio_snapshot "
-        "(time, total_portfolio, weighted_return, combined_drawdown, "
-        "active_strategies, allocation) "
-        "VALUES ($1, $2, $3, $4, $5, $6::jsonb) "
-        "ON CONFLICT (time) DO UPDATE SET "
-        "total_portfolio = EXCLUDED.total_portfolio, "
-        "weighted_return = EXCLUDED.weighted_return, "
-        "combined_drawdown = EXCLUDED.combined_drawdown, "
-        "active_strategies = EXCLUDED.active_strategies, "
-        "allocation = EXCLUDED.allocation"
-    )
     SELECT_DAILY_PERFORMANCE_RECENT: str = (
         "SELECT time, strategy_id, daily_return, cumulative_return, "
         "total_value, cash_balance, max_drawdown, sharpe_ratio, metadata "
@@ -178,78 +154,6 @@ class GatewayAdapter:
                 "or use 'async with adapter:' first."
             )
         return self._pool
-
-    async def write_daily_performance(
-        self,
-        strategy_id: str,
-        date: datetime,
-        metrics: dict[str, object],
-    ) -> None:
-        """Upsert a daily performance row for a strategy.
-
-        Scalar fields (daily_return, cumulative_return, …) are extracted
-        from the ``metrics`` dict with ``.get()`` defaults; the full dict
-        is stored in the JSONB ``metadata`` column for extensibility.
-
-        Args:
-            strategy_id: Strategy identifier (e.g. ``"csm-set"``).
-            date: tz-aware trading day timestamp.
-            metrics: Dict with keys ``daily_return``, ``cumulative_return``,
-                ``total_value``, ``cash_balance``, ``max_drawdown``,
-                ``sharpe_ratio`` (all float-coercible) plus any additional
-                fields for the metadata catch-all.
-
-        Raises:
-            RuntimeError: When the pool has not been opened.
-            asyncpg.PostgresError: On database error.
-        """
-        pool = self._require_pool()
-        await pool.execute(
-            _SQL.UPSERT_DAILY_PERFORMANCE,
-            date,
-            strategy_id,
-            metrics.get("daily_return"),
-            metrics.get("cumulative_return"),
-            metrics.get("total_value"),
-            metrics.get("cash_balance"),
-            metrics.get("max_drawdown"),
-            metrics.get("sharpe_ratio"),
-            metrics,
-        )
-        logger.debug("write_daily_performance strategy=%s date=%s", strategy_id, date.isoformat())
-
-    async def write_portfolio_snapshot(
-        self,
-        date: datetime,
-        snapshot: dict[str, object],
-    ) -> None:
-        """Upsert a daily cross-strategy portfolio snapshot.
-
-        Fields are extracted from the ``snapshot`` dict; ``allocation`` is
-        stored as JSONB and shaped for multi-strategy weights.
-
-        Args:
-            date: tz-aware trading day timestamp.
-            snapshot: Dict with keys ``total_portfolio``, ``weighted_return``,
-                ``combined_drawdown`` (float-coercible), ``active_strategies``
-                (int-coercible), and ``allocation`` (dict).
-
-        Raises:
-            RuntimeError: When the pool has not been opened.
-            asyncpg.PostgresError: On database error.
-        """
-        pool = self._require_pool()
-        allocation: object = snapshot.get("allocation", {})
-        await pool.execute(
-            _SQL.UPSERT_PORTFOLIO_SNAPSHOT,
-            date,
-            snapshot.get("total_portfolio"),
-            snapshot.get("weighted_return"),
-            snapshot.get("combined_drawdown"),
-            snapshot.get("active_strategies", 0),
-            allocation,
-        )
-        logger.debug("write_portfolio_snapshot date=%s", date.isoformat())
 
     async def read_daily_performance(
         self,
