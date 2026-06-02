@@ -33,7 +33,6 @@ def _isolate_tvkit_auth_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
 
 
-
 @fixture
 def sample_prices() -> pd.DataFrame:
     """100 symbols x 500 trading days of synthetic close prices, tz-aware Asia/Bangkok."""
