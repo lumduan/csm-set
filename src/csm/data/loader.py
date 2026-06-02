@@ -22,6 +22,7 @@ Adjustment:
 
 import asyncio
 import logging
+import warnings
 from enum import StrEnum
 
 import pandas as pd
@@ -63,6 +64,14 @@ class OHLCVLoader:
     """
 
     def __init__(self, settings: Settings) -> None:
+        warnings.warn(
+            "OHLCVLoader (parquet source) is deprecated in favour of "
+            "MarketDataEngineLoader (db source). The parquet path remains "
+            "functional behind CSM_OHLCV_SOURCE='parquet' for rollback. "
+            "See feature-market-data-engine Phase 5.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._settings: Settings = settings
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.tvkit_concurrency)
 

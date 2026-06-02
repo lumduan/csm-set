@@ -1,8 +1,14 @@
 """Shared pytest fixtures for csm-set."""
 
+import os
 from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import TypeVar, cast
+
+# Phase 5 (2026-06-02): the default CSM_OHLCV_SOURCE is now "db", which
+# requires CSM_MARKET_DATA_ENGINE_BASE_URL.  Set a dummy value before any
+# module-level Settings() call runs so the import doesn't fail.
+os.environ.setdefault("CSM_MARKET_DATA_ENGINE_BASE_URL", "http://localhost:8300")
 
 import numpy as np
 import pandas as pd
@@ -25,6 +31,7 @@ def _isolate_tvkit_auth_token(monkeypatch: pytest.MonkeyPatch) -> None:
     test a deterministic anonymous-mode default unless it opts in.
     """
     monkeypatch.setenv("TVKIT_AUTH_TOKEN", "")
+
 
 
 @fixture
@@ -53,6 +60,7 @@ def settings_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Settin
     monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+    monkeypatch.setenv("CSM_MARKET_DATA_ENGINE_BASE_URL", "http://localhost:8300")
     return Settings()
 
 
@@ -63,6 +71,7 @@ def public_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Settings
     monkeypatch.setenv("CSM_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("CSM_RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setenv("CSM_PUBLIC_MODE", "true")
+    monkeypatch.setenv("CSM_MARKET_DATA_ENGINE_BASE_URL", "http://localhost:8300")
     return Settings()
 
 

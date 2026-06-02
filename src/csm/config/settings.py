@@ -217,14 +217,14 @@ class Settings(BaseSettings):
         ),
     )
     ohlcv_source: str = Field(
-        default="parquet",
+        default="db",
         description=(
             "OHLCV acquisition source for the owner-side daily refresh. "
-            "'parquet' (default) — fetch from tvkit and persist the local Parquet "
-            "store, the unchanged legacy behaviour. 'db' — read pre-fetched bars "
-            "from the Market Data Engine read API instead of touching tvkit "
-            "(no tvkit cookie required in csm-set). See feature-market-data-engine "
-            "Phase 3."
+            "'db' (default) — read pre-fetched bars from the Market Data Engine "
+            "read API instead of touching tvkit (no tvkit cookie required in "
+            "csm-set). 'parquet' — fetch from tvkit and persist the local Parquet "
+            "store (DEPRECATED legacy path; kept for rollback). See "
+            "feature-market-data-engine Phase 5."
         ),
     )
     market_data_engine_base_url: str | None = Field(

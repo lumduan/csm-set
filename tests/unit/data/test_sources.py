@@ -20,10 +20,13 @@ def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> Settings:
 
 
 class TestFactory:
-    def test_default_is_parquet_tvkit_loader(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        settings = _settings(monkeypatch)
+    def test_default_is_db_engine_loader(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Since Phase 5 (2026-06-02), the default OHLCV source is 'db'."""
+        settings = _settings(
+            monkeypatch, CSM_MARKET_DATA_ENGINE_BASE_URL="http://marketdata.test:8000"
+        )
         loader = build_ohlcv_loader(settings)
-        assert isinstance(loader, OHLCVLoader)
+        assert isinstance(loader, MarketDataEngineLoader)
         assert isinstance(loader, OHLCVSource)
 
     def test_explicit_parquet_is_tvkit_loader(self, monkeypatch: pytest.MonkeyPatch) -> None:

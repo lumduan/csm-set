@@ -95,19 +95,21 @@ RequestIDMiddleware → AccessLogMiddleware → APIKeyMiddleware → public_mode
 The owner-side daily refresh acquires OHLCV through a small factory
 (`csm.data.sources.build_ohlcv_loader`) selected by `CSM_OHLCV_SOURCE`:
 
-- **`parquet`** (default): the unchanged legacy path — `OHLCVLoader` fetches tvkit and
-  persists the local Parquet store. Requires `TVKIT_AUTH_TOKEN`.
-- **`db`**: `MarketDataEngineLoader` reads pre-fetched bars from the **Market Data Engine**
+- **`db`** (default): `MarketDataEngineLoader` reads pre-fetched bars from the **Market Data Engine**
   (`quant-marketdata-engine`, host `:8300`) over HTTP via
   `csm.adapters.market_data_engine_client`. csm-set holds **no tvkit cookie** on this path.
   Requires `CSM_MARKET_DATA_ENGINE_BASE_URL` (e.g. `http://quant-marketdata-engine:8000`
   in-cluster, `http://localhost:8300` for dev); `CSM_MARKET_DATA_ENGINE_API_KEY` is optional
   (only when the engine sets its own key).
+- **`parquet`** (deprecated): the legacy path — `OHLCVLoader` fetches tvkit and
+  persists the local Parquet store. Requires `TVKIT_AUTH_TOKEN`. Kept for rollback;
+  triggers a `DeprecationWarning` on use.
 
 Both loaders return the identical DataFrame shape (`open/high/low/close/volume` floats,
-`Asia/Bangkok` `datetime` index), so downstream logic is source-agnostic. Default is
-unchanged behaviour; rollback = leave the flag unset / `parquet`. This is Phase 3 of
-`feature-market-data-engine`.
+`Asia/Bangkok` `datetime` index), so downstream logic is source-agnostic. The default
+was flipped from `parquet` to `db` in Phase 5 (2026-06-02) after 100% parity was
+verified across 691 symbols. Rollback = set `CSM_OHLCV_SOURCE=parquet`. This is
+Phase 5 of `feature-market-data-engine`.
 
 ### Adapters and storage
 
