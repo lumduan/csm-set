@@ -30,9 +30,13 @@
 # drive the daily-log %U.PL calculation.
 
 strategy_id: csm-set
-entry_date: "2026-05-05"
+# June 2026 rebalance (Option C — backtest top-10) executed at 2026-06-02 ATO.
+# SELL: NEX, AGE, JTS.  BUY: KCE, EASTW, EPG.  MCOT (the 10th name) could not
+# be filled on 2026-06-02 (liquidity too thin) and is deferred to 2026-06-04
+# (2026-06-03 is a SET holiday) — this file will be updated again then.
+entry_date: "2026-06-02"
 starting_nav: 1000000.0
-cash: 37699.71
+cash: 11307.27
 positions:
   - symbol: DELTA
     shares: 300
@@ -43,12 +47,6 @@ positions:
   - symbol: PTTGC
     shares: 3000
     avg_cost: 41.0672
-  - symbol: NEX
-    shares: 99000
-    avg_cost: 1.0116
-  - symbol: AGE
-    shares: 80600
-    avg_cost: 1.2621
   - symbol: HANA
     shares: 3000
     avg_cost: 35.8070
@@ -58,6 +56,12 @@ positions:
   - symbol: INSET
     shares: 42000
     avg_cost: 3.0848
-  - symbol: JTS
-    shares: 1900
-    avg_cost: 43.3207
+  - symbol: KCE
+    shares: 2600
+    avg_cost: 39.0655
+  - symbol: EASTW
+    shares: 24000
+    avg_cost: 4.2672
+  - symbol: EPG
+    shares: 17300
+    avg_cost: 5.9099
