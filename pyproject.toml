@@ -64,7 +64,7 @@ packages = ["src/csm"]
 line-length = 100
 target-version = "py311"
 src = ["src"]
-exclude = ["notebooks/"]
+exclude = ["notebooks/", "scripts/build_rationale_notebook.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
