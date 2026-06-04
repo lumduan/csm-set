@@ -32,11 +32,23 @@
 strategy_id: csm-set
 # June 2026 rebalance (Option C — backtest top-10) executed at 2026-06-02 ATO.
 # SELL: NEX, AGE, JTS.  BUY: KCE, EASTW, EPG.  MCOT (the 10th name) could not
-# be filled on 2026-06-02 (liquidity too thin) and is deferred to 2026-06-04
-# (2026-06-03 is a SET holiday) — this file will be updated again then.
-entry_date: "2026-06-02"
-starting_nav: 1000000.0
-cash: 11307.27
+# be filled on 2026-06-02 (liquidity too thin) and was deferred to 2026-06-04.
+#
+# 2026-06-04: MCOT partial fill (tranche 1 of 2 — thin liquidity).
+#   BUY 8,100 MCOT @ 5.95 → gross 48,195.00 + fees @0.16799% 80.96 = all-in
+#   48,275.96; avg_cost 5.9600 (commission-inclusive, 4-dp).  Remaining ~8,600
+#   shares to fill on the next session (tranche 2).
+#   Funded by a 100,000 THB fresh-capital injection (cash 11,307.27 + 100,000
+#   − 48,275.96 = 63,031.31); the June-2 rebalance had left only 11,307.27 in
+#   cash, so MCOT was never cash-funded — the injection covers it.
+#   starting_nav bumped 1,000,000 → 1,100,000 so the injected capital is not
+#   booked as a return; Total Return on NAV stays a true performance measure.
+#   entry_date reset to 2026-06-04 (book composition + capital base both
+#   changed) so the equity reconstruction restarts here and does not overwrite
+#   the historical 06-02 equity row.
+entry_date: "2026-06-04"
+starting_nav: 1100000.0
+cash: 63031.31
 positions:
   - symbol: DELTA
     shares: 300
@@ -65,3 +77,6 @@ positions:
   - symbol: EPG
     shares: 17300
     avg_cost: 5.9099
+  - symbol: MCOT
+    shares: 8100
+    avg_cost: 5.9600
