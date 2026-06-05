@@ -46,9 +46,21 @@ strategy_id: csm-set
 #   entry_date reset to 2026-06-04 (book composition + capital base both
 #   changed) so the equity reconstruction restarts here and does not overwrite
 #   the historical 06-02 equity row.
-entry_date: "2026-06-04"
+#
+# 2026-06-05: MCOT tranche 2 of 2 — position complete at 16,700 shares.
+#   BUY 8,600 MCOT @ 6.10 → gross 52,460.00 + fees @0.16799% 88.13 = all-in
+#   52,548.13; cash 63,031.31 − 52,548.13 = 10,483.18.  Blended commission-
+#   inclusive avg_cost over both tranches: (48,275.96 + 52,548.13) / 16,700 =
+#   6.0374 (4-dp).  No capital injection — funded from the tranche-2 cash
+#   reserve carried since 06-04; starting_nav unchanged at 1,100,000.
+#   entry_date reset to 2026-06-05 because MCOT's share count changed: the
+#   equity reconstruction reprices the *current* book back over
+#   [entry_date, today] and UPSERTs every row, so leaving entry_date at 06-04
+#   would overwrite the historical 06-04 equity row (1,119,768.31) with a
+#   fictional 16,700-share mark.  Restarting at 06-05 preserves it.
+entry_date: "2026-06-05"
 starting_nav: 1100000.0
-cash: 63031.31
+cash: 10483.18
 positions:
   - symbol: DELTA
     shares: 300
@@ -78,5 +90,5 @@ positions:
     shares: 17300
     avg_cost: 5.9099
   - symbol: MCOT
-    shares: 8100
-    avg_cost: 5.9600
+    shares: 16700
+    avg_cost: 6.0374
