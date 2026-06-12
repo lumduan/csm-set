@@ -818,6 +818,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "types-pyyaml" },
 ]
 research = [
     { name = "jupyterlab" },
@@ -858,6 +859,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.6" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260518" },
 ]
 research = [
     { name = "jupyterlab", specifier = ">=4" },
@@ -4297,6 +4299,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/44/d9/099afe9212719fec94a27ecc832d9c9aa9871bc8b7ebda676bd5e34edf9a/tvkit-0.11.0.tar.gz", hash = "sha256:91cdeee9fc28ae8b4dee61699aa52f38bdeaac832b6b37e24fa7600b2872dc5c", size = 211573, upload-time = "2026-04-24T03:50:54.244Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/19/ff/267d8bd99da735dde591f3e1b2a57d90dc750dbf7a9af409e2fc8ef76d9b/tvkit-0.11.0-py3-none-any.whl", hash = "sha256:1b17aa497e586a89578ef024e0e76f8e3decf5ba3aedf5b8ba7e7f26a9caac81", size = 157817, upload-time = "2026-04-24T03:50:37.414Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260518"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/83/4a1afc3fbfcf5b8d46fc390cd95ed6b0dc9010a265f4e9f46314efffa37a/types_pyyaml-6.0.12.20260518.tar.gz", hash = "sha256:d917f83fb38462550338c1297faedd860b3ec83912b96b1e3d73255f7473e466", size = 17850, upload-time = "2026-05-18T06:01:58.675Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/a2/c01db32be2ae7d6a1689972f3c492b149ee4e164b12fdfd9f64b50888215/types_pyyaml-6.0.12.20260518-py3-none-any.whl", hash = "sha256:d2150f75a231c9fe9c7463bd29487d93e60bac90400287351384bc2284eba7cd", size = 20312, upload-time = "2026-05-18T06:01:57.368Z" },
 ]
 
 [[package]]

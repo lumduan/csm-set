@@ -34,6 +34,11 @@ jobs:
         with:
           cache-binary: true
 
+      - name: Create shared Docker network
+        # docker-compose.yml declares quant-network as external (owned by
+        # quant-infra-db in production); the CI runner must create it first.
+        run: docker network create quant-network || true
+
       - name: Build and start services
         run: docker compose up -d --wait
 
