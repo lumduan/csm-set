@@ -203,3 +203,102 @@ def test_db_dsn_fields_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.db_csm_set_dsn == "postgresql://user:pass@host:5432/db_csm_set"
     assert s.db_gateway_dsn == "postgresql://user:pass@host:5432/db_gateway"
     assert s.mongo_uri == "mongodb://host:27017/"
+
+
+def _execution_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set the gateway URL/key/account env so a non-off execution mode validates."""
+    monkeypatch.setenv("CSM_GATEWAY_BASE_URL", "http://gateway:8000")
+    monkeypatch.setenv("CSM_GATEWAY_API_KEY", "internal-key")
+    monkeypatch.setenv("CSM_EXECUTION_ACCOUNT", "SIM-1")
+
+
+class TestExecutionSettings:
+    def test_default_off_constructs_without_extra_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """execution_mode defaults to 'off' and requires no gateway env."""
+        for key in (
+            "CSM_EXECUTION_MODE",
+            "CSM_EXECUTION_ACCOUNT",
+            "CSM_EXECUTION_BROKER",
+            "CSM_GATEWAY_BASE_URL",
+            "CSM_GATEWAY_API_KEY",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        s = Settings()
+        assert s.execution_mode == "off"
+        assert s.execution_account is None
+        assert s.execution_broker == "sim"
+
+    def test_mode_whitelist_rejects_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CSM_EXECUTION_MODE", "paper")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_broker_whitelist_rejects_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CSM_EXECUTION_BROKER", "kraken")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_sim_mode_valid_with_gateway_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _execution_env(monkeypatch)
+        monkeypatch.setenv("CSM_EXECUTION_MODE", "sim")
+        s = Settings()
+        assert s.execution_mode == "sim"
+        assert s.execution_account == "SIM-1"
+
+    def test_sim_missing_gateway_url_rejects(self) -> None:
+        # _env_file=None isolates from the developer's local .env (which sets these);
+        # CI has no .env so this matches the CI environment.
+        with pytest.raises(ValidationError, match="CSM_GATEWAY_BASE_URL"):
+            Settings(
+                _env_file=None,  # type: ignore[call-arg]
+                execution_mode="sim",
+                gateway_api_key="k",  # type: ignore[arg-type]
+                execution_account="SIM-1",
+            )
+
+    def test_sim_missing_gateway_key_rejects(self) -> None:
+        with pytest.raises(ValidationError, match="CSM_GATEWAY_API_KEY"):
+            Settings(
+                _env_file=None,  # type: ignore[call-arg]
+                execution_mode="sim",
+                gateway_base_url="http://gateway:8000",
+                execution_account="SIM-1",
+            )
+
+    def test_sim_missing_account_rejects(self) -> None:
+        with pytest.raises(ValidationError, match="CSM_EXECUTION_ACCOUNT"):
+            Settings(
+                _env_file=None,  # type: ignore[call-arg]
+                execution_mode="sim",
+                gateway_base_url="http://gateway:8000",
+                gateway_api_key="k",  # type: ignore[arg-type]
+            )
+
+    def test_live_in_public_mode_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _execution_env(monkeypatch)
+        monkeypatch.setenv("CSM_PUBLIC_MODE", "true")
+        monkeypatch.setenv("CSM_EXECUTION_MODE", "live")
+        monkeypatch.setenv("CSM_EXECUTION_BROKER", "liberator")
+        with pytest.raises(ValidationError, match="forbidden when CSM_PUBLIC_MODE"):
+            Settings()
+
+    def test_live_with_sim_broker_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _execution_env(monkeypatch)
+        monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+        monkeypatch.setenv("CSM_EXECUTION_MODE", "live")
+        monkeypatch.setenv("CSM_EXECUTION_BROKER", "sim")
+        with pytest.raises(ValidationError, match="CSM_EXECUTION_BROKER"):
+            Settings()
+
+    def test_live_valid_with_real_broker_private_mode(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _execution_env(monkeypatch)
+        monkeypatch.setenv("CSM_PUBLIC_MODE", "false")
+        monkeypatch.setenv("CSM_EXECUTION_MODE", "live")
+        monkeypatch.setenv("CSM_EXECUTION_BROKER", "settrade")
+        s = Settings()
+        assert s.execution_mode == "live"
+        assert s.execution_broker == "settrade"

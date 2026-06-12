@@ -111,6 +111,46 @@ was flipped from `parquet` to `db` in Phase 5 (2026-06-02) after 100% parity was
 verified across 691 symbols. Rollback = set `CSM_OHLCV_SOURCE=parquet`. This is
 Phase 5 of `feature-market-data-engine`.
 
+### Execution mode (`CSM_EXECUTION_MODE`)
+
+The optional execution path (feature-execution-engine Phase 5.1) is gated by
+`CSM_EXECUTION_MODE`. It is a **library + verify-script only** facility — it is
+**not** wired into the daily refresh or the scheduler; nothing routes an order
+unless you call `csm.execution.run_sim_loop` (or the verify script) explicitly.
+
+- **`off`** (default): zero-code path. The engine adapter is never instantiated
+  and no order HTTP is performed. Adds no required env.
+- **`sim`**: submit `NormalizedOrder`s through the **gateway proxy**
+  (`/api/v2/engines/execution/*`) to the Execution engine `SimAdapter`, then
+  apply the SSE fill stream (`GET /orders/stream`) to a local `SimPortfolio`.
+  Requires `CSM_GATEWAY_BASE_URL`, `CSM_GATEWAY_API_KEY` (both reused from the
+  daily-report path), and `CSM_EXECUTION_ACCOUNT`.
+- **`live`**: RESERVED. Rejected at `Settings()` when `CSM_PUBLIC_MODE=true`,
+  and unimplemented in Phase 5.1 (`run_sim_loop` only runs `sim`). When enabled
+  it would source the real venue from `CSM_EXECUTION_BROKER` (so `live` +
+  `CSM_EXECUTION_BROKER=sim` is rejected).
+
+Supporting env:
+
+- `CSM_EXECUTION_ACCOUNT` — broker account stamped on every order
+  (`NormalizedOrder.account` is mandatory); required when mode != `off`.
+- `CSM_EXECUTION_BROKER` — `sim` (default) | `liberator` | `settrade`.
+
+No broker credential ever lives in this repo — the Execution engine is the sole
+order-routing-credential owner; csm-set only ever posts a normalized order
+through the gateway. The loop is single-source (positions move only from stream
+`fill` events, never from the POST ack), uses a fresh UUIDv4 `client_order_id`
+per logical order (the same id is reused only on transport/5xx retries), a
+client-side seq watermark for reconnect dedupe, and a `GET /orders/{cid}`
+residual reconcile on timeout or stream reset.
+
+Module locations: `src/csm/execution/models.py` (wire mirrors),
+`engine_adapter.py` (HTTP/SSE client), `sim_loop.py` (the loop),
+`errors.py` (typed exceptions). Manual end-to-end check:
+`uv run python scripts/verify_execution_sim.py --symbol PTT --side BUY --qty 100 --price 35.50`
+(needs `CSM_EXECUTION_MODE=sim` + the gateway env above). See
+`.claude/knowledge/execution-mode.md`.
+
 ### Adapters and storage
 
 - **Parquet (PyArrow)** is the durable store for all tabular data in `data/` (gitignored) and `results/static/` (tracked). Partition by date where feasible; set column dtypes explicitly on read.
