@@ -245,6 +245,37 @@ class Settings(BaseSettings):
             "MARKETDATA_ENGINE_API_KEY is set. Never logged."
         ),
     )
+    execution_mode: str = Field(
+        default="off",
+        description=(
+            "Strategy execution path (feature-execution-engine Phase 5.1). "
+            "'off' (default) — no execution: the engine adapter is never "
+            "instantiated and no order HTTP is performed. 'sim' — submit "
+            "NormalizedOrders through the gateway proxy to the Execution engine "
+            "SimAdapter and apply SSE fill events to a local sim portfolio. "
+            "'live' — RESERVED: forbidden when CSM_PUBLIC_MODE=true and "
+            "unimplemented in Phase 5.1. Modes other than 'off' require "
+            "CSM_GATEWAY_BASE_URL, CSM_GATEWAY_API_KEY, and "
+            "CSM_EXECUTION_ACCOUNT."
+        ),
+    )
+    execution_account: str | None = Field(
+        default=None,
+        description=(
+            "Broker account identifier stamped on every NormalizedOrder "
+            "(NormalizedOrder.account is required). Required when "
+            "CSM_EXECUTION_MODE != 'off'; ignored when execution is 'off'."
+        ),
+    )
+    execution_broker: str = Field(
+        default="sim",
+        description=(
+            "Target broker for execution: 'sim' (default), 'liberator', or "
+            "'settrade'. In 'sim' mode this is always 'sim'. The 'live' mode "
+            "sources the real venue from this field, so 'live' + 'sim' is "
+            "rejected."
+        ),
+    )
 
     @field_validator("ohlcv_source")
     @classmethod
@@ -252,6 +283,22 @@ class Settings(BaseSettings):
         allowed: set[str] = {"parquet", "db"}
         if value not in allowed:
             raise ValueError(f"ohlcv_source must be one of {sorted(allowed)!r}, got {value!r}")
+        return value
+
+    @field_validator("execution_mode")
+    @classmethod
+    def _validate_execution_mode(cls, value: str) -> str:
+        allowed: set[str] = {"off", "sim", "live"}
+        if value not in allowed:
+            raise ValueError(f"execution_mode must be one of {sorted(allowed)!r}, got {value!r}")
+        return value
+
+    @field_validator("execution_broker")
+    @classmethod
+    def _validate_execution_broker(cls, value: str) -> str:
+        allowed: set[str] = {"sim", "liberator", "settrade"}
+        if value not in allowed:
+            raise ValueError(f"execution_broker must be one of {sorted(allowed)!r}, got {value!r}")
         return value
 
     @field_validator("tvkit_adjustment")
@@ -300,6 +347,45 @@ class Settings(BaseSettings):
                 "CSM_MARKET_DATA_ENGINE_BASE_URL is required when CSM_OHLCV_SOURCE='db' "
                 "(e.g. http://quant-marketdata-engine:8000 in-cluster or "
                 "http://localhost:8300 for host-local dev)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_execution_path(self) -> Self:
+        """Fail fast on an inconsistent execution configuration.
+
+        ``execution_mode='off'`` (the default) requires no execution env and is
+        always valid. Any other mode requires the gateway URL/key plus a broker
+        account, and ``'live'`` is forbidden in public mode and incompatible with
+        the ``'sim'`` broker.
+        """
+        if self.execution_mode == "off":
+            return self
+        if self.execution_mode == "live" and self.public_mode:
+            raise ValueError(
+                "CSM_EXECUTION_MODE='live' is forbidden when CSM_PUBLIC_MODE=true "
+                "(public mode is read-only; no live order routing)."
+            )
+        if not self.gateway_base_url:
+            raise ValueError(
+                "CSM_GATEWAY_BASE_URL is required when CSM_EXECUTION_MODE != 'off' "
+                "(the order path posts through the gateway, e.g. "
+                "http://quant-api-gateway:8000)."
+            )
+        if not self.gateway_api_key:
+            raise ValueError(
+                "CSM_GATEWAY_API_KEY is required when CSM_EXECUTION_MODE != 'off' "
+                "(presented as the X-API-Key header on every order request)."
+            )
+        if not self.execution_account:
+            raise ValueError(
+                "CSM_EXECUTION_ACCOUNT is required when CSM_EXECUTION_MODE != 'off' "
+                "(NormalizedOrder.account is mandatory)."
+            )
+        if self.execution_mode == "live" and self.execution_broker == "sim":
+            raise ValueError(
+                "CSM_EXECUTION_BROKER must be a real venue ('liberator' or "
+                "'settrade') when CSM_EXECUTION_MODE='live'; got 'sim'."
             )
         return self
 

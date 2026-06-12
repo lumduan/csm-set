@@ -196,24 +196,14 @@ async def run_post_refresh_hook(
     # ---------------------------------------------------------------
     if live_config is not None and not prices.empty:
         try:
-            equity_series = _reconstruct_live_equity(
-                live_config=live_config, prices=prices
-            )
+            equity_series = _reconstruct_live_equity(live_config=live_config, prices=prices)
         except Exception:
-            logger.warning(
-                "post-refresh hook: _reconstruct_live_equity failed", exc_info=True
-            )
-        if (
-            manager.postgres is not None
-            and equity_series is not None
-            and not equity_series.empty
-        ):
+            logger.warning("post-refresh hook: _reconstruct_live_equity failed", exc_info=True)
+        if manager.postgres is not None and equity_series is not None and not equity_series.empty:
             try:
                 await manager.postgres.write_equity_curve(strategy_id, equity_series)
             except Exception:
-                logger.warning(
-                    "post-refresh hook: write_equity_curve failed", exc_info=True
-                )
+                logger.warning("post-refresh hook: write_equity_curve failed", exc_info=True)
 
     # ---------------------------------------------------------------
     # 4. Daily report → Gateway HTTP ingestion contract.
