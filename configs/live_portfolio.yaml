@@ -58,9 +58,29 @@ strategy_id: csm-set
 #   [entry_date, today] and UPSERTs every row, so leaving entry_date at 06-04
 #   would overwrite the historical 06-04 equity row (1,119,768.31) with a
 #   fictional 16,700-share mark.  Restarting at 06-05 preserves it.
-entry_date: "2026-06-05"
+#
+# 2026-07-01: July rebalance — first fully systematic rotation (1-out/1-in),
+# executed at ATO. Plan: docs/live-test/monthly/2026-06.md; rationale:
+# docs/live-test/events/2026-06-30-rebalance-systematic-and-pipeline-gap.md.
+#   SELL MCOT (16,700 sh @ 5.15) → gross 86,005.00 − fees @0.16799% 144.48 =
+#   net 85,860.52; realized P/L vs cost basis 100,824.58 = −14,964.06
+#   (−14.84%). MCOT was evicted on three independent grounds: buffer
+#   eviction, EMA100 fast-exit (close 5.10 < EMA100 5.45 at the Jun 30
+#   evaluation), and liquidity (63-day ADTV 3.58M THB below the 5M floor).
+#   BUY FORTH (5,300 sh @ 16.10) → gross 85,330.00 + fees @0.16799% 143.35 =
+#   all-in 85,473.35; avg_cost = 85,473.35 / 5,300 = 16.1270 (4-dp). FORTH
+#   was the top eligible composite challenger (pct 0.947, ICT sector) and
+#   steps directly into MCOT's old ICT sector slot.
+#   Cash: 10,483.18 + 85,860.52 − 85,473.35 = 10,870.35.  No capital
+#   injection — a clean, self-funding cash rotation.
+#   entry_date reset to 2026-07-01 because the book composition changed: the
+#   equity reconstruction reprices the *current* book back over
+#   [entry_date, today], so it must restart here to avoid overwriting the
+#   historical 06-05..06-30 equity rows with a fictional FORTH-instead-of-
+#   MCOT mark.
+entry_date: "2026-07-01"
 starting_nav: 1100000.0
-cash: 10483.18
+cash: 10870.35
 positions:
   - symbol: DELTA
     shares: 300
@@ -89,6 +109,6 @@ positions:
   - symbol: EPG
     shares: 17300
     avg_cost: 5.9099
-  - symbol: MCOT
-    shares: 16700
-    avg_cost: 6.0374
+  - symbol: FORTH
+    shares: 5300
+    avg_cost: 16.1270
