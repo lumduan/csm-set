@@ -1,7 +1,7 @@
 # Live Test Documentation
 
 > Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy.
-> **Period:** May–December 2026 | **Status:** Phase A — Setup & Calibration
+> **Period:** May–December 2026 | **Status:** Phase B — Execution & Observation (Jun–Aug 2026); 2 calendar months complete, July underway
 
 ## Quick Reference
 
@@ -22,14 +22,21 @@
 
 ## Current Phase
 
-**Phase A — Setup & Calibration (May 2026)**
+**Phase A — Setup & Calibration (May 2026)** — ✅ CLOSED 2026-05-31 (all exit criteria met)
 
 - [x] A.1 Environment Lock
 - [x] A.2 Configuration
 - [x] A.3 Infrastructure Check (19/19 May sessions refreshed; scheduler cron bug fixed `7be6762` and validated — 3 consecutive clean unattended fires May 21/22/25; see [events/2026-05-18-scheduler-cron-misfire.md](events/2026-05-18-scheduler-cron-misfire.md))
 - [x] A.4 Baseline Reporting (research report complete — 132 symbols ranked, top 10 buy list ready)
-- First monthly review committed: [monthly/2026-05.md](monthly/2026-05.md)
-- Second monthly review committed: [monthly/2026-06.md](monthly/2026-06.md) — June; the **first fully systematic rebalance** (July 1 ATO = SELL MCOT / BUY FORTH, 1-out/1-in)
+- Bonus baseline (not a formal A-deliverable): [monthly/2026-05.md](monthly/2026-05.md)
+
+**Phase B — Execution & Observation (June–August 2026)** — 🔄 IN PROGRESS (1 of 3 monthly reviews filed)
+
+- [x] June monthly review: [monthly/2026-06.md](monthly/2026-06.md) — the **first fully systematic rebalance** (July 1 ATO = SELL MCOT / BUY FORTH, 1-out/1-in)
+- [ ] July monthly review — due 2026-08-03 (first trading day of August, before ATO)
+- [ ] August monthly review — due ~2026-09-01
+- Daily automation: 42/42 trading days logged through 2026-07-02, zero gaps, 100% refresh success
+- Weekly health checks: 7 filed ([weekly/2026-05-08.md](weekly/2026-05-08.md) → [weekly/2026-06-26.md](weekly/2026-06-26.md)); next due ~2026-07-03/04
 
 ## Everyday Job Summary
 
@@ -65,3 +72,5 @@ _Last updated: 2026-06-30_
 | Max Drawdown | -4.60% (May 19, since inception) | > -15% | OK |
 | Data Completeness | 100% (39/39 days) | >= 95% | OK |
 | System Uptime | Container healthy @ 8100; scheduler validated (Jun 30 = fastest, zero-retry cron) | >= 99% | OK |
+
+_(Next refresh: 2026-08-03, with the July monthly review.)_

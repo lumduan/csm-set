@@ -3,7 +3,7 @@
 **Feature:** Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy
 **Branch:** `live-test`
 **Created:** 2026-05-04
-**Status:** Phase A in progress (container healthy, 72h stability period started)
+**Status:** Phase B in progress — 2 calendar months complete (May, June); July underway (Day 42 as of 2026-07-02). Phase A closed 2026-05-31 (all exit criteria met). Phase B exit gate (3 consecutive months, Jun–Aug) tracks 1 of 3 monthly reviews filed (June); July review due 2026-08-03.
 **Environment Lock:** Git tag `live-test-v1.0.0` at commit `892e78a`
 **Docker Port:** 8100 (host) → 8000 (container)
 **Depends on:** Phase 7 (Hardening & Documentation — complete), Phase 4.9 (Signal Robustness & Risk Stabilization — complete)
@@ -201,29 +201,34 @@ live_test:
   - [x] Exit mechanisms documented: only monthly rebalance (exit rank floor 35%, buffer 0.25, EMA100 fast exit, portfolio circuit breaker -10%/-5%)
   - [x] Per-position stop-loss rules REMOVED — not in backtest, not in live test
   - [x] `.env` configured with tvkit credentials and `CSM_PUBLIC_MODE=false`
-  - [ ] Validate configuration loads correctly via `Settings` pydantic model
+  - [x] Validate configuration loads correctly via `Settings` pydantic model — implicitly validated: 42/42 trading days of clean container boots with zero Settings/pydantic validation errors
 
-- [ ] **A.3 Infrastructure Check**
+- [x] **A.3 Infrastructure Check**
   - [x] Docker container starts and is healthy (`csm-set-csm-1` Up, healthy)
-  - [ ] Container stable for 72 consecutive hours (started 2026-05-04 — in progress)
-  - [ ] APScheduler triggers daily data refresh without failures for 5 consecutive trading days (first trading day: 2026-05-05)
+  - [x] Container stable for 72 consecutive hours (started 2026-05-04) — far exceeded: 2 months continuous uptime; only restarts were operator-initiated (rebalance NAV recomputes, deploys)
+  - [x] APScheduler triggers daily data refresh without failures for 5 consecutive trading days (first trading day: 2026-05-05) — far exceeded: 42/42 trading days refreshed through 2026-07-02, 0 failures logged
   - [x] Docker auto-restart policy configured (`restart: unless-stopped` in compose)
-  - [ ] Verify disk space: ensure >= 10 GB free for 8 months of parquet data accumulation
+  - [x] Verify disk space: ensure >= 10 GB free for 8 months of parquet data accumulation — confirmed 2026-07-03: 110G free of 361G filesystem; csm-set `data/` dir only 58M after 2 months (well under the 2–4GB/8-month estimate)
 
 - [x] **A.4 Baseline Reporting**
   - [x] Generate initial portfolio composition snapshot (daily log 2026-05-04: 10 stocks, top momentum quintile)
   - [x] Portfolio rationale notebook generated (`notebooks/05_live_portfolio_rationale.ipynb`) with embedded data fallback
   - [x] Backtest baseline metrics documented: Phase 3.8 CAGR 12.52%, Sharpe 0.663, Max DD -31.03%; Phase 4.9 CAGR 36.24%, Sharpe 2.70, Max DD -10.54%
-  - [ ] Generate initial regime state report (BULL/BEAR/NEUTRAL, SMA200 position) — SET vs SMA200 check pending before first entry
-  - [ ] Log the current SET index level and 200-day SMA for future comparison
+  - [x] Generate initial regime state report (BULL/BEAR/NEUTRAL, SMA200 position) — established from the first trading day (2026-05-05); every daily log since includes a Regime State section (BULL detected continuously since inception)
+  - [x] Log the current SET index level and 200-day SMA for future comparison — part of every daily log's Market Context table since day 1
 
-**Exit criteria:** Container stable for 72 hours, 5 consecutive successful daily refreshes, baseline report committed.
+**Exit criteria:** Container stable for 72 hours, 5 consecutive successful daily refreshes, baseline report committed. **MET — Phase A closed 2026-05-31.**
 
 ---
 
 ### Phase B — Execution & Observation (June–August 2026)
 
 **Goal:** Run the strategy daily with minimal intervention. Collect data. Observe.
+
+**Progress (as of 2026-07-02, Day 42):**
+- B.1 Daily Automation — ACTIVE since 2026-05-05; 42/42 trading days logged through 2026-07-02, zero data gaps, 100% refresh success.
+- B.2 Weekly Health Checks — 7 filed (`2026-05-08` → `2026-06-26`); next due ~2026-07-03/04.
+- B.3 Monthly Performance Reviews — 1 of 3 required filed (`monthly/2026-06.md`, closed 2026-06-30). July review due 2026-08-03 (first trading day of August, before ATO); August review due ~2026-09-01.
 
 **Deliverables:**
 
@@ -261,7 +266,7 @@ live_test:
   - Monthly review saved as `docs/live-test/monthly/YYYY-MM.md`
   - Include exported charts in `docs/live-test/graphs/`
 
-**Exit criteria:** 3 consecutive months of daily logs, weekly health checks, and monthly reviews. No data gaps exceeding 24 hours. No unexplained strategy behavior.
+**Exit criteria:** 3 consecutive months of daily logs, weekly health checks, and monthly reviews. No data gaps exceeding 24 hours. No unexplained strategy behavior. **Status: 1 of 3 required consecutive months filed (June); on track, pending July + August reviews with no gaps/unexplained behavior.**
 
 ---
 
