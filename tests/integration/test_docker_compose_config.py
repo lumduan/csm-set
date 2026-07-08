@@ -96,14 +96,19 @@ class TestPrivateCompose:
         assert "localhost:3000" in origins
         assert "localhost:5173" in origins
 
-    def test_forwards_tvkit_auth_token(self) -> None:
-        """TVKIT_AUTH_TOKEN is forwarded from the host shell with a required marker."""
-        env = _service(_load_yaml(PRIVATE_COMPOSE))["environment"]
-        token_value = env["TVKIT_AUTH_TOKEN"]
-        # Compose ${VAR:?msg} interpolation form — fails fast when the host
-        # has not exported a cookie blob, instead of booting unauthenticated.
-        assert token_value.startswith("${TVKIT_AUTH_TOKEN")
-        assert ":?" in token_value, "must use the required-variable marker"
+    def test_loads_env_file_for_tvkit_auth_token(self) -> None:
+        """TVKIT_AUTH_TOKEN reaches the container via env_file (.env), not an
+        explicit ``environment:`` entry.
+
+        The token is optional — an unset value means anonymous free-tier tvkit
+        fetching (see the compose file header), so the old ``${VAR:?msg}``
+        required-marker interpolation was intentionally dropped. What must hold
+        is that the private override loads ``.env`` (the vehicle for CSM_* +
+        the optional cookie) and does not pin the token as a hardcoded env var.
+        """
+        service = _service(_load_yaml(PRIVATE_COMPOSE))
+        assert service["env_file"] == ".env"
+        assert "TVKIT_AUTH_TOKEN" not in service.get("environment", {})
 
     def test_results_volume_writable(self) -> None:
         """Results volume is writable — no :ro suffix."""
