@@ -33,6 +33,7 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 ## Table of Contents
 
 - [What this project does](#what-this-project-does)
+- [Fund Fact Sheet](#fund-fact-sheet)
 - [Quick Start (Public)](#quick-start-public)
 - [Architecture (Headless)](#architecture-headless)
 - [What you will see](#what-you-will-see)
@@ -64,6 +65,30 @@ Powered by [tvkit](https://github.com/lumduan/tvkit), pandas/numpy, and FastAPI.
 - Frontend-agnostic JSON data contract with JSON Schema sidecars
 
 **Cross-sectional momentum** (also called relative momentum) ranks stocks within a universe by their past return over a lookback window (typically 12 months, skipping the most recent month to avoid short-term reversal). The strategy buys the top quintile and, in a long-only implementation, weights them equally or by risk target. The approach was first documented by Jegadeesh & Titman (1993) and has been replicated across equity markets globally. This project applies it to the Stock Exchange of Thailand (SET) with Thai-market-specific constraints: minimum ADV of 100M THB, minimum listing of 12 months, and a 200-day SMA regime filter on the SET index. See [docs/concepts/momentum.md](docs/concepts/momentum.md) for the full theoretical background.
+
+---
+
+## Fund Fact Sheet
+
+A one-page, investor-facing summary of the strategy — what it does, its backtested returns and risk
+versus the SET, year-by-year performance, a data-reliability assessment, and how to read the four
+research notebooks. Written in Thai. **บทสรุปกลยุทธ์แบบหน้าเดียว** สำหรับนักลงทุน.
+
+| Metric (backtest 2009–2026, net of 15 bps, benchmark = SET Total Return) | Value |
+|---|---|
+| CAGR — compound annual return | **12.5%/yr** (SET: 7.3%) |
+| Max drawdown | **−31%** |
+| Sharpe / Sortino / Calmar | 0.66 / 0.85 / 0.40 |
+| Annual volatility | 17% |
+| Positive months | 43.9% |
+| Portfolio turnover | ~250%/yr |
+| Years beating SET | **10 / 18** |
+
+- **Read on GitHub (Markdown):** [docs/fact-sheet/README.md](docs/fact-sheet/README.md)
+- **Styled one-pager (HTML):** [CSM-SET_Fact_Sheet.html](docs/fact-sheet/CSM-SET_Fact_Sheet.html) · [browser preview](https://htmlpreview.github.io/?https://github.com/lumduan/csm-set/blob/live-test/docs/fact-sheet/CSM-SET_Fact_Sheet.html)
+
+> Backtested / simulated results for education only — **not** a real fund and **not** investment
+> advice. Past results do not guarantee future returns. See the disclaimer at the top of this README.
 
 ---
 
