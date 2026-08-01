@@ -170,7 +170,7 @@ async def _fetch_batch_with_retry(
         # empty/all-NaN frame also satisfies — so a symbol that returned nothing
         # dropped out of `remaining`, was never retried, and was reported as a
         # success. That false liveness is how SET:BANPU read as healthy from
-        # 2026-07-17 until a month-end audit caught it (it was a ticker rename).
+        # 2026-07-17 until a month-end audit caught it.
         recovered: list[str] = [s for s in remaining if _has_usable_data(result.get(s))]
         # Merge only the usable frames. An unusable one must not reach the caller
         # either: it would land in prices_latest as an all-NaN column and count
@@ -303,7 +303,29 @@ async def daily_refresh(
     rebalance_dates: list[pd.Timestamp] = list(
         pd.date_range(end=pd.Timestamp.now(tz="Asia/Bangkok"), periods=12, freq="BME")
     )
-    FeaturePipeline(store=store).build(prices=fetched, rebalance_dates=rebalance_dates)
+    # `sector_rel_strength` is gated on a symbol → sector mapping the same way the
+    # risk-adjusted factors are gated on the index. The universe snapshot is the
+    # only place the refresh can get one, and it carried no sector column until
+    # build_universe.py started emitting one — so the factor was never computed.
+    # Absent column ⇒ None ⇒ the pipeline behaves exactly as before, which keeps
+    # a refresh against an older snapshot working instead of erroring.
+    symbol_sectors: dict[str, str] | None = None
+    if "sector" in universe.columns:
+        symbol_sectors = {
+            str(sym): str(sec)
+            for sym, sec in zip(universe["symbol"], universe["sector"], strict=True)
+            if pd.notna(sec)
+        }
+    else:
+        logger.warning(
+            "daily refresh: universe_latest has no 'sector' column — sector_rel_strength "
+            "will NOT be computed; rebuild the universe with scripts/build_universe.py"
+        )
+    FeaturePipeline(store=store).build(
+        prices=fetched,
+        rebalance_dates=rebalance_dates,
+        symbol_sectors=symbol_sectors,
+    )
     duration: float = time.perf_counter() - started_at
     # ``failures`` covers the union of held + universe so the legacy marker
     # field keeps the same meaning (requested - successfully fetched).

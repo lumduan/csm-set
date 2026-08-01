@@ -1,6 +1,7 @@
 """Universe construction utilities for csm-set."""
 
 import logging
+from collections.abc import Mapping
 
 import pandas as pd
 
@@ -9,6 +10,7 @@ from csm.config.constants import (
     MIN_AVG_DAILY_VOLUME,
     MIN_DATA_COVERAGE,
     MIN_PRICE_THB,
+    UNKNOWN_SECTOR,
 )
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
@@ -111,24 +113,46 @@ class UniverseBuilder:
         symbols: list[str],
         rebalance_dates: pd.DatetimeIndex,
         snapshot_store: ParquetStore | None = None,
+        symbol_sectors: Mapping[str, str] | None = None,
     ) -> None:
         """Build and persist one snapshot per rebalance date.
 
         Each snapshot is saved as a DataFrame with ``symbol`` and ``asof``
-        columns under key ``universe/{YYYY-MM-DD}``.
+        columns under key ``universe/{YYYY-MM-DD}`` — plus ``sector`` when
+        ``symbol_sectors`` is supplied.
 
         Args:
             symbols: Candidate symbols to evaluate at each date.
             rebalance_dates: Sorted rebalance date index.
             snapshot_store: Store to write snapshots to. Defaults to
                 ``self._store`` (same as the OHLCV source) when None.
+            symbol_sectors: Optional symbol → SET-official sector mapping. When
+                given, each snapshot carries a ``sector`` column. This is what
+                lets ``FeaturePipeline.build`` compute ``sector_rel_strength``:
+                it needs a ``symbol_sectors`` mapping, the daily refresh can only
+                get one from the universe it already loads, and the universe
+                carried no sector at all. Symbols absent from the mapping get
+                ``UNKNOWN`` rather than being dropped — a missing classification
+                must not silently shrink the tradeable universe.
         """
         out_store = snapshot_store if snapshot_store is not None else self._store
         for date in rebalance_dates:
             passing = self.build_snapshot(date, symbols)
-            snapshot_df = pd.DataFrame({"symbol": passing, "asof": date})
+            columns: dict[str, object] = {"symbol": passing, "asof": date}
+            if symbol_sectors is not None:
+                columns["sector"] = [symbol_sectors.get(s, UNKNOWN_SECTOR) for s in passing]
+            snapshot_df = pd.DataFrame(columns)
             key = f"universe/{date.strftime('%Y-%m-%d')}"
             out_store.save(key, snapshot_df)
+            if symbol_sectors is not None:
+                unknown = sum(1 for s in passing if s not in symbol_sectors)
+                if unknown:
+                    logger.warning(
+                        "Snapshot %s: %d/%d symbols have no sector classification",
+                        date.strftime("%Y-%m-%d"),
+                        unknown,
+                        len(passing),
+                    )
             logger.info("Saved %s: %d symbols", key, len(passing))
 
 

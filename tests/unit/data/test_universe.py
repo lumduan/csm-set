@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from csm.config.constants import UNKNOWN_SECTOR
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
 from csm.data.universe import UniverseBuilder
@@ -107,3 +108,62 @@ def test_build_all_snapshots_one_per_date(tmp_path: Path) -> None:
 
     universe_keys = universe_store.list_keys()
     assert len(universe_keys) == len(rebalance_dates)
+
+
+def test_snapshots_carry_sector_when_mapping_supplied(tmp_path: Path) -> None:
+    """``sector`` is what unlocks ``sector_rel_strength`` in the feature pipeline.
+
+    The pipeline needs a ``symbol_sectors`` mapping; the daily refresh can only
+    build one from the universe snapshot it already loads; and the snapshot
+    carried no sector at all — so the factor was never computed.
+    """
+    raw_store = ParquetStore(tmp_path / "raw")
+    universe_store = ParquetStore(tmp_path / "universe")
+    raw_store.save("SET:GOOD", _make_ohlcv())
+
+    builder = UniverseBuilder(raw_store, Settings())
+    dates = pd.date_range("2023-06-30", periods=2, freq="BME", tz="Asia/Bangkok")
+    builder.build_all_snapshots(
+        ["SET:GOOD"],
+        dates,
+        snapshot_store=universe_store,
+        symbol_sectors={"SET:GOOD": "ETRON"},
+    )
+
+    snapshot = universe_store.load(f"universe/{dates[0].strftime('%Y-%m-%d')}")
+    assert list(snapshot.columns) == ["symbol", "asof", "sector"]
+    assert snapshot.loc[snapshot["symbol"] == "SET:GOOD", "sector"].iloc[0] == "ETRON"
+
+
+def test_unclassified_symbol_is_labelled_not_dropped(tmp_path: Path) -> None:
+    """A missing sector must never shrink the tradeable universe."""
+    raw_store = ParquetStore(tmp_path / "raw")
+    universe_store = ParquetStore(tmp_path / "universe")
+    raw_store.save("SET:GOOD", _make_ohlcv())
+
+    builder = UniverseBuilder(raw_store, Settings())
+    dates = pd.date_range("2023-06-30", periods=1, freq="BME", tz="Asia/Bangkok")
+    builder.build_all_snapshots(
+        ["SET:GOOD"], dates, snapshot_store=universe_store, symbol_sectors={}
+    )
+
+    snapshot = universe_store.load(f"universe/{dates[0].strftime('%Y-%m-%d')}")
+    assert "SET:GOOD" in set(snapshot["symbol"]), "an unclassified symbol must survive"
+    assert snapshot["sector"].iloc[0] == UNKNOWN_SECTOR
+
+
+def test_no_sector_column_when_mapping_omitted(tmp_path: Path) -> None:
+    """Omitting the mapping leaves the schema exactly as it was.
+
+    Keeps a refresh against an older snapshot working rather than erroring.
+    """
+    raw_store = ParquetStore(tmp_path / "raw")
+    universe_store = ParquetStore(tmp_path / "universe")
+    raw_store.save("SET:GOOD", _make_ohlcv())
+
+    builder = UniverseBuilder(raw_store, Settings())
+    dates = pd.date_range("2023-06-30", periods=1, freq="BME", tz="Asia/Bangkok")
+    builder.build_all_snapshots(["SET:GOOD"], dates, snapshot_store=universe_store)
+
+    snapshot = universe_store.load(f"universe/{dates[0].strftime('%Y-%m-%d')}")
+    assert "sector" not in snapshot.columns
