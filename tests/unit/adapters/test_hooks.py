@@ -16,6 +16,7 @@ from csm.adapters.hooks import (
     run_post_rebalance_hook,
     run_post_refresh_hook,
 )
+from csm.adapters.payload import _series_to_equity_curve
 from csm.data.store import ParquetStore
 from csm.research.backtest import (
     BacktestConfig,
@@ -279,6 +280,78 @@ class TestPostRefreshHook:
         pg.write_equity_curve.assert_called_once()
         series = pg.write_equity_curve.call_args[0][1]
         assert str(series.index.tz) == "UTC"
+
+    @pytest.mark.asyncio
+    async def test_equity_index_is_date_normalized(self, tmp_path: Path) -> None:
+        """equity_curve is one row per day, so the series must be keyed by date."""
+        pg = _make_pg()
+        manager = _make_manager(postgres=pg)
+        # 09:55 BKK — the real market-data bar time-of-day as of 2026-07-31.
+        dates = pd.date_range("2026-05-01 09:55", periods=10, freq="B", tz="Asia/Bangkok")
+        symbols = ["SET:A", "SET:B", "SET:C", "SET:D", "SET:E"]
+        prices = pd.DataFrame(
+            {s: [100.0 + i * 1.0 + j * 0.1 for i in range(10)] for j, s in enumerate(symbols)},
+            index=dates,
+        )
+        store = _make_store(prices=prices)
+        live_path = _write_live_portfolio_yaml(tmp_path)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        series = pg.write_equity_curve.call_args[0][1]
+        assert str(series.index.tz) == "UTC"
+        assert (series.index == series.index.normalize()).all(), (
+            f"index carries a time-of-day: {sorted({t.strftime('%H:%M') for t in series.index})}"
+        )
+        # one key per calendar day
+        assert len(series.index) == len({t.date() for t in series.index})
+
+    @pytest.mark.asyncio
+    async def test_bar_time_of_day_change_does_not_re_key_the_series(self, tmp_path: Path) -> None:
+        """Regression: the upsert target is (time, strategy_id), so a vendor-side change in
+        the price bar's time-of-day must NOT produce new keys.
+
+        Before this was fixed, tvkit moved the daily bar 09:00 -> 10:00 -> 09:55 BKK and each
+        move made the daily refresh INSERT a fresh copy of the whole [entry_date, today]
+        window instead of updating it in place — 97 rows across 60 dates.
+        """
+        symbols = ["SET:A", "SET:B", "SET:C", "SET:D", "SET:E"]
+        live_path = _write_live_portfolio_yaml(tmp_path)
+
+        def _prices_at(time_of_day: str) -> pd.DataFrame:
+            dates = pd.date_range(
+                f"2026-05-01 {time_of_day}", periods=10, freq="B", tz="Asia/Bangkok"
+            )
+            return pd.DataFrame(
+                {s: [100.0 + i * 1.0 + j * 0.1 for i in range(10)] for j, s in enumerate(symbols)},
+                index=dates,
+            )
+
+        captured: list[pd.Series] = []
+        for tod in ("09:00", "09:55"):
+            pg = _make_pg()
+            manager = _make_manager(postgres=pg)
+            await run_post_refresh_hook(
+                manager, _make_store(prices=_prices_at(tod)), live_portfolio_path=live_path
+            )
+            captured.append(pg.write_equity_curve.call_args[0][1])
+
+        first, second = captured
+        assert first.index.equals(second.index), (
+            "a bar time-of-day change re-keyed the series — the next refresh would insert "
+            "duplicates instead of upserting"
+        )
+        pd.testing.assert_series_equal(first, second)
+
+    @pytest.mark.asyncio
+    async def test_normalization_does_not_change_the_gateway_payload(self, tmp_path: Path) -> None:
+        """_series_to_equity_curve already emits date-only keys, so the wire format is
+        unaffected by normalizing upstream."""
+        idx = pd.date_range("2026-05-01 02:55", periods=5, freq="B", tz="UTC")
+        raw = pd.Series([1000.0 + i for i in range(5)], index=idx, name="equity")
+        normalized = pd.Series(raw.to_numpy(), index=idx.normalize(), name="equity")
+
+        assert _series_to_equity_curve(raw) == _series_to_equity_curve(normalized)
 
     @pytest.mark.asyncio
     async def test_posts_daily_report_with_contract_shape(self, tmp_path: Path) -> None:
