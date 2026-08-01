@@ -15,6 +15,8 @@ import pandas as pd
 from api.scheduler.jobs import DEFAULT_LIVE_PORTFOLIO_PATH, _held_symbols_from_config
 from fastapi.testclient import TestClient
 
+from csm.config.constants import INDEX_SYMBOL
+
 
 def _echo_requested_symbols(symbols: list[str], *_args: object, **_kwargs: object) -> dict:
     """Return a frame for every requested symbol, so no retry/backoff loop is entered."""
@@ -121,15 +123,17 @@ class TestManualTrigger:
         marker_path = tmp_path / "results" / ".tmp" / "last_refresh.json"
         assert marker_path.is_file()
         marker = json.loads(marker_path.read_text())
-        # The marker counts the universe symbols PLUS the held book, which
-        # daily_refresh fetches first from the real configs/live_portfolio.yaml.
-        # Derived rather than hardcoded so a rebalance that changes the position
-        # count does not break this test.
+        # The marker counts the universe symbols, the SET index that daily_refresh
+        # prepends (it gates residual_momentum / sharpe_momentum in the pipeline),
+        # PLUS the held book, which is fetched first from the real
+        # configs/live_portfolio.yaml. Derived rather than hardcoded so a rebalance
+        # that changes the position count does not break this test.
         expected_fetched = len(
-            {"SET001", "SET002", "SET003"}
+            {"SET001", "SET002", "SET003", INDEX_SYMBOL}
             | set(_held_symbols_from_config(DEFAULT_LIVE_PORTFOLIO_PATH))
         )
         assert marker["symbols_fetched"] == expected_fetched
         assert marker["failures"] == 0
+        assert marker["index_fetched"] is True
         assert "timestamp" in marker
         assert "duration_seconds" in marker
