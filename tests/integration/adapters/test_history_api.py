@@ -25,6 +25,8 @@ from httpx import ASGITransport, AsyncClient
 
 from csm.adapters import AdapterManager
 
+from .conftest import seed_daily_performance, seed_portfolio_snapshot, snapshot_time_utc
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
@@ -55,11 +57,17 @@ def _equity_series(n: int = 10) -> pd.Series:
 
 
 def _trades_df() -> pd.DataFrame:
+    """Seed trades. ``side`` must be UPPERCASE.
+
+    ``trade_history_side_check`` allows only ``LONG``/``SHORT``/``BUY``/``SELL``/``HOLD``,
+    and production writes ``TradeSide.BUY == "BUY"``. The lowercase values this
+    helper used to carry never matched production and violated the constraint.
+    """
     return pd.DataFrame(
         {
             "time": pd.to_datetime(["2026-04-01", "2026-04-02", "2026-04-03"], utc=True),
             "symbol": ["PTT", "PTT", "BBL"],
-            "side": ["buy", "sell", "buy"],
+            "side": ["BUY", "SELL", "BUY"],
             "quantity": [100.0, 100.0, 50.0],
             "price": [40.0, 42.0, 150.0],
             "commission": [6.42, 6.74, 12.05],
@@ -155,13 +163,13 @@ class TestPerformanceLive:
         if adapter_manager.gateway is None:
             pytest.skip("Gateway adapter not available")
 
-        for offset in range(3):
-            await adapter_manager.gateway.write_daily_performance(
-                TEST_STRATEGY_ID,
-                datetime(2026, 4, 1, tzinfo=UTC) + timedelta(days=offset),
+        for days_ago in range(3):
+            await seed_daily_performance(
+                adapter_manager.gateway,
+                snapshot_time_utc(days_ago),
                 {
-                    "daily_return": 0.01 + offset * 0.001,
-                    "cumulative_return": 0.05 + offset * 0.005,
+                    "daily_return": 0.01 + days_ago * 0.001,
+                    "cumulative_return": 0.05 + days_ago * 0.005,
                     "total_value": 1_000_000.0,
                     "cash_balance": 10_000.0,
                     "max_drawdown": -0.04,
@@ -191,11 +199,12 @@ class TestPortfolioSnapshotsLive:
         if adapter_manager.gateway is None:
             pytest.skip("Gateway adapter not available")
 
-        for offset in range(2):
-            await adapter_manager.gateway.write_portfolio_snapshot(
-                datetime(2026, 4, 10, tzinfo=UTC) + timedelta(days=offset),
+        for days_ago in range(2):
+            await seed_portfolio_snapshot(
+                adapter_manager.gateway,
+                snapshot_time_utc(days_ago),
                 {
-                    "total_portfolio": 1_010_000.0 + offset * 1_000.0,
+                    "total_portfolio": 1_010_000.0 + days_ago * 1_000.0,
                     "weighted_return": 0.012,
                     "combined_drawdown": -0.05,
                     "active_strategies": 1,
