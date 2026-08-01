@@ -137,9 +137,7 @@ Defects found during the live test that are **not yet fixed**. Each links to its
 | Issue | Effect | Filed |
 |-------|--------|-------|
 | **Price adjustment never applied** — the `adjustment` kwarg is resolved, validated, then discarded, so `data/raw/dividends/` is split-adjusted only | Every momentum factor computed in the live test to date is on split-adjusted prices while documented as total-return | [2026-08-01](events/2026-08-01-price-adjustment-never-applied.md) |
-| **Ranking-pipeline gap** — `daily_refresh` builds features without `SET:SET` and without `symbol_sectors` | `residual_momentum`, `sharpe_momentum` and `sector_rel_strength` are never written; the authoritative composite needs a **manual re-fetch** at every month-end. `residual_momentum` is the only signal that passed the ICIR > 0.15 gate | [2026-06-30](events/2026-06-30-rebalance-systematic-and-pipeline-gap.md) |
-| **False-liveness retry** — an all-NaN column reads as a "recovered" symbol | A symbol that returned no data is counted as a successful fetch | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
-| **Benchmark series null** — `^SET.BK` is not among the fetched columns | `extended_data.benchmark_series` is null in every daily-report POST; no benchmark comparison is possible | — |
+| **`SET:BANPU` has no price history** — the 2026-08-01 "renamed to BANPUU" reading was **retracted**; settfex lists plain `BANPU` and the banked `BANPUU` frame held only 2 bars | BANPU fails the coverage screen, so the 2026-07-31 universe is 210 rather than 211. No trading impact — not held, not in the August 3 list. Re-fetching `SET:BANPU` restores it | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
 
 _Resolved during the July month-end sweep: the truncated universe (136 → 211 symbols) and the
 duplicated `equity_curve` (97 → 60 rows) — both in
@@ -152,3 +150,10 @@ takes its date from the price bar rather than the wall clock, skipping the gatew
 no bar arrived for today ([2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) follow-up #1).
 **The unattended proof of that guard lands at the next SET closure, candidate 2026-08-12** — expect no
 row dated that day and a WARNING in the container log._
+
+_Also resolved 2026-08-01: the **ranking-pipeline gap**. `daily_refresh` now fetches `SET:SET` and
+passes `symbol_sectors` from the universe, so all **six** factors compute — `residual_momentum`
+(the only one that cleared the ICIR > 0.15 gate), `sharpe_momentum` and `sector_rel_strength` were
+previously never written, which is why the authoritative composite needed a manual re-fetch at three
+consecutive month-ends. The **false-liveness retry** (an all-NaN column reading as "recovered") and
+the **null benchmark** (`^SET.BK`, a symbol tvkit never served) are fixed in the same pass._

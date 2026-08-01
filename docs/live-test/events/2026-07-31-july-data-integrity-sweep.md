@@ -54,12 +54,37 @@ appended to — the absence of that flag is why the store went stale in the firs
 no longer contains delisted names (BANPU, PTECH, SVI), so rebuilding historical snapshots would drop
 those names from the past and inject **survivorship bias** into any point-in-time backtest.
 
-### Sub-finding — BANPU was a ticker change, not a fetch failure
+### Sub-finding — BANPU ~~was a ticker change~~ **RETRACTED 2026-08-01**
 
-`SET:BANPU` had been the terminal fetch miss since 2026-07-17. settfex lists no BANPU but does list
-**`BANPUU` — "BANPU PUBLIC COMPANY LIMITED"**, the same company; prices are continuous across the
-rename (5.70 on 2026-05-29 → 5.75 on 2026-07-15). Corrected in both the engine store and the
-universe.
+> **This sub-finding did not hold up and is retracted the same day it was filed.** It originally
+> read: *"`SET:BANPU` had been the terminal fetch miss since 2026-07-17. settfex lists no BANPU but
+> does list `BANPUU` — 'BANPU PUBLIC COMPANY LIMITED', the same company; prices are continuous across
+> the rename (5.70 on 2026-05-29 → 5.75 on 2026-07-15)."*
+>
+> Re-querying settfex later on **2026-08-01** returns **`BANPU`** (type `S`, sector `ENERG`) and **no
+> `BANPUU` at all**. Two facts settle it:
+>
+> - the symbol list went **702 → 701**, with `BANPUU` the only name removed;
+> - the `SET:BANPUU` frame actually banked on 2026-08-01 holds **2 bars** (2026-07-15 → 07-16), not
+>   the continuous history the original claim asserted. A genuine rename carries its history across.
+>
+> So `BANPUU` was a **transient listing artifact**, not a rename, and the "prices are continuous"
+> evidence was never in the stored data — it was inferred. The canonical ticker is and remains
+> `SET:BANPU`.
+>
+> **Consequence:** `SET:BANPU` is back in `symbols.json` but has no frame in the raw store, so it
+> fails the coverage screen and is absent from the regenerated universe — which is why the
+> 2026-07-31 snapshot is **210** symbols rather than 211. Re-fetching `SET:BANPU` restores it.
+> **No trading impact:** BANPU/BANPUU is neither held nor in the 2026-08-03 ATO trade list.
+>
+> The lesson is the one this whole sweep keeps repeating: a claim about a symbol's identity has to be
+> checked against the **stored frame**, not against the listing API alone. Two bars would have
+> falsified it immediately.
+
+`SET:BPP` is a different case and **still stands**: **halted, not broken.** It resolves and returns
+bars ending 2026-07-16, and SET carries the last price forward (settfex's YTD close as of 07-30 is
+the same 12.00). It therefore fails the 90-bar volume/coverage screen and has dropped out of the
+regenerated universe, which is the correct outcome.
 
 `SET:BPP` is a different case: **halted, not broken.** It resolves and returns bars ending
 2026-07-16, and SET carries the last price forward (settfex's YTD close as of 07-30 is the same

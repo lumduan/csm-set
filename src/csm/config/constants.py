@@ -3,6 +3,11 @@
 # TradingView symbol format used by tvkit
 INDEX_SYMBOL: str = "SET:SET"
 
+# Placeholder for a symbol whose SET-official sector could not be resolved.
+# A missing classification must never drop a symbol from the universe, so it is
+# labelled rather than filtered; sector-relative features simply group it here.
+UNKNOWN_SECTOR: str = "UNKNOWN"
+
 # SET industry group codes → official English names (source: SET website)
 SET_SECTOR_CODES: dict[str, str] = {
     "AGRO": "Agro & Food Industry",
@@ -99,6 +104,7 @@ __all__: list[str] = [
     "SET_SECTOR_CODES",
     "TIMEZONE",
     "TRANSACTION_COST_BPS",
+    "UNKNOWN_SECTOR",
     "VOL_LOOKBACK_DAYS",
     "VOL_SCALE_CAP",
     "VOL_TARGET_ANNUAL",

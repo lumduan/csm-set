@@ -101,8 +101,15 @@ def _parse_args() -> argparse.Namespace:
 
 async def _fetch_set_symbols(
     include: frozenset[SecurityType],
-) -> list[str]:
-    """Fetch SET-listed symbols via settfex, filtered by security type."""
+) -> tuple[list[str], dict[str, str]]:
+    """Fetch SET-listed symbols via settfex, filtered by security type.
+
+    Returns:
+        A ``(symbols, symbol_sectors)`` pair. settfex's ``StockSymbol`` already
+        carries the SET-official ``sector``, so the mapping costs nothing extra —
+        it was simply being discarded here, which is why the universe snapshots
+        had no sector column and ``sector_rel_strength`` could never be computed.
+    """
     from settfex.services.set import get_stock_list  # noqa: PLC0415
 
     stock_list = await get_stock_list()
@@ -124,8 +131,19 @@ async def _fetch_set_symbols(
         logger.info("  %s (%s): %d symbols", code, SECURITY_TYPE_LABELS[stype], count)
 
     symbols = sorted(f"SET:{s.symbol}" for s in filtered)
-    logger.info("Fetched %d SET symbols (filtered from %d total)", len(symbols), len(all_set))
-    return symbols
+    symbol_sectors: dict[str, str] = {
+        f"SET:{s.symbol}": s.sector for s in filtered if getattr(s, "sector", None)
+    }
+    missing: int = len(symbols) - len(symbol_sectors)
+    if missing:
+        logger.warning("%d of %d symbols carry no sector from settfex", missing, len(symbols))
+    logger.info(
+        "Fetched %d SET symbols (filtered from %d total); %d distinct sectors",
+        len(symbols),
+        len(all_set),
+        len(set(symbol_sectors.values())),
+    )
+    return symbols, symbol_sectors
 
 
 def _save_symbols_json(symbols: list[str], output_path: Path) -> None:
@@ -162,7 +180,7 @@ async def main() -> None:
 
     # Step 1+2 — fetch and filter symbol list
     try:
-        symbols = await _fetch_set_symbols(include)
+        symbols, symbol_sectors = await _fetch_set_symbols(include)
     except Exception:
         logger.exception("Failed to fetch symbol list from settfex")
         sys.exit(1)
@@ -197,7 +215,12 @@ async def main() -> None:
     )
     builder = UniverseBuilder(raw_store, app_settings)
     try:
-        builder.build_all_snapshots(symbols, rebalance_dates, snapshot_store=universe_store)
+        builder.build_all_snapshots(
+            symbols,
+            rebalance_dates,
+            snapshot_store=universe_store,
+            symbol_sectors=symbol_sectors,
+        )
     except Exception:
         logger.exception("Snapshot build failed")
         sys.exit(1)

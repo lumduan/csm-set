@@ -303,7 +303,29 @@ async def daily_refresh(
     rebalance_dates: list[pd.Timestamp] = list(
         pd.date_range(end=pd.Timestamp.now(tz="Asia/Bangkok"), periods=12, freq="BME")
     )
-    FeaturePipeline(store=store).build(prices=fetched, rebalance_dates=rebalance_dates)
+    # `sector_rel_strength` is gated on a symbol → sector mapping the same way the
+    # risk-adjusted factors are gated on the index. The universe snapshot is the
+    # only place the refresh can get one, and it carried no sector column until
+    # build_universe.py started emitting one — so the factor was never computed.
+    # Absent column ⇒ None ⇒ the pipeline behaves exactly as before, which keeps
+    # a refresh against an older snapshot working instead of erroring.
+    symbol_sectors: dict[str, str] | None = None
+    if "sector" in universe.columns:
+        symbol_sectors = {
+            str(sym): str(sec)
+            for sym, sec in zip(universe["symbol"], universe["sector"], strict=True)
+            if pd.notna(sec)
+        }
+    else:
+        logger.warning(
+            "daily refresh: universe_latest has no 'sector' column — sector_rel_strength "
+            "will NOT be computed; rebuild the universe with scripts/build_universe.py"
+        )
+    FeaturePipeline(store=store).build(
+        prices=fetched,
+        rebalance_dates=rebalance_dates,
+        symbol_sectors=symbol_sectors,
+    )
     duration: float = time.perf_counter() - started_at
     # ``failures`` covers the union of held + universe so the legacy marker
     # field keeps the same meaning (requested - successfully fetched).
