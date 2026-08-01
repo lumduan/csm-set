@@ -12,16 +12,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 
 from csm.adapters.gateway_client import GatewayWriteError
 from csm.adapters.payload import DEFAULT_STRATEGY_TYPE, build_ingestion_payload
+from csm.config.constants import TIMEZONE
 from csm.config.settings import Settings, get_settings
 from csm.data.benchmark import BenchmarkLoader
 from csm.data.exceptions import BenchmarkUnavailableError
@@ -45,6 +47,45 @@ if TYPE_CHECKING:
 logger: logging.Logger = logging.getLogger(__name__)
 DEFAULT_STRATEGY_ID: str = "csm-set"
 DEFAULT_LIVE_PORTFOLIO_PATH: Path = Path("configs/live_portfolio.yaml")
+
+#: SET trading days are Bangkok days, so the "is this bar from today?" comparison
+#: must be made in Bangkok. A UTC comparison happens to agree for the 18:00 BKK
+#: cron (= 11:00 UTC) and silently disagrees for any run after 07:00 BKK the
+#: following morning.
+_MARKET_TZ: ZoneInfo = ZoneInfo(TIMEZONE)
+
+
+def _market_date(moment: datetime) -> date:
+    """Return the Bangkok calendar date of ``moment``.
+
+    Naive input is assumed to already be Bangkok local time — that is what the
+    OHLCV loaders produce, and it is the only reading under which a naive
+    timestamp is meaningful here.
+    """
+    if moment.tzinfo is None:
+        return moment.date()
+    return moment.astimezone(_MARKET_TZ).date()
+
+
+def _describe_stale_bar(summary: dict[str, Any] | None) -> str:
+    """Classify *why* the latest bar is not today's, for the operator's benefit.
+
+    The two causes are indistinguishable from the data alone — the market was
+    closed, or it traded and our fetch did not produce a bar — and **both must
+    skip the write**, so this never changes control flow. It only makes the log
+    line actionable: a clean refresh reads as an expected closure, a refresh with
+    failures reads as something to investigate.
+    """
+    if not summary:
+        return "no refresh summary available"
+    failures: object = summary.get("failures")
+    held_failed: object = summary.get("held_symbols_failed")
+    if isinstance(failures, int) and failures > 0:
+        return (
+            f"the refresh reported {failures} fetch failure(s) "
+            f"({held_failed} of them held symbols) — likely a DATA problem, not a market closure"
+        )
+    return "the refresh reported no fetch failures — consistent with a market closure"
 
 
 async def run_post_refresh_hook(
@@ -71,6 +112,20 @@ async def run_post_refresh_hook(
       When the config is missing, the gateway writes are skipped as well
       (we never write synthetic data into any live-portfolio tables).
 
+    **No fresh bar, no gateway write.** The daily report is stamped with the
+    date of the price bar it describes (``LivePortfolioMetrics.snapshot_time``),
+    never with the wall clock, and the POST is skipped entirely when that bar
+    is not today's. On a day SET does not trade the scheduler still fires and
+    the metrics still compute — against the *previous* session's bar — so
+    without this the gateway receives an exact carry-forward stamped as a new
+    day. That is a fabricated observation, not a duplicate: the repeated
+    ``daily_return`` biases every mean, σ, Sharpe and hit-rate computed off
+    those tables. It produced 12 phantom rows across the three gateway tables
+    on the four 2026 closures before being fixed.
+
+    The equity-curve path never had this bug because it derives its dates from
+    the price panel's index; this makes the gateway path behave the same way.
+
     Args:
         manager: The shared ``AdapterManager`` (each slot may be ``None``).
         store: ``ParquetStore`` from which ``prices_latest`` and
@@ -82,7 +137,6 @@ async def run_post_refresh_hook(
             cwd.
     """
     strategy_id: str = DEFAULT_STRATEGY_ID
-    today: datetime = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     portfolio_path: Path = (
         live_portfolio_path if live_portfolio_path is not None else DEFAULT_LIVE_PORTFOLIO_PATH
     )
@@ -216,26 +270,57 @@ async def run_post_refresh_hook(
     #    for the day — so we no longer need a separate snapshot write.
     # ---------------------------------------------------------------
     if manager.gateway_client is not None and live_metrics is not None:
-        try:
-            curve: pd.Series = (
-                equity_series if equity_series is not None else pd.Series(dtype="float64")
-            )
-            payload: dict[str, object] = build_ingestion_payload(
-                strategy_id=strategy_id,
-                strategy_type=DEFAULT_STRATEGY_TYPE,
-                last_updated=today,
-                live_metrics=live_metrics,
-                equity_curve=curve,
-                report=live_metrics.report,
-            )
-            await manager.gateway_client.post_daily_report(payload)
-        except GatewayWriteError:
-            logger.warning("post-refresh hook: gateway daily-report POST failed", exc_info=True)
-        except Exception:
+        # The date is taken from the DATA, never from the wall clock.
+        #
+        # `snapshot_time` is the last price bar `compute_live_portfolio_metrics`
+        # repriced against, so on a day SET did not trade it is the PREVIOUS
+        # session's bar. Stamping the payload with `datetime.now()` instead is
+        # what wrote 12 phantom rows across the three gateway tables on the four
+        # 2026 closures (06-01, 06-03, 07-28, 07-29): an exact carry-forward of
+        # the prior session, including a repeated `daily_return`, which injects
+        # fabricated observations into every statistic read off those tables.
+        #
+        # `db_csm_set.equity_curve` never had this bug precisely because it
+        # derives its dates from the price panel's index. This is that rule
+        # applied to the gateway path.
+        bar_date: date = _market_date(live_metrics.snapshot_time)
+        today_date: date = _market_date(datetime.now(tz=UTC))
+        # Only the *date* is data-derived; the stamp itself stays UTC midnight.
+        # `daily_performance` is uniformly 00:00:00 UTC (all 61 rows) and its unique
+        # index is (time, strategy_id), so posting the raw bar timestamp — 09:55
+        # Bangkok, i.e. 02:55 UTC — would INSERT a second row per day instead of
+        # upserting onto the existing one. That is precisely the mechanism that took
+        # `equity_curve` to 97 rows across 60 dates.
+        as_of: datetime = datetime.combine(bar_date, time.min, tzinfo=UTC)
+        if bar_date != today_date:
             logger.warning(
-                "post-refresh hook: unexpected error building/posting daily report",
-                exc_info=True,
+                "post-refresh hook: skipping gateway daily-report POST — the latest price bar "
+                "is %s, not today (%s), so there is nothing new to report; %s",
+                bar_date.isoformat(),
+                today_date.isoformat(),
+                _describe_stale_bar(summary),
             )
+        else:
+            try:
+                curve: pd.Series = (
+                    equity_series if equity_series is not None else pd.Series(dtype="float64")
+                )
+                payload: dict[str, object] = build_ingestion_payload(
+                    strategy_id=strategy_id,
+                    strategy_type=DEFAULT_STRATEGY_TYPE,
+                    last_updated=as_of,
+                    live_metrics=live_metrics,
+                    equity_curve=curve,
+                    report=live_metrics.report,
+                )
+                await manager.gateway_client.post_daily_report(payload)
+            except GatewayWriteError:
+                logger.warning("post-refresh hook: gateway daily-report POST failed", exc_info=True)
+            except Exception:
+                logger.warning(
+                    "post-refresh hook: unexpected error building/posting daily report",
+                    exc_info=True,
+                )
     elif manager.gateway_client is not None:
         logger.info(
             "post-refresh hook: skipping daily-report POST — no live portfolio "

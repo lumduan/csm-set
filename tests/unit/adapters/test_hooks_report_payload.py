@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import textwrap
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -13,6 +15,8 @@ import pytest
 from csm.adapters import AdapterManager
 from csm.adapters.hooks import run_post_refresh_hook
 from csm.data.store import ParquetStore
+
+_BKK: ZoneInfo = ZoneInfo("Asia/Bangkok")
 
 
 def _make_gateway_client() -> AsyncMock:
@@ -29,7 +33,19 @@ def _make_pg() -> AsyncMock:
 
 
 def _make_prices() -> pd.DataFrame:
-    idx: pd.DatetimeIndex = pd.date_range("2026-05-01", periods=5, freq="B", tz="UTC")
+    """5 daily bars ending **today** (Bangkok), 09:55 as in production.
+
+    The dates must be now-relative: the hook only POSTs a daily report when the
+    latest bar is today's, so a fixed historical base would be treated as a market
+    closure and skipped. See ``run_post_refresh_hook``'s "no fresh bar, no gateway
+    write" contract.
+    """
+    last_bar: pd.Timestamp = pd.Timestamp(
+        datetime.combine(datetime.now(_BKK).date(), time(9, 55), tzinfo=_BKK)
+    )
+    idx: pd.DatetimeIndex = pd.DatetimeIndex(
+        [last_bar - pd.Timedelta(days=4 - i) for i in range(5)]
+    )
     return pd.DataFrame(
         {
             "SET:DELTA": [319.0, 320.0, 321.0, 322.0, 323.0],
@@ -47,15 +63,18 @@ def _make_store(prices: pd.DataFrame) -> MagicMock:
 
 
 def _write_yaml(tmp_path: Path) -> Path:
+    # entry_date must sit at/below the first bar of the now-relative panel from
+    # _make_prices, otherwise the repriced window is empty and no metrics compute.
+    entry: str = (datetime.now(_BKK).date() - pd.Timedelta(days=4)).isoformat()
     yaml_text: str = textwrap.dedent(
-        """
+        f"""
         strategy_id: csm-set
-        entry_date: "2026-05-01"
+        entry_date: "{entry}"
         starting_nav: 1000000.0
         cash: 37699.71
         positions:
-          - {symbol: DELTA, shares: 300, avg_cost: 319.51}
-          - {symbol: SET:IRPC, shares: 56600, avg_cost: 2.30}
+          - {{symbol: DELTA, shares: 300, avg_cost: 319.51}}
+          - {{symbol: SET:IRPC, shares: 56600, avg_cost: 2.30}}
         """
     ).strip()
     path: Path = tmp_path / "live_portfolio.yaml"

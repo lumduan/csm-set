@@ -136,7 +136,6 @@ Defects found during the live test that are **not yet fixed**. Each links to its
 
 | Issue | Effect | Filed |
 |-------|--------|-------|
-| **Phantom rows on closed days** — the scheduler holds no market calendar and writes a carry-forward row (incl. a repeated `daily_return`) whenever it fires on a non-trading day. **The 12 historical rows were deleted 2026-08-01, but the write path is unchanged** — the next closure (candidate: **2026-08-12**) will write them again | Any mean/σ/Sharpe/hit-rate read from `daily_performance`, `portfolio_snapshot` or `strategy_report_snapshot` ingests fabricated observations | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
 | **Price adjustment never applied** — the `adjustment` kwarg is resolved, validated, then discarded, so `data/raw/dividends/` is split-adjusted only | Every momentum factor computed in the live test to date is on split-adjusted prices while documented as total-return | [2026-08-01](events/2026-08-01-price-adjustment-never-applied.md) |
 | **Ranking-pipeline gap** — `daily_refresh` builds features without `SET:SET` and without `symbol_sectors` | `residual_momentum`, `sharpe_momentum` and `sector_rel_strength` are never written; the authoritative composite needs a **manual re-fetch** at every month-end. `residual_momentum` is the only signal that passed the ICIR > 0.15 gate | [2026-06-30](events/2026-06-30-rebalance-systematic-and-pipeline-gap.md) |
 | **False-liveness retry** — an all-NaN column reads as a "recovered" symbol | A symbol that returned no data is counted as a successful fetch | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
@@ -147,4 +146,9 @@ duplicated `equity_curve` (97 → 60 rows) — both in
 [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md). Resolved 2026-08-01: the **unscoped
 `DELETE` in the `infra_db` fixture** — deletes are now scoped to self-identifying test rows and the
 suite refuses to run against a database holding rows it did not create, verified against the live
-`db_gateway` with zero mutations ([2026-08-01](events/2026-08-01-portfolio-snapshot-wiped-by-test-fixture.md))._
+`db_gateway` with zero mutations ([2026-08-01](events/2026-08-01-portfolio-snapshot-wiped-by-test-fixture.md));
+and the **phantom rows on closed days** — the 12 historical rows were deleted and the write path now
+takes its date from the price bar rather than the wall clock, skipping the gateway POST entirely when
+no bar arrived for today ([2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) follow-up #1).
+**The unattended proof of that guard lands at the next SET closure, candidate 2026-08-12** — expect no
+row dated that day and a WARNING in the container log._

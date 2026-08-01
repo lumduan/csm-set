@@ -17,7 +17,7 @@ the most consequential of the three for anything that reads the gateway tables.
 | # | Defect | Blast radius | Status |
 |---|---|---|---|
 | 1 | **Universe silently truncated** to 136 of 211 symbols for three months | Changed the published August trade list | **RESOLVED** 2026-08-01 |
-| 2 | **Phantom rows written on closed days** into `daily_performance` + `portfolio_snapshot` + `strategy_report_snapshot` | Fabricated return observations in every statistic computed off those tables | **rows DELETED 2026-08-01** — the write path is still uncalendared, so it recurs |
+| 2 | **Phantom rows written on closed days** into `daily_performance` + `portfolio_snapshot` + `strategy_report_snapshot` | Fabricated return observations in every statistic computed off those tables | **RESOLVED 2026-08-01** — 12 rows deleted **and** the write path fixed ("no fresh bar, no gateway write"). Unattended proof lands at the next closure |
 | 3 | **`equity_curve` duplicated** — 97 rows across 60 dates | None on values; every date since the restart carried a duplicate | **RESOLVED** — `b76d709` |
 
 Defect 2 turned out to be **broader than the July review recorded**: it is not a July one-off. See
@@ -147,9 +147,20 @@ fingerprint identically to the production originals.
 2026-07-28/29 (2 rows, `total_value = 0`) and those rows were **left in place** — that strategy
 belongs to another session. Flagged, not acted on.
 
-**The write path is unchanged, so this recurs.** Deleting rows is a cleanup, not a fix. The scheduler
-still holds no market calendar and will write the same carry-forward on the next closure — the known
-next candidate is **2026-08-12**. See Follow-up #1.
+**The write path was fixed the same day** — see Follow-up #1. Deleting rows alone would have been a
+cleanup, not a fix; the scheduler would have written the same carry-forward on the next closure.
+
+**The check that closes this out is unattended and dated.** The next SET closure — known candidate
+**2026-08-12** — is the first time the guard runs without anyone watching. Expected on that date:
+
+- **no new rows** in `daily_performance`, `portfolio_snapshot` or `strategy_report_snapshot`
+  (counts stay wherever the intervening sessions leave them, with no row *dated 2026-08-12*);
+- a **WARNING** in the `csm-set-csm-1` container log reading
+  `skipping gateway daily-report POST — the latest price bar is <prev session>, not today
+  (2026-08-12) … consistent with a market closure`.
+
+If a row dated 2026-08-12 appears, the guard did not deploy — check that the image was **rebuilt**,
+not just the pin bumped: `src/` is baked into the image, not mounted.
 
 ---
 
@@ -207,11 +218,33 @@ of `daily_performance` has no way to know they should.
 
 ## Follow-up
 
-1. **Teach the gateway write path a market calendar** *(open, highest value)*. The scheduler should
-   not write a `daily_performance` / `portfolio_snapshot` row on a day SET did not trade. Note that
-   `settfex.get_holidays()` returns **HTTP 401 for 2026** and csm-set's pinned `settfex` (0.1.0)
-   ships no holiday module, so the calendar source is itself an open question — the cheapest correct
-   guard is "no new price bar ⇒ no write", which is exactly what `equity_curve` already does right.
+1. ~~**Teach the gateway write path a market calendar.**~~ ✅ **DONE 2026-08-01** — implemented as
+   **"no fresh bar, no gateway write"** in `run_post_refresh_hook`, which is what `equity_curve`
+   already did right. Two changes, because there were two separable defects:
+   - **The date now comes from the data.** `LivePortfolioMetrics.snapshot_time` — the last price bar
+     the metrics were computed against — replaces the wall-clock `datetime.now()`. That field already
+     existed and was simply being ignored; the wall clock was the whole bug.
+   - **The POST is skipped** when that bar's **Bangkok** date is not today's. Bangkok, not UTC: the
+     18:00 BKK cron is 11:00 UTC so the two agree by luck, and disagree for any run after 07:00 BKK
+     the next morning.
+
+   **No calendar file, deliberately.** The pinned `settfex` **0.1.0 ships no holiday module at all**
+   (`modules: ['services', 'utils']`) and `get_holidays()` 401s for 2026. A hand-maintained YAML
+   would reintroduce this exact failure the first time a closure was missing from it. "Did a bar
+   arrive for today?" is ground truth, needs no maintenance, and also catches
+   market-traded-but-our-fetch-broke — which must skip the write too, so the inability to distinguish
+   the two never changes behaviour. The log line classifies the cause from the refresh summary
+   (`failures == 0` reads as a closure; `failures > 0` as a data problem) for the operator's benefit.
+
+   **One trap found while building it.** Stamping the payload with the raw bar timestamp would have
+   written `09:55+07:00` → **02:55 UTC**, while all 61 existing rows are `00:00:00 UTC` and the unique
+   index is `(time, strategy_id)` — so every future row would have *inserted* rather than upserted.
+   That is precisely the mechanism that took `equity_curve` to 97 rows across 60 dates. Only the
+   **date** is data-derived; the stamp stays UTC midnight. A test pins both halves.
+
+   Verified by replaying the hook against the **real** `prices_latest` truncated to 2026-07-27 — the
+   exact panel that existed on the 2026-07-28 closure: **0 POSTs**. Against a panel whose last bar is
+   today: **1 POST**, stamped `<today>T00:00:00+00:00`.
 2. ~~**Backfill-delete the existing phantom rows.**~~ ✅ **DONE 2026-08-01** — 12 rows (not 8; the
    third gateway table was found during the work), backed up with a replay-verified restore script,
    deleted in one transaction, survivors fingerprint-identical. Note this was done **before** #1, so
