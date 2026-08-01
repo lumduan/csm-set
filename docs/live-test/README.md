@@ -1,7 +1,7 @@
 # Live Test Documentation
 
 > Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy.
-> **Period:** May–December 2026 | **Status:** Phase B — Execution & Observation (Jun–Aug 2026); 2 calendar months complete, July underway
+> **Period:** May–December 2026 | **Status:** Phase B — Execution & Observation (Jun–Aug 2026); 3 calendar months complete (May–July), August underway
 
 ## Quick Reference
 
@@ -30,13 +30,13 @@
 - [x] A.4 Baseline Reporting (research report complete — 132 symbols ranked, top 10 buy list ready)
 - Bonus baseline (not a formal A-deliverable): [monthly/2026-05.md](monthly/2026-05.md)
 
-**Phase B — Execution & Observation (June–August 2026)** — 🔄 IN PROGRESS (1 of 3 monthly reviews filed)
+**Phase B — Execution & Observation (June–August 2026)** — 🔄 IN PROGRESS (2 of 3 monthly reviews filed)
 
 - [x] June monthly review: [monthly/2026-06.md](monthly/2026-06.md) — the **first fully systematic rebalance** (July 1 ATO = SELL MCOT / BUY FORTH, 1-out/1-in)
-- [ ] July monthly review — due 2026-08-03 (first trading day of August, before ATO)
+- [x] July monthly review: [monthly/2026-07.md](monthly/2026-07.md) — filed 2026-07-31, **rebalance amended 2026-08-01** after a universe defect was corrected (August 3 ATO = SELL DELTA + PTTGC / BUY SMT + MGC, 2-out/2-in)
 - [ ] August monthly review — due ~2026-09-01
-- Daily automation: 42/42 trading days logged through 2026-07-02, zero gaps, 100% refresh success
-- Weekly health checks: 7 filed ([weekly/2026-05-08.md](weekly/2026-05-08.md) → [weekly/2026-06-26.md](weekly/2026-06-26.md)); next due ~2026-07-03/04
+- Daily automation: 61 daily logs filed, [2026-05-04](daily/2026-05-04.md) → [2026-07-31](daily/2026-07-31.md), zero gaps; 60 trading sessions carry a DB NAV row (2026-05-04 is the inception/entry day)
+- Weekly health checks: 12 filed ([weekly/2026-05-08.md](weekly/2026-05-08.md) → [weekly/2026-07-31.md](weekly/2026-07-31.md)); next due ~2026-08-07/08
 
 ## Everyday Job Summary
 
@@ -62,15 +62,87 @@ These are the **only exit mechanisms tested in the 15-year backtest** (207 rebal
 
 ## Key Metrics at a Glance
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-31 (July month-close)_
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Cumulative Return | +2.19% (restart series; +1.78% TWR since inception) | Positive | OK |
-| NAV | 1,119,968.18 THB (fresh all-time high) | — | — |
-| Sharpe Ratio | 1.15 (annualized, n=17, June) | >= 0.5 | OK (small-sample) |
-| Max Drawdown | -4.60% (May 19, since inception) | > -15% | OK |
-| Data Completeness | 100% (39/39 days) | >= 95% | OK |
-| System Uptime | Container healthy @ 8100; scheduler validated (Jun 30 = fastest, zero-retry cron) | >= 99% | OK |
+| NAV | 1,226,740.35 THB | — | — |
+| Monthly Return (July) | +9.53% — best month of the live test | Positive | OK |
+| Total Return on NAV | +11.52% vs the rebased 1,100,000 capital base (+11.48% time-weighted since inception) | Positive | OK |
+| **Realized P/L (since inception)** | **−19,315.93 THB** — banked, from 2 rebalances | — | — |
+| **Unrealized P/L (open book)** | **+147,665.89 THB (+13.82%)** on a 1,068,204.11 cost basis | — | — |
+| **Commission paid (since inception)** | **−3,052.51 THB** @ 0.16799% all-in — 0.25% of NAV, 15.8% of the realized loss | — | — |
+| Sharpe Ratio | 3.56 (annualized, n=21, July) | >= 0.5 | OK (small-sample — see caveat) |
+| Max Drawdown | -7.11% (2026-07-30, vs the 2026-07-22 peak of 1,262,400.35) | > -15% | OK |
+| Data Completeness | 100% (60/60 trading sessions) | >= 95% | OK |
+| System Uptime | Container healthy @ 8100; 18:00 BKK cron fired every session | >= 99% | OK |
 
-_(Next refresh: 2026-08-03, with the July monthly review.)_
+**Read the Sharpe with care.** 3.56 is one month of 21 observations and carries no useful confidence
+interval. The two largest observations in the sample are the final two sessions and they are of
+opposite sign — **2026-07-30 −3.70%** (largest decline of the restart series) and **2026-07-31
++4.61%** (largest price-driven gain of the live test). The honest baseline remains the Phase 3.8
+backtest's **0.663** on the broad top-quantile book; the live book is a ~10-name concentrated
+expression of the same edge and is therefore higher-variance by construction.
+
+Regime held **BULL** on all 21 July sessions — SET closed the month at **1,623.64** with the SMA200
+at 1,418.32, a **+14.48%** cushion.
+
+### Realized vs unrealized P/L
+
+![Realized vs Unrealized P/L](graphs/pnl_realized_unrealized.png)
+
+The two halves of the result answer different questions and are reported separately at every cadence
+(daily, weekly, monthly):
+
+| | Since inception | Meaning |
+|---|---:|---|
+| **Realized** | **−19,315.93 THB** | Banked. Only moves when a position is **closed** — i.e. at a rebalance — and can never change again |
+| **Unrealized** | **+147,665.89 THB** | Mark-to-market on the open book. Moves every session; can round-trip to zero |
+| **Total** | **+128,349.96 THB** | Sum of the two |
+| **Commission paid** | **−3,052.51 THB** | All-in fees on every fill @ **0.16799%**. Already *inside* the two rows above — buy-side is capitalised into cost basis, sell-side is netted out of realized. Shown separately because it is otherwise invisible |
+
+Every realisation so far, and the commission behind it. Both exits came from exit rules, not
+discretionary calls:
+
+| Date | Event | Realized | Commission |
+|---|---|---:|---:|
+| 2026-05-05 | Initial entry — 10 names | — | −1,611.15 |
+| 2026-06-02 | Rebalance — NEX +6,591.99 · AGE −3,558.45 · JTS −7,385.41 | −4,351.87 | −984.44 |
+| 2026-06-04/05 | MCOT filled in two tranches | — | −169.09 |
+| 2026-07-01 | SELL MCOT — tripped three independent exit signals | −14,964.06 | −287.83 |
+| | **Cumulative** | **−19,315.93** | **−3,052.51** |
+
+**Commission is 0.25% of NAV but 15.8% of the realized loss.** The NAV denominator makes rotation
+friction look free; the realized one is the denominator that carries the consequence, because
+friction scales with turnover, not with book size. The pending August 2-out/2-in adds roughly
+570 THB.
+
+**Realized P/L being negative while the strategy is up +11.52% is expected, not a warning.** A
+momentum book banks its losers at rebalance and lets winners ride to the next one, so realized P/L
+skews negative while the gains accumulate unrealized. It becomes worth investigating only if the
+*total* stalls, or if realisations start coming from discretionary sales rather than exit rules. The
+pending 2026-08-03 rotation (SELL DELTA + PTTGC) would take cumulative realized to
+**−45,048.18 THB**.
+
+_(Next refresh: ~2026-09-01, with the August monthly review. Charts:
+[equity curve](graphs/equity_curve.png) · [drawdown](graphs/drawdown.png) ·
+[monthly returns](graphs/monthly_returns.png) · [realized vs unrealized P/L](graphs/pnl_realized_unrealized.png)
+— see [graphs/README.md](graphs/README.md) before regenerating; they are **not** all built from one
+series.)_
+
+## Known Open Issues
+
+Defects found during the live test that are **not yet fixed**. Each links to its event report.
+
+| Issue | Effect | Filed |
+|-------|--------|-------|
+| **Phantom rows on closed days** — the scheduler holds no market calendar and writes a carry-forward row (incl. a repeated `daily_return`) whenever it fires on a non-trading day. 8 rows across 4 dates so far | Any mean/σ/Sharpe/hit-rate read from `daily_performance` or `portfolio_snapshot` ingests fabricated observations. Every review so far has excluded them **by hand** | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
+| **Price adjustment never applied** — the `adjustment` kwarg is resolved, validated, then discarded, so `data/raw/dividends/` is split-adjusted only | Every momentum factor computed in the live test to date is on split-adjusted prices while documented as total-return | [2026-08-01](events/2026-08-01-price-adjustment-never-applied.md) |
+| **Ranking-pipeline gap** — `daily_refresh` builds features without `SET:SET` and without `symbol_sectors` | `residual_momentum`, `sharpe_momentum` and `sector_rel_strength` are never written; the authoritative composite needs a **manual re-fetch** at every month-end. `residual_momentum` is the only signal that passed the ICIR > 0.15 gate | [2026-06-30](events/2026-06-30-rebalance-systematic-and-pipeline-gap.md) |
+| **False-liveness retry** — an all-NaN column reads as a "recovered" symbol | A symbol that returned no data is counted as a successful fetch | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
+| **Unscoped `DELETE` in the `infra_db` fixture** — `tests/integration/adapters/conftest.py:120` and `:180` | Running that suite against a populated database empties the live `portfolio_snapshot`. It has already happened once (restored) | [2026-08-01](events/2026-08-01-portfolio-snapshot-wiped-by-test-fixture.md) |
+| **Benchmark series null** — `^SET.BK` is not among the fetched columns | `extended_data.benchmark_series` is null in every daily-report POST; no benchmark comparison is possible | — |
+
+_Resolved during the July month-end sweep: the truncated universe (136 → 211 symbols) and the
+duplicated `equity_curve` (97 → 60 rows) — both in
+[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md)._
