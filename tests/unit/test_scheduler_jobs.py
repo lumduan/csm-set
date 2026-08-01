@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Generator
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -61,6 +62,29 @@ def _echoing_fetch_batch(*, fail: set[str] | None = None) -> AsyncMock:
         return {s: _ohlcv() for s in symbols if s not in omit}
 
     return AsyncMock(side_effect=_fetch)
+
+
+@pytest.fixture(autouse=True)
+def _never_hit_the_holiday_api() -> Generator[None, None, None]:
+    """Stub the SET holiday calendar at the NETWORK boundary for every test here.
+
+    ``daily_refresh`` consults the calendar before fetching, so without this the
+    unit suite would make a live settfex request per test — slow, flaky, and
+    dependent on a WAF-gated host being reachable from CI.
+
+    Patching ``get_holidays`` rather than ``is_set_holiday`` is deliberate: it
+    leaves the real fail-open wrapper in the call path, so a test that wants to
+    exercise an outage can simply override this with a ``side_effect`` and still
+    go through the production logic.
+
+    The default is an empty calendar — i.e. "not a holiday" — which keeps every
+    pre-existing test behaving exactly as it did before the calendar landed.
+    """
+    with patch(
+        "settfex.services.set.holiday.get_holidays",
+        new=AsyncMock(return_value=SimpleNamespace(holidays=[])),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -308,6 +332,100 @@ def _held_config(*symbols: str) -> LivePortfolioConfig:
         cash=0.0,
         positions=tuple(LivePosition(symbol=s, shares=100.0, avg_cost=100.0) for s in symbols),
     )
+
+
+class TestHolidaySkipsTheFetch:
+    """On a published SET closure the refresh skips the fetch entirely.
+
+    Purely an optimisation: without it the scheduler fires, spends ~6 minutes
+    pulling a couple of hundred symbols that cannot have moved, and is then
+    correctly refused by the no-fresh-bar guard at the write. The calendar lets
+    it decline earlier and say why.
+
+    The failure asymmetry is what these tests really pin. Skipping a *real*
+    session loses live data that cannot be backfilled, so the calendar must fail
+    open — an outage means "trade as normal", never "assume closed".
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_held_phase(self) -> Generator[None, None, None]:
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+        ):
+            yield
+
+    async def test_holiday_skips_the_fetch_and_records_why(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline") as MockPipeline,
+            patch(
+                "api.scheduler.jobs.is_set_holiday",
+                new=AsyncMock(return_value=(True, "H.M. Queen Sirikit's Birthday")),
+            ),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+            MockLoader.return_value.fetch_batch.assert_not_awaited()
+            MockPipeline.return_value.build.assert_not_called()
+
+        assert result["skipped_reason"] == "set_holiday"
+        assert "Queen Sirikit" in result["skipped_detail"]
+        assert result["symbols_fetched"] == 0
+        assert result["failures"] == 0
+
+        marker = json.loads(
+            (settings_override.results_dir / ".tmp" / "last_refresh.json").read_text()
+        )
+        # The marker must still be written: a skipped run that leaves yesterday's
+        # marker in place is indistinguishable from a scheduler that never fired.
+        assert marker["skipped_reason"] == "set_holiday"
+        assert "timestamp" in marker
+
+    async def test_trading_day_runs_normally(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch("api.scheduler.jobs.is_set_holiday", new=AsyncMock(return_value=(False, ""))),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+            MockLoader.return_value.fetch_batch.assert_awaited()
+
+        assert "skipped_reason" not in result
+        assert result["symbols_fetched"] == 3  # A + B + the SET index
+
+    async def test_calendar_outage_does_not_suppress_a_refresh(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """Fail-open, end to end.
+
+        ``is_set_holiday`` swallows its own errors, so this drives the real
+        helper with a broken settfex rather than stubbing the helper out — the
+        point is that a calendar outage reaches ``daily_refresh`` as "trading
+        day" and the session is still fetched.
+        """
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("settfex unreachable")),
+            ),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+            MockLoader.return_value.fetch_batch.assert_awaited()
+
+        assert "skipped_reason" not in result
+        assert result["symbols_fetched"] == 3
 
 
 class TestIndexSymbolIsAlwaysFetched:
