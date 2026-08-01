@@ -151,6 +151,22 @@ The arithmetic on that third table is the cleanest single confirmation of the wh
 to the prior real session (`md5(2026-07-27) == md5(07-28) == md5(07-29)`; `md5(06-01) == md5(05-29)`;
 `md5(06-03) == md5(06-02)`).
 
+**A fifth check landed later the same day, and it is the only fully external one.** The authoritative
+SET holiday calendar (`settfex` 0.15.x `get_holidays(year=2026)`) lists exactly four closures inside
+the live-test window:
+
+| Date | Official reason |
+|---|---|
+| 2026-06-01 | Substitution for Visakha Bucha Day (Sunday 31 May 2026) |
+| 2026-06-03 | H.M. Queen Suthida Bajrasudhabimalalakshana's Birthday |
+| 2026-07-28 | H.M. King Maha Vajiralongkorn Phra Vajiraklaochaoyuhua's Birthday |
+| 2026-07-29 | Asarnha Bucha Day |
+
+Those are **precisely** the four dates the deletion targeted — no more, no fewer. The arithmetic
+closes as well: **64 business days (2026-05-05 → 07-31) − 4 holidays = 60 expected sessions = 60
+`equity_curve` rows.** The four dates had been derived from the data alone; an outside source
+agreeing on all four *and* on the total is corroboration, not a restatement.
+
 ```
                             before    after
 daily_performance (csm-set)     65  ->    61
@@ -175,8 +191,11 @@ belongs to another session. Flagged, not acted on.
 **The write path was fixed the same day** — see Follow-up #1. Deleting rows alone would have been a
 cleanup, not a fix; the scheduler would have written the same carry-forward on the next closure.
 
-**The check that closes this out is unattended and dated.** The next SET closure — known candidate
-**2026-08-12** — is the first time the guard runs without anyone watching. Expected on that date:
+**The check that closes this out is unattended and dated.** The next SET closure is
+**2026-08-12** — no longer a "candidate": confirmed on 2026-08-01 against the authoritative SET
+holiday calendar (`settfex` 0.15.x `get_holidays(year=2026)`, run ephemerally), which lists it as
+H.M. Queen Sirikit's Birthday / Mother's Day and shows **no other August closure**. That is the first
+time the guard runs without anyone watching. Expected on that date:
 
 - **no new rows** in `daily_performance`, `portfolio_snapshot` or `strategy_report_snapshot`
   (counts stay wherever the intervening sessions leave them, with no row *dated 2026-08-12*);
