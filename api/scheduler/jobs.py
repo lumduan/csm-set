@@ -7,16 +7,18 @@ import json
 import logging
 import random
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from csm.config.constants import INDEX_SYMBOL
+from csm.config.constants import INDEX_SYMBOL, TIMEZONE
 from csm.config.settings import Settings
+from csm.data.calendar import is_set_holiday
 from csm.data.sources import OHLCVSource, build_ohlcv_loader
 from csm.data.store import ParquetStore
 from csm.features.pipeline import FeaturePipeline
@@ -95,6 +97,32 @@ def _trigger_from_standard_crontab(expr: str, timezone: str) -> CronTrigger:
         day_of_week=_standard_dow_to_apscheduler(dow),
         timezone=timezone,
     )
+
+
+def _write_marker(settings: Settings, summary: dict[str, Any]) -> dict[str, Any]:
+    """Persist *summary* to ``results/.tmp/last_refresh.json`` and return it.
+
+    Written atomically (tmp file + rename) so a reader never sees a half-written
+    marker. Shared by both exits from :func:`daily_refresh` — the normal one and
+    the holiday skip — so a skipped run is still *observable*: it reports that
+    the job fired and why it did nothing, rather than leaving yesterday's marker
+    in place and looking like the scheduler never ran.
+
+    Args:
+        settings: Provides ``results_dir``.
+        summary: The run summary. ``timestamp`` is added here.
+
+    Returns:
+        The summary as written, including ``timestamp``.
+    """
+    marker: dict[str, Any] = {"timestamp": datetime.now(UTC).isoformat(), **summary}
+    marker_dir = settings.results_dir / ".tmp"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = marker_dir / "last_refresh.json"
+    tmp_marker = marker_path.with_suffix(".tmp")
+    tmp_marker.write_text(json.dumps(marker, indent=2), encoding="utf-8")
+    tmp_marker.rename(marker_path)
+    return marker
 
 
 def _has_usable_data(frame: pd.DataFrame | None) -> bool:
@@ -241,6 +269,43 @@ async def daily_refresh(
     """
 
     started_at: float = time.perf_counter()
+
+    # Phase 0 — is the market even open today?
+    #
+    # Purely an optimisation, and deliberately a weak one. On a published SET
+    # closure the scheduler still fires (it holds no calendar of its own), spends
+    # ~6 minutes fetching a couple of hundred symbols that cannot have moved, and
+    # is then correctly refused by the no-fresh-bar guard at the write. This skips
+    # the wasted fetch and records why.
+    #
+    # `is_set_holiday` FAILS OPEN — a calendar outage returns "trading day" — so a
+    # settfex problem can never suppress a real session's refresh. The no-bar
+    # guard downstream remains the ground truth for whether anything is written,
+    # and it also covers what no calendar can: the market traded but our fetch
+    # came back empty.
+    today_bkk: date = datetime.now(tz=ZoneInfo(TIMEZONE)).date()
+    holiday, holiday_name = await is_set_holiday(today_bkk)
+    if holiday:
+        logger.info(
+            "daily refresh: %s is a SET holiday (%s) — skipping the fetch entirely",
+            today_bkk.isoformat(),
+            holiday_name,
+        )
+        return _write_marker(
+            settings,
+            {
+                "symbols_fetched": 0,
+                "failures": 0,
+                "duration_seconds": round(time.perf_counter() - started_at, 3),
+                "held_symbols_fetched": 0,
+                "held_symbols_failed": 0,
+                "retry_attempts_used": 0,
+                "index_fetched": False,
+                "skipped_reason": "set_holiday",
+                "skipped_detail": holiday_name,
+            },
+        )
+
     universe: pd.DataFrame = store.load("universe_latest")
     symbols: list[str] = (
         universe["symbol"].astype(str).tolist() if "symbol" in universe.columns else []
@@ -369,27 +434,7 @@ async def daily_refresh(
 
         await run_post_refresh_hook(manager=adapters, store=store, summary=summary)
 
-    marker = {
-        "timestamp": datetime.now(UTC).isoformat(),
-        "symbols_fetched": len(fetched),
-        "duration_seconds": round(duration, 3),
-        "failures": failures,
-        "held_symbols_fetched": held_fetched_count,
-        "held_symbols_failed": held_failed_count,
-        "retry_attempts_used": retry_attempts_used,
-        # The marker is what the daily-log skill and the operator read after an
-        # unattended run, so the index's fate has to be visible here too — not
-        # just in the returned summary, which nothing persists.
-        "index_fetched": index_fetched,
-    }
-    marker_dir = settings.results_dir / ".tmp"
-    marker_dir.mkdir(parents=True, exist_ok=True)
-    marker_path = marker_dir / "last_refresh.json"
-    tmp_marker = marker_path.with_suffix(".tmp")
-    tmp_marker.write_text(json.dumps(marker, indent=2), encoding="utf-8")
-    tmp_marker.rename(marker_path)
-
-    return summary
+    return _write_marker(settings, summary)
 
 
 def create_scheduler(

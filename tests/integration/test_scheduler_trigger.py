@@ -8,14 +8,34 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Generator
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pandas as pd
+import pytest
 from api.scheduler.jobs import DEFAULT_LIVE_PORTFOLIO_PATH, _held_symbols_from_config
 from fastapi.testclient import TestClient
 
 from csm.config.constants import INDEX_SYMBOL
+
+
+@pytest.fixture(autouse=True)
+def _never_hit_the_holiday_api() -> Generator[None, None, None]:
+    """Stub the SET holiday calendar at the network boundary.
+
+    ``daily_refresh`` consults it before fetching, so without this the triggered
+    job makes a live settfex request and cannot reach a terminal state inside the
+    5 s poll budget — which is exactly how this test failed when the calendar
+    landed. Defaults to an empty calendar, i.e. "not a holiday", preserving the
+    behaviour these tests were written against.
+    """
+    with patch(
+        "settfex.services.set.holiday.get_holidays",
+        new=AsyncMock(return_value=SimpleNamespace(holidays=[])),
+    ):
+        yield
 
 
 def _echo_requested_symbols(symbols: list[str], *_args: object, **_kwargs: object) -> dict:
