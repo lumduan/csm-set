@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import textwrap
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -164,6 +166,60 @@ def _make_synthetic_prices_set_columns() -> pd.DataFrame:
     return df
 
 
+def _prices_ending(days_ago: int = 0, *, periods: int = 10) -> pd.DataFrame:
+    """``SET:``-prefixed price panel whose **last bar** is ``days_ago`` days back.
+
+    The hook now refuses to POST a daily report unless the latest bar is *today*
+    (Bangkok), so any test that expects a POST needs a panel anchored to the
+    current date rather than the fixed 2026-05 base ``_make_synthetic_prices``
+    uses. Bars are stamped 09:55 ``Asia/Bangkok`` to match production.
+
+    Args:
+        days_ago: 0 → the last bar is today (POST expected); 1 → yesterday
+            (POST must be skipped, the market-closure case).
+        periods: Number of consecutive daily bars to emit.
+    """
+    last_day = (datetime.now(ZoneInfo("Asia/Bangkok")) - timedelta(days=days_ago)).date()
+    last_bar = pd.Timestamp(
+        datetime.combine(last_day, time(9, 55), tzinfo=ZoneInfo("Asia/Bangkok"))
+    )
+    index = pd.DatetimeIndex(
+        [last_bar - pd.Timedelta(days=periods - 1 - i) for i in range(periods)]
+    )
+    symbols: list[str] = ["A", "B", "C", "D", "E"]
+    data: dict[str, list[float]] = {
+        f"SET:{s}": [100.0 + i * 0.5 + j * 0.1 for i in range(periods)]
+        for j, s in enumerate(symbols)
+    }
+    return pd.DataFrame(data, index=index)
+
+
+def _live_portfolio_yaml_from(tmp_path: Path, prices: pd.DataFrame) -> Path:
+    """Write a live-portfolio config whose ``entry_date`` matches ``prices``.
+
+    ``_write_live_portfolio_yaml`` hard-codes ``2026-05-01``, which sits outside a
+    now-relative panel and would leave the repriced window empty.
+    """
+    entry: str = prices.index[0].date().isoformat()
+    yaml_text: str = textwrap.dedent(
+        f"""
+        strategy_id: csm-set
+        entry_date: "{entry}"
+        starting_nav: 1000.0
+        cash: 100.0
+        positions:
+          - {{symbol: "SET:A", shares: 1.0, avg_cost: 100.0}}
+          - {{symbol: "SET:B", shares: 1.0, avg_cost: 100.0}}
+          - {{symbol: "SET:C", shares: 1.0, avg_cost: 100.0}}
+          - {{symbol: "SET:D", shares: 1.0, avg_cost: 100.0}}
+          - {{symbol: "SET:E", shares: 1.0, avg_cost: 100.0}}
+        """
+    ).strip()
+    path: Path = tmp_path / "live_portfolio.yaml"
+    path.write_text(yaml_text, encoding="utf-8")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Post-refresh hook tests
 # ---------------------------------------------------------------------------
@@ -178,10 +234,10 @@ class TestPostRefreshHook:
         mongo = _make_mongo()
         gc = _make_gateway_client()
         manager = _make_manager(postgres=pg, mongo=mongo, gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
-        live_path = _write_live_portfolio_yaml(tmp_path)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
 
         summary = {"symbols_fetched": 5, "failures": 0, "duration_seconds": 1.5}
         await run_post_refresh_hook(manager, store, summary=summary, live_portfolio_path=live_path)
@@ -357,9 +413,9 @@ class TestPostRefreshHook:
     async def test_posts_daily_report_with_contract_shape(self, tmp_path: Path) -> None:
         gc = _make_gateway_client()
         manager = _make_manager(gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         store = _make_store(prices=prices)
-        live_path = _write_live_portfolio_yaml(tmp_path)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
 
         await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
@@ -383,7 +439,7 @@ class TestPostRefreshHook:
         """Without a live portfolio config the daily-report POST is skipped."""
         gc = _make_gateway_client()
         manager = _make_manager(gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         store = _make_store(prices=prices)
         missing_path = tmp_path / "does_not_exist.yaml"
 
@@ -396,9 +452,9 @@ class TestPostRefreshHook:
         """The posted payload carries the live portfolio NAV, not the synthetic one."""
         gc = _make_gateway_client()
         manager = _make_manager(gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         store = _make_store(prices=prices)
-        live_path = _write_live_portfolio_yaml(tmp_path)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
 
         await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
@@ -412,6 +468,124 @@ class TestPostRefreshHook:
 # ---------------------------------------------------------------------------
 # Post-backtest hook tests
 # ---------------------------------------------------------------------------
+
+
+class TestNoFreshBarNoGatewayWrite:
+    """The gateway daily report is skipped when the latest bar is not today's.
+
+    Regression cover for the phantom holiday rows: on 2026-06-01, 06-03, 07-28 and
+    07-29 SET did not trade, the scheduler fired anyway, and the hook POSTed an exact
+    carry-forward of the previous session stamped with the wall clock — 12 rows across
+    the three gateway tables. ``equity_curve`` never had the bug because it derives its
+    dates from the price panel; these tests pin that the gateway path now does too.
+    """
+
+    @pytest.mark.asyncio
+    async def test_skips_post_when_latest_bar_is_not_today(self, tmp_path: Path) -> None:
+        """The 2026-07-28 scenario: a panel whose last bar is yesterday."""
+        gc = _make_gateway_client()
+        manager = _make_manager(gateway_client=gc)
+        prices = _prices_ending(1)  # market closed today — last bar is yesterday's
+        store = _make_store(prices=prices)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
+
+        await run_post_refresh_hook(
+            manager,
+            store,
+            summary={"symbols_fetched": 5, "failures": 0},
+            live_portfolio_path=live_path,
+        )
+
+        gc.post_daily_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_posts_when_latest_bar_is_today(self, tmp_path: Path) -> None:
+        """Positive control — a guard that only ever skips is as broken as none."""
+        gc = _make_gateway_client()
+        manager = _make_manager(gateway_client=gc)
+        prices = _prices_ending(0)
+        store = _make_store(prices=prices)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        gc.post_daily_report.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_last_updated_comes_from_the_bar_not_the_clock(self, tmp_path: Path) -> None:
+        """The stamp is the bar's date at UTC midnight, matching every stored row.
+
+        Two things are asserted together on purpose. The **date** must come from the
+        data (not ``datetime.now()``), and the **time-of-day** must stay 00:00:00 UTC:
+        `daily_performance` is uniformly midnight and unique on ``(time, strategy_id)``,
+        so posting the raw 09:55 Bangkok bar time would insert a second row per day
+        instead of upserting — the mechanism that took ``equity_curve`` to 97 rows
+        across 60 dates.
+        """
+        gc = _make_gateway_client()
+        manager = _make_manager(gateway_client=gc)
+        prices = _prices_ending(0)
+        store = _make_store(prices=prices)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        payload = gc.post_daily_report.call_args[0][0]
+        last_updated = payload["strategy_metadata"]["last_updated"]
+        bar_date = prices.index[-1].date().isoformat()
+        assert last_updated.startswith(bar_date)
+        assert last_updated.endswith("T00:00:00+00:00")
+
+    @pytest.mark.asyncio
+    async def test_equity_curve_still_written_when_the_post_is_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """The fix must not over-reach into the path that never had the bug.
+
+        ``write_equity_curve`` upserts the whole ``[entry_date, today]`` window keyed by
+        calendar day, so re-writing it on a closed day is idempotent — it lands on the
+        rows already there and adds nothing. Suppressing it would be a behaviour change
+        with no defect behind it.
+        """
+        pg = _make_pg()
+        gc = _make_gateway_client()
+        manager = _make_manager(postgres=pg, gateway_client=gc)
+        prices = _prices_ending(1)
+        store = _make_store(prices=prices)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
+
+        await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
+
+        gc.post_daily_report.assert_not_called()
+        pg.write_equity_curve.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_skip_log_distinguishes_closure_from_fetch_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Both cases skip; the log says which, so the operator can act."""
+        prices = _prices_ending(1)
+        store = _make_store(prices=prices)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
+
+        with caplog.at_level(logging.WARNING, logger="csm.adapters.hooks"):
+            await run_post_refresh_hook(
+                _make_manager(gateway_client=_make_gateway_client()),
+                store,
+                summary={"symbols_fetched": 5, "failures": 0, "held_symbols_failed": 0},
+                live_portfolio_path=live_path,
+            )
+        assert "consistent with a market closure" in caplog.text
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="csm.adapters.hooks"):
+            await run_post_refresh_hook(
+                _make_manager(gateway_client=_make_gateway_client()),
+                store,
+                summary={"symbols_fetched": 3, "failures": 2, "held_symbols_failed": 1},
+                live_portfolio_path=live_path,
+            )
+        assert "likely a DATA problem" in caplog.text
 
 
 class TestPostBacktestHook:
@@ -593,10 +767,10 @@ class TestErrorIsolation:
         mongo = _make_mongo()
         gc = _make_gateway_client()
         manager = _make_manager(postgres=pg, mongo=mongo, gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
-        live_path = _write_live_portfolio_yaml(tmp_path)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
 
         await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
 
@@ -632,10 +806,10 @@ class TestErrorIsolation:
         gc = _make_gateway_client()
         gc.post_daily_report.side_effect = GatewayWriteError("gateway down")
         manager = _make_manager(postgres=pg, mongo=mongo, gateway_client=gc)
-        prices = _make_synthetic_prices_set_columns()
+        prices = _prices_ending(0)
         features = _make_synthetic_features()
         store = _make_store(prices=prices, features=features)
-        live_path = _write_live_portfolio_yaml(tmp_path)
+        live_path = _live_portfolio_yaml_from(tmp_path, prices)
 
         with caplog.at_level(logging.WARNING, logger="csm.adapters.hooks"):
             await run_post_refresh_hook(manager, store, live_portfolio_path=live_path)
