@@ -86,8 +86,9 @@ _AUTH_RESPONSES: dict[int | str, dict[str, object]] = {
     response_model=list[EquityPoint],
     summary="Historical equity curve",
     description=(
-        "Return up to ``days`` most-recent rows of the strategy equity curve "
-        "from ``db_csm_set.equity_curve``, ascending by time."
+        "Return the strategy equity curve from ``db_csm_set.equity_curve`` for the "
+        "last ``days`` calendar days, ascending by time. The row count is the number "
+        "of trading days inside that window, so it is normally smaller than ``days``."
     ),
     responses={**_ADAPTER_DOWN_RESPONSES, **_AUTH_RESPONSES},
 )
@@ -101,7 +102,7 @@ async def get_equity_curve(
         default=90,
         ge=1,
         le=3650,
-        description="Number of most-recent days to return (ascending by time).",
+        description="Look-back window in calendar days, inclusive of today (UTC).",
     ),
     manager: AdapterManager = Depends(get_adapter_manager),
 ) -> list[EquityPoint]:
@@ -146,8 +147,8 @@ async def get_trades(
     response_model=list[DailyPerformanceRow],
     summary="Daily performance metrics",
     description=(
-        "Return up to ``days`` most-recent rows from "
-        "``db_gateway.daily_performance`` for the given strategy, ascending by time."
+        "Return rows from ``db_gateway.daily_performance`` for the given strategy "
+        "over the last ``days`` calendar days, ascending by time."
     ),
     responses={**_ADAPTER_DOWN_RESPONSES, **_AUTH_RESPONSES},
 )
@@ -161,7 +162,7 @@ async def get_performance(
         default=30,
         ge=1,
         le=3650,
-        description="Number of most-recent days to return (ascending by time).",
+        description="Look-back window in calendar days, inclusive of today (UTC).",
     ),
     manager: AdapterManager = Depends(get_adapter_manager),
 ) -> list[DailyPerformanceRow]:
@@ -176,8 +177,8 @@ async def get_performance(
     response_model=list[PortfolioSnapshotRow],
     summary="Portfolio snapshots",
     description=(
-        "Return up to ``days`` most-recent cross-strategy portfolio snapshots "
-        "from ``db_gateway.portfolio_snapshot``, ascending by time."
+        "Return cross-strategy portfolio snapshots from ``db_gateway.portfolio_snapshot`` "
+        "over the last ``days`` calendar days, ascending by time."
     ),
     responses={**_ADAPTER_DOWN_RESPONSES, **_AUTH_RESPONSES},
 )
@@ -186,7 +187,7 @@ async def get_portfolio_snapshots(
         default=30,
         ge=1,
         le=3650,
-        description="Number of most-recent days to return (ascending by time).",
+        description="Look-back window in calendar days, inclusive of today (UTC).",
     ),
     manager: AdapterManager = Depends(get_adapter_manager),
 ) -> list[PortfolioSnapshotRow]:

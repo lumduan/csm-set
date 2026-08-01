@@ -1351,7 +1351,7 @@
     },
     "/api/v1/history/equity-curve": {
       "get": {
-        "description": "Return up to ``days`` most-recent rows of the strategy equity curve from ``db_csm_set.equity_curve``, ascending by time.",
+        "description": "Return the strategy equity curve from ``db_csm_set.equity_curve`` for the last ``days`` calendar days, ascending by time. The row count is the number of trading days inside that window, so it is normally smaller than ``days``.",
         "operationId": "get_equity_curve_api_v1_history_equity_curve_get",
         "parameters": [
           {
@@ -1370,13 +1370,13 @@
             }
           },
           {
-            "description": "Number of most-recent days to return (ascending by time).",
+            "description": "Look-back window in calendar days, inclusive of today (UTC).",
             "in": "query",
             "name": "days",
             "required": false,
             "schema": {
               "default": 90,
-              "description": "Number of most-recent days to return (ascending by time).",
+              "description": "Look-back window in calendar days, inclusive of today (UTC).",
               "maximum": 3650,
               "minimum": 1,
               "title": "Days",
@@ -1438,7 +1438,7 @@
     },
     "/api/v1/history/performance": {
       "get": {
-        "description": "Return up to ``days`` most-recent rows from ``db_gateway.daily_performance`` for the given strategy, ascending by time.",
+        "description": "Return rows from ``db_gateway.daily_performance`` for the given strategy over the last ``days`` calendar days, ascending by time.",
         "operationId": "get_performance_api_v1_history_performance_get",
         "parameters": [
           {
@@ -1457,13 +1457,13 @@
             }
           },
           {
-            "description": "Number of most-recent days to return (ascending by time).",
+            "description": "Look-back window in calendar days, inclusive of today (UTC).",
             "in": "query",
             "name": "days",
             "required": false,
             "schema": {
               "default": 30,
-              "description": "Number of most-recent days to return (ascending by time).",
+              "description": "Look-back window in calendar days, inclusive of today (UTC).",
               "maximum": 3650,
               "minimum": 1,
               "title": "Days",
@@ -1525,17 +1525,17 @@
     },
     "/api/v1/history/portfolio-snapshots": {
       "get": {
-        "description": "Return up to ``days`` most-recent cross-strategy portfolio snapshots from ``db_gateway.portfolio_snapshot``, ascending by time.",
+        "description": "Return cross-strategy portfolio snapshots from ``db_gateway.portfolio_snapshot`` over the last ``days`` calendar days, ascending by time.",
         "operationId": "get_portfolio_snapshots_api_v1_history_portfolio_snapshots_get",
         "parameters": [
           {
-            "description": "Number of most-recent days to return (ascending by time).",
+            "description": "Look-back window in calendar days, inclusive of today (UTC).",
             "in": "query",
             "name": "days",
             "required": false,
             "schema": {
               "default": 30,
-              "description": "Number of most-recent days to return (ascending by time).",
+              "description": "Look-back window in calendar days, inclusive of today (UTC).",
               "maximum": 3650,
               "minimum": 1,
               "title": "Days",

@@ -62,12 +62,16 @@ class _SQLStatements:
         "VALUES ($1, $2, $3, $4::jsonb, $5::jsonb) "
         "ON CONFLICT (run_id) DO NOTHING"
     )
+    # ``$2`` is a number of CALENDAR DAYS, not a row count. The window is
+    # day-aligned in UTC and inclusive of today, so ``days => N`` spans exactly N
+    # calendar dates regardless of the time of day the query runs. The UTC
+    # alignment is written out rather than relying on ``date_trunc('day', now())``,
+    # which resolves in the *session* timezone.
     SELECT_EQUITY_CURVE_RECENT: str = (
-        "SELECT time, strategy_id, equity FROM ("
-        "  SELECT time, strategy_id, equity FROM equity_curve"
-        "  WHERE strategy_id = $1"
-        "  ORDER BY time DESC LIMIT $2"
-        ") sub "
+        "SELECT time, strategy_id, equity FROM equity_curve "
+        "WHERE strategy_id = $1 "
+        "  AND time >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') "
+        "            - make_interval(days => $2::int - 1) "
         "ORDER BY time ASC"
     )
     SELECT_TRADE_HISTORY_RECENT: str = (
@@ -295,12 +299,20 @@ class PostgresAdapter:
         logger.debug("write_backtest_log run_id=%s strategy=%s", run_id, strategy_id)
 
     async def read_equity_curve(self, strategy_id: str, days: int = 90) -> list[EquityPoint]:
-        """Return up to the last ``days`` equity points, ascending by time.
+        """Return the equity points falling in the last ``days`` days, ascending by time.
+
+        ``days`` is a window of **calendar days**, not a row count. It previously
+        mapped straight to ``LIMIT``, so the parameter meant "rows" while its name,
+        the OpenAPI description and every caller meant "days" — and because
+        ``equity_curve`` had accumulated duplicate rows per date, a request for 90
+        returned barely 60 days of history. The row count returned is now the number
+        of *trading* days inside the window, which is naturally smaller than ``days``
+        (weekends and holidays carry no row).
 
         Args:
             strategy_id: Strategy identifier.
-            days: Maximum number of rows to return (most recent first, then
-                re-ordered ascending). Defaults to 90.
+            days: Size of the look-back window in calendar days, inclusive of
+                today (UTC). Defaults to 90.
 
         Returns:
             ``EquityPoint`` list ordered by ``time`` ascending.

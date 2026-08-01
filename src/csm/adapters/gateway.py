@@ -41,27 +41,25 @@ class _GatewaySQL:
     each ``INSERT``.
     """
 
+    # ``days`` is a window of CALENDAR DAYS, not a row count — see the note on
+    # PostgresAdapter.read_equity_curve. Day-aligned in UTC and inclusive of today;
+    # the alignment is spelled out rather than using ``date_trunc('day', now())``,
+    # which resolves in the session timezone.
     SELECT_DAILY_PERFORMANCE_RECENT: str = (
         "SELECT time, strategy_id, daily_return, cumulative_return, "
         "total_value, cash_balance, max_drawdown, sharpe_ratio, metadata "
-        "FROM ("
-        "  SELECT time, strategy_id, daily_return, cumulative_return, "
-        "  total_value, cash_balance, max_drawdown, sharpe_ratio, metadata "
-        "  FROM daily_performance"
-        "  WHERE strategy_id = $1"
-        "  ORDER BY time DESC LIMIT $2"
-        ") sub "
+        "FROM daily_performance "
+        "WHERE strategy_id = $1 "
+        "  AND time >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') "
+        "            - make_interval(days => $2::int - 1) "
         "ORDER BY time ASC"
     )
     SELECT_PORTFOLIO_SNAPSHOTS_RECENT: str = (
         "SELECT time, total_portfolio, weighted_return, combined_drawdown, "
         "active_strategies, allocation "
-        "FROM ("
-        "  SELECT time, total_portfolio, weighted_return, combined_drawdown, "
-        "  active_strategies, allocation "
-        "  FROM portfolio_snapshot"
-        "  ORDER BY time DESC LIMIT $1"
-        ") sub "
+        "FROM portfolio_snapshot "
+        "WHERE time >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') "
+        "          - make_interval(days => $1::int - 1) "
         "ORDER BY time ASC"
     )
     PING: str = "SELECT 1"
@@ -160,12 +158,16 @@ class GatewayAdapter:
         strategy_id: str,
         days: int = 90,
     ) -> list[DailyPerformanceRow]:
-        """Return up to the last ``days`` performance rows, ascending by time.
+        """Return the daily-performance rows in the last ``days`` days, ascending by time.
+
+        ``days`` is a window of **calendar days**, not a row count (it previously
+        mapped straight to ``LIMIT``). The count returned is the number of rows
+        recorded inside that window.
 
         Args:
             strategy_id: Strategy identifier.
-            days: Maximum number of rows to return (most recent first, then
-                re-ordered ascending). Defaults to 90.
+            days: Size of the look-back window in calendar days, inclusive of
+                today (UTC). Defaults to 90.
 
         Returns:
             ``DailyPerformanceRow`` list ordered by ``time`` ascending.
@@ -184,11 +186,14 @@ class GatewayAdapter:
         self,
         days: int = 90,
     ) -> list[PortfolioSnapshotRow]:
-        """Return up to the last ``days`` portfolio snapshots, ascending by time.
+        """Return the portfolio snapshots in the last ``days`` days, ascending by time.
+
+        ``days`` is a window of **calendar days**, not a row count (it previously mapped
+        straight to ``LIMIT``).
 
         Args:
-            days: Maximum number of rows to return (most recent first, then
-                re-ordered ascending). Defaults to 90.
+            days: Size of the look-back window in calendar days, inclusive of
+                today (UTC). Defaults to 90.
 
         Returns:
             ``PortfolioSnapshotRow`` list ordered by ``time`` ascending.
