@@ -13,13 +13,54 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
-from api.scheduler.jobs import create_scheduler, daily_refresh
+from api.scheduler.jobs import (
+    _fetch_batch_with_retry,
+    _has_usable_data,
+    create_scheduler,
+    daily_refresh,
+)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from csm.config.constants import INDEX_SYMBOL
 from csm.config.settings import Settings
 from csm.data.store import ParquetStore
 from csm.live.portfolio import LivePortfolioConfig, LivePosition
+
+
+def _ohlcv(close: float = 100.0, periods: int = 5) -> pd.DataFrame:
+    """One synthetic OHLCV frame, shaped as the loaders return them."""
+    dates = pd.date_range("2024-01-01", periods=periods, freq="B", tz="Asia/Bangkok")
+    return pd.DataFrame(
+        {
+            "open": [close] * periods,
+            "high": [close + 1.0] * periods,
+            "low": [close - 1.0] * periods,
+            "close": [close] * periods,
+            "volume": [1_000_000.0] * periods,
+        },
+        index=dates,
+    )
+
+
+def _echoing_fetch_batch(*, fail: set[str] | None = None) -> AsyncMock:
+    """A ``fetch_batch`` mock that serves whatever symbols are requested.
+
+    ``daily_refresh`` prepends ``INDEX_SYMBOL`` to the universe, so a mock wired
+    to a fixed dict leaves the index permanently unserved: it never counts as
+    recovered, the retry loop burns every attempt on it, and the run reports a
+    spurious failure. Echoing the request keeps these tests about the behaviour
+    they name rather than about the fixture's symbol list.
+
+    Args:
+        fail: Symbols to omit from the response, simulating a fetch failure.
+    """
+    omit: set[str] = fail or set()
+
+    async def _fetch(symbols: list[str], **_: object) -> dict[str, pd.DataFrame]:
+        return {s: _ohlcv() for s in symbols if s not in omit}
+
+    return AsyncMock(side_effect=_fetch)
 
 
 @pytest.fixture
@@ -143,13 +184,15 @@ class TestDailyRefreshRunner:
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(return_value=fetched_data)
+            mock_loader.fetch_batch = _echoing_fetch_batch()
 
             result = await daily_refresh(settings=settings_override, store=mock_store)
 
         assert isinstance(result, dict)
-        assert result["symbols_fetched"] == 2
+        # A + B + the prepended SET index.
+        assert result["symbols_fetched"] == 3
         assert result["failures"] == 0
+        assert result["index_fetched"] is True
         assert isinstance(result["duration_seconds"], float)
         assert result["duration_seconds"] > 0
 
@@ -164,7 +207,7 @@ class TestDailyRefreshRunner:
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(return_value=fetched_data)
+            mock_loader.fetch_batch = _echoing_fetch_batch()
 
             await daily_refresh(settings=settings_override, store=mock_store)
 
@@ -172,8 +215,9 @@ class TestDailyRefreshRunner:
         assert marker_path.is_file()
         marker = json.loads(marker_path.read_text())
         assert "timestamp" in marker
-        assert marker["symbols_fetched"] == 2
+        assert marker["symbols_fetched"] == 3  # A + B + the SET index
         assert marker["failures"] == 0
+        assert marker["index_fetched"] is True
         assert isinstance(marker["duration_seconds"], float)
 
     async def test_marker_timestamp_is_iso_utc(
@@ -187,7 +231,7 @@ class TestDailyRefreshRunner:
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(return_value=fetched_data)
+            mock_loader.fetch_batch = _echoing_fetch_batch()
 
             await daily_refresh(settings=settings_override, store=mock_store)
 
@@ -203,22 +247,24 @@ class TestDailyRefreshRunner:
         fetched_data: dict[str, pd.DataFrame],
     ) -> None:
         """Failures count = requested symbols - successfully fetched."""
-        partial = {"A": fetched_data["A"]}
+        # B fails; A and the prepended index still come back.
         with (
             patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(return_value=partial)
+            mock_loader.fetch_batch = _echoing_fetch_batch(fail={"B"})
 
             result = await daily_refresh(settings=settings_override, store=mock_store)
 
-        assert result["symbols_fetched"] == 1
+        # A + the index succeed; B does not.
+        assert result["symbols_fetched"] == 2
         assert result["failures"] == 1
+        assert result["index_fetched"] is True
 
         marker_path = settings_override.results_dir / ".tmp" / "last_refresh.json"
         marker = json.loads(marker_path.read_text())
-        assert marker["symbols_fetched"] == 1
+        assert marker["symbols_fetched"] == 2
         assert marker["failures"] == 1
 
 
@@ -264,6 +310,135 @@ def _held_config(*symbols: str) -> LivePortfolioConfig:
     )
 
 
+class TestIndexSymbolIsAlwaysFetched:
+    """The SET index must reach the feature pipeline on every refresh.
+
+    ``FeaturePipeline.build`` gates the risk-adjusted factors on ``INDEX_SYMBOL``
+    being a key of ``prices``. The scheduled refresh never included it, so
+    ``residual_momentum`` — the only factor that cleared the historical
+    ICIR > 0.15 gate — and ``sharpe_momentum`` were silently absent from every
+    panel it built, forcing a manual re-fetch at three consecutive month-ends.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_held_phase(self) -> Generator[None, None, None]:
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+        ):
+            yield
+
+    async def test_index_is_prepended_to_the_universe_request(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            await daily_refresh(settings=settings_override, store=mock_store)
+
+            requested = MockLoader.return_value.fetch_batch.call_args.kwargs["symbols"]
+        assert requested[0] == INDEX_SYMBOL, "index must lead the universe request"
+        assert requested == [INDEX_SYMBOL, "A", "B"]
+
+    async def test_index_reaches_the_feature_pipeline(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """The assertion that matters — the pipeline's gate is on `prices`, not the request."""
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline") as MockPipeline,
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            await daily_refresh(settings=settings_override, store=mock_store)
+
+            prices = MockPipeline.return_value.build.call_args.kwargs["prices"]
+        assert INDEX_SYMBOL in prices
+
+    async def test_index_not_duplicated_when_already_in_the_universe(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        mock_store.load.return_value = pd.DataFrame({"symbol": [INDEX_SYMBOL, "A"]})
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            await daily_refresh(settings=settings_override, store=mock_store)
+
+            requested = MockLoader.return_value.fetch_batch.call_args.kwargs["symbols"]
+        assert requested.count(INDEX_SYMBOL) == 1
+        assert requested == [INDEX_SYMBOL, "A"]
+
+    async def test_a_missing_index_is_reported_not_swallowed(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """If the index cannot be fetched, two factors vanish — say so loudly."""
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch(fail={INDEX_SYMBOL})
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+        assert result["index_fetched"] is False
+        assert result["failures"] == 1
+
+        marker_path = settings_override.results_dir / ".tmp" / "last_refresh.json"
+        assert json.loads(marker_path.read_text())["index_fetched"] is False
+
+
+class TestFetchRecoveryRequiresUsableData:
+    """A present-but-empty frame is not a successful fetch.
+
+    ``_fetch_batch_with_retry`` used to treat ``symbol in result`` as recovery.
+    ``fetch_batch`` omits hard failures, so that is usually right — but a frame
+    can arrive structurally valid and carry no data, and such a symbol dropped
+    out of the retry set, was never re-requested, and was counted as fetched.
+    """
+
+    def test_all_nan_close_is_not_usable(self) -> None:
+        frame = _ohlcv()
+        frame["close"] = float("nan")
+        assert _has_usable_data(frame) is False
+
+    def test_empty_frame_is_not_usable(self) -> None:
+        assert _has_usable_data(_ohlcv().iloc[0:0]) is False
+
+    def test_missing_close_column_is_not_usable(self) -> None:
+        assert _has_usable_data(_ohlcv().drop(columns=["close"])) is False
+
+    def test_absent_symbol_is_not_usable(self) -> None:
+        assert _has_usable_data(None) is False
+
+    def test_real_data_is_usable(self) -> None:
+        assert _has_usable_data(_ohlcv()) is True
+
+    async def test_all_nan_symbol_is_retried_and_never_counted_as_fetched(self) -> None:
+        """The regression: an all-NaN symbol must stay in the retry set."""
+        empty = _ohlcv()
+        empty["close"] = float("nan")
+        calls: list[list[str]] = []
+
+        async def _fetch(symbols: list[str], **_: object) -> dict[str, pd.DataFrame]:
+            calls.append(list(symbols))
+            return {s: (empty if s == "DEAD" else _ohlcv()) for s in symbols}
+
+        loader = MagicMock()
+        loader.fetch_batch = AsyncMock(side_effect=_fetch)
+
+        with patch("api.scheduler.jobs._sleep", new=AsyncMock()):
+            fetched, retries = await _fetch_batch_with_retry(
+                loader, ["LIVE", "DEAD"], max_attempts=3, base_delay_secs=0
+            )
+
+        assert "LIVE" in fetched
+        assert "DEAD" not in fetched, "an all-NaN frame must not count as fetched"
+        assert retries == 2, "the dead symbol should have consumed both retries"
+        assert calls[1] == ["DEAD"], "only the unusable symbol is re-requested"
+
+
 class TestDailyRefreshResilience:
     """A+C: outer-loop retry on failed symbols + held-symbols-first priority."""
 
@@ -282,14 +457,15 @@ class TestDailyRefreshResilience:
             mock_loader = MockLoader.return_value
             mock_loader.fetch_batch = AsyncMock(
                 side_effect=[
-                    {"A": _ohlcv_frame(100.0)},  # universe attempt 1: B missing
+                    # universe attempt 1: index + A land, B missing
+                    {INDEX_SYMBOL: _ohlcv_frame(1500.0), "A": _ohlcv_frame(100.0)},
                     {"B": _ohlcv_frame(200.0)},  # universe retry of just ["B"]
                 ]
             )
 
             result = await daily_refresh(settings=settings_override, store=mock_store)
 
-        assert result["symbols_fetched"] == 2
+        assert result["symbols_fetched"] == 3  # A + B + the SET index
         assert result["failures"] == 0
         assert result["retry_attempts_used"] == 1
         # Retry call must request only the failed subset.
@@ -330,7 +506,8 @@ class TestDailyRefreshResilience:
             mock_loader.fetch_batch = AsyncMock(
                 side_effect=[
                     {"SET:A": _ohlcv_frame(100.0), "SET:X": _ohlcv_frame(50.0)},  # held
-                    {"SET:B": _ohlcv_frame(200.0)},  # universe (excluding held)
+                    # universe (excluding held), with the prepended index
+                    {INDEX_SYMBOL: _ohlcv_frame(1500.0), "SET:B": _ohlcv_frame(200.0)},
                 ]
             )
 
@@ -338,15 +515,17 @@ class TestDailyRefreshResilience:
 
         calls = mock_loader.fetch_batch.call_args_list
         assert len(calls) == 2, "Expected one held-phase call and one universe call"
-        # First call is the held batch — sorted, SET-prefixed names.
+        # First call is the held batch — sorted, SET-prefixed names. The index is
+        # NOT here: it is a data input, not a holding, so it must not distort the
+        # held-symbol counters or ride the stricter held retry policy.
         assert calls[0].kwargs["symbols"] == ["SET:A", "SET:X"]
-        # Second call is the universe sweep, with held names removed.
-        assert calls[1].kwargs["symbols"] == ["SET:B"]
+        # Second call is the universe sweep, held names removed, index prepended.
+        assert calls[1].kwargs["symbols"] == [INDEX_SYMBOL, "SET:B"]
 
         assert result["held_symbols_fetched"] == 2
         assert result["held_symbols_failed"] == 0
-        # Universe-only "SET:B" + both held "SET:A", "SET:X" all counted.
-        assert result["symbols_fetched"] == 3
+        # Universe-only "SET:B" + the index + both held "SET:A", "SET:X".
+        assert result["symbols_fetched"] == 4
 
     async def test_daily_refresh_held_failure_still_runs_universe(
         self,
@@ -386,7 +565,7 @@ class TestDailyRefreshResilience:
         assert result["held_symbols_fetched"] == 0
         assert result["held_symbols_failed"] == 1
         # Universe still completed.
-        assert result["symbols_fetched"] == 2  # "SET:A" and "SET:B"
+        assert result["symbols_fetched"] == 3  # "SET:A", "SET:B" and the index
         # Hook was still called despite the held failure — it will internally
         # skip the gateway POST when compute_live_portfolio_metrics returns None.
         hook_mock.assert_awaited_once()
@@ -407,20 +586,18 @@ class TestDailyRefreshResilience:
             patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            # Belt-and-braces: if the mock ever fails to serve a requested symbol
+            # this test would otherwise sit through the real backoff windows.
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(
-                return_value={
-                    "A": _ohlcv_frame(100.0),
-                    "B": _ohlcv_frame(200.0),
-                }
-            )
+            mock_loader.fetch_batch = _echoing_fetch_batch()
 
             result = await daily_refresh(settings=settings_override, store=mock_store)
 
-        # Exactly one batch — the universe sweep.
+        # Exactly one batch — the universe sweep, with the index prepended.
         assert mock_loader.fetch_batch.await_count == 1
-        assert mock_loader.fetch_batch.call_args.kwargs["symbols"] == ["A", "B"]
+        assert mock_loader.fetch_batch.call_args.kwargs["symbols"] == [INDEX_SYMBOL, "A", "B"]
         assert result["held_symbols_fetched"] == 0
         assert result["held_symbols_failed"] == 0
         assert result["retry_attempts_used"] == 0
@@ -435,14 +612,10 @@ class TestDailyRefreshResilience:
             patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
             patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
         ):
             mock_loader = MockLoader.return_value
-            mock_loader.fetch_batch = AsyncMock(
-                return_value={
-                    "A": _ohlcv_frame(100.0),
-                    "B": _ohlcv_frame(200.0),
-                }
-            )
+            mock_loader.fetch_batch = _echoing_fetch_batch()
 
             await daily_refresh(settings=settings_override, store=mock_store)
 
@@ -456,5 +629,6 @@ class TestDailyRefreshResilience:
             "held_symbols_fetched",
             "held_symbols_failed",
             "retry_attempts_used",
+            "index_fetched",
         ):
             assert key in marker, f"new key {key!r} missing from marker file"

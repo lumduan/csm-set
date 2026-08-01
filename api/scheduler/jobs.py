@@ -15,6 +15,7 @@ import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from csm.config.constants import INDEX_SYMBOL
 from csm.config.settings import Settings
 from csm.data.sources import OHLCVSource, build_ohlcv_loader
 from csm.data.store import ParquetStore
@@ -96,6 +97,21 @@ def _trigger_from_standard_crontab(expr: str, timezone: str) -> CronTrigger:
     )
 
 
+def _has_usable_data(frame: pd.DataFrame | None) -> bool:
+    """Return ``True`` when ``frame`` carries at least one real close price.
+
+    ``fetch_batch`` omits hard failures from its result, so a key being present
+    normally means success. It does not *guarantee* it: a frame can arrive
+    structurally valid and carry no data — an empty index, or a ``close`` column
+    that is entirely NaN. Treating that as a successful fetch is the
+    false-liveness defect this guards; the retry loop and the ``failures`` count
+    both key off the answer.
+    """
+    if frame is None or frame.empty or "close" not in frame.columns:
+        return False
+    return bool(frame["close"].notna().any())
+
+
 async def _fetch_batch_with_retry(
     loader: OHLCVSource,
     symbols: list[str],
@@ -149,9 +165,18 @@ async def _fetch_batch_with_retry(
         result: dict[str, pd.DataFrame] = await loader.fetch_batch(
             symbols=remaining, interval=interval, bars=bars
         )
-        merged.update(result)
-        recovered: list[str] = [s for s in remaining if s in result]
-        remaining = [s for s in remaining if s not in result]
+        # A symbol counts as recovered only when it came back with USABLE data.
+        # Testing `s in result` tests key presence, which a structurally valid but
+        # empty/all-NaN frame also satisfies — so a symbol that returned nothing
+        # dropped out of `remaining`, was never retried, and was reported as a
+        # success. That false liveness is how SET:BANPU read as healthy from
+        # 2026-07-17 until a month-end audit caught it (it was a ticker rename).
+        recovered: list[str] = [s for s in remaining if _has_usable_data(result.get(s))]
+        # Merge only the usable frames. An unusable one must not reach the caller
+        # either: it would land in prices_latest as an all-NaN column and count
+        # toward `symbols_fetched`, making the marker file overstate the run.
+        merged.update({s: result[s] for s in recovered})
+        remaining = [s for s in remaining if s not in recovered]
         logger.info(
             "%s attempt %d/%d: requested=%d recovered=%d still_failing=%d",
             phase_label,
@@ -220,6 +245,19 @@ async def daily_refresh(
     symbols: list[str] = (
         universe["symbol"].astype(str).tolist() if "symbol" in universe.columns else []
     )
+    # Always fetch the SET index alongside the universe. `FeaturePipeline.build`
+    # gates the risk-adjusted factors on exactly this key being present in
+    # `prices` (`pipeline.py`: `if _INDEX_SYMBOL in prices`), so without it
+    # `residual_momentum` and `sharpe_momentum` are silently never computed —
+    # and `residual_momentum` is the only factor that cleared the historical
+    # ICIR > 0.15 gate. Its absence forced a manual re-fetch at three
+    # consecutive month-ends before this was found. `scripts/fetch_history.py`
+    # has always done this; the scheduled refresh simply never did.
+    #
+    # The index is a data input, not a universe member: the pipeline excludes it
+    # from the feature loop and from the volume matrix, so it never ranks.
+    if symbols and INDEX_SYMBOL not in symbols:
+        symbols = [INDEX_SYMBOL, *symbols]
     loader: OHLCVSource = build_ohlcv_loader(settings)
 
     held_symbols: list[str] = _held_symbols_from_config(DEFAULT_LIVE_PORTFOLIO_PATH)
@@ -270,6 +308,17 @@ async def daily_refresh(
     # ``failures`` covers the union of held + universe so the legacy marker
     # field keeps the same meaning (requested - successfully fetched).
     failures: int = (len(held_symbols) + len(universe_only)) - len(fetched)
+    # Surfaced on its own because its absence is silent and expensive: without the
+    # index the pipeline computes 4 of 6 factors and says nothing, which is how
+    # residual_momentum went missing for three months. `failures` alone would not
+    # single it out among a couple of hundred symbols.
+    index_fetched: bool = INDEX_SYMBOL in fetched
+    if not index_fetched:
+        logger.warning(
+            "daily refresh: %s missing from the fetched set — residual_momentum and "
+            "sharpe_momentum will NOT be computed for this panel",
+            INDEX_SYMBOL,
+        )
     logger.info(
         "Completed daily refresh",
         extra={
@@ -279,6 +328,7 @@ async def daily_refresh(
             "held_symbols_fetched": held_fetched_count,
             "held_symbols_failed": held_failed_count,
             "retry_attempts_used": retry_attempts_used,
+            "index_fetched": index_fetched,
         },
     )
 
@@ -289,6 +339,7 @@ async def daily_refresh(
         "held_symbols_fetched": held_fetched_count,
         "held_symbols_failed": held_failed_count,
         "retry_attempts_used": retry_attempts_used,
+        "index_fetched": index_fetched,
     }
 
     if adapters is not None:
@@ -304,6 +355,10 @@ async def daily_refresh(
         "held_symbols_fetched": held_fetched_count,
         "held_symbols_failed": held_failed_count,
         "retry_attempts_used": retry_attempts_used,
+        # The marker is what the daily-log skill and the operator read after an
+        # unattended run, so the index's fate has to be visible here too — not
+        # just in the returned summary, which nothing persists.
+        "index_fetched": index_fetched,
     }
     marker_dir = settings.results_dir / ".tmp"
     marker_dir.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from csm.config.constants import INDEX_SYMBOL
 from csm.config.settings import Settings, TradingViewCookies, get_settings
 
 
@@ -167,10 +168,16 @@ def test_db_write_enabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_benchmark_symbol_defaults_to_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """benchmark_symbol defaults to ``^SET.BK`` when CSM_BENCHMARK_SYMBOL is not set."""
+    """benchmark_symbol defaults to the SET index in tvkit symbology.
+
+    The default was ``^SET.BK`` — Yahoo-style symbology tvkit does not serve, so
+    the column was never in the store and every daily report since inception went
+    out with a null ``benchmark_series``. ``SET:SET`` is the same ``INDEX_SYMBOL``
+    the daily refresh fetches, so the benchmark resolves at no extra cost.
+    """
     monkeypatch.delenv("CSM_BENCHMARK_SYMBOL", raising=False)
     s = Settings()
-    assert s.benchmark_symbol == "^SET.BK"
+    assert s.benchmark_symbol == INDEX_SYMBOL
 
 
 def test_benchmark_symbol_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

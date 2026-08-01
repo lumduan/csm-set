@@ -200,12 +200,17 @@ class Settings(BaseSettings):
         description="Enable DB write-back after pipeline events when True.",
     )
     benchmark_symbol: str = Field(
-        default="^SET.BK",
+        default="SET:SET",
         description=(
             "Buy-and-hold benchmark symbol used by the per-strategy report's "
             "benchmark_equity_curve and benchmark_comparison sections. The column "
             "of this name must be present in the local prices store; if absent, "
-            "the report is emitted without benchmark fields."
+            "the report is emitted without benchmark fields. Defaults to the SET "
+            "index in tvkit's symbology — the same INDEX_SYMBOL the daily refresh "
+            "fetches, so the benchmark resolves at no extra cost. The previous "
+            "default '^SET.BK' is Yahoo-style symbology that tvkit does not serve, "
+            "so it was never in the store and every daily report since inception "
+            "was emitted with a null benchmark_series."
         ),
     )
     report_enable_public: bool = Field(
