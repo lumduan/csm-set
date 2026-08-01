@@ -910,6 +910,36 @@
         "title": "SignalSnapshotDoc",
         "type": "object"
       },
+      "StrategyReportResponse": {
+        "additionalProperties": false,
+        "description": "Wrapper around the latest persisted ``extended_data.report`` block.\n\nThe ``report`` payload is returned as a loosely-typed ``dict`` here so that\nthe strategy service does not couple to the Phase 3 gateway schema before\nthat schema is published. Downstream consumers parse it through their own\ntyped model.",
+        "properties": {
+          "as_of": {
+            "description": "Snapshot time of the underlying daily_performance row.",
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "report": {
+            "additionalProperties": true,
+            "description": "The strategy report payload, verbatim.",
+            "title": "Report",
+            "type": "object"
+          },
+          "strategy_id": {
+            "description": "Strategy identifier whose report is returned.",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "as_of",
+          "report"
+        ],
+        "title": "StrategyReportResponse",
+        "type": "object"
+      },
       "TradeRow": {
         "description": "One row of the ``db_csm_set.trade_history`` hypertable.\n\nAttributes:\n    time: tz-aware timestamp (UTC) when the trade was recorded.\n    strategy_id: Strategy identifier (e.g. ``\"csm-set\"``).\n    symbol: Traded ticker (e.g. ``\"PTT\"``).\n    side: ``\"buy\"`` or ``\"sell\"``.\n    quantity: Number of shares (positive).\n    price: Execution price.\n    commission: Commission paid (THB, includes broker + venue fees + VAT).",
         "properties": {
@@ -1651,6 +1681,85 @@
           }
         },
         "summary": "Signal snapshot for a given trading day",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/history/strategy-report": {
+      "get": {
+        "description": "Return the latest ``extended_data.report`` block recorded against the strategy in ``db_gateway.daily_performance``. Phase 1 of ``feature-strategies-report-metrics`` \u2014 the dashboard's local fallback when the gateway service is unreachable.",
+        "operationId": "get_strategy_report_api_v1_history_strategy_report_get",
+        "parameters": [
+          {
+            "description": "Strategy identifier.",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "default": "csm-set",
+              "description": "Strategy identifier.",
+              "examples": [
+                "csm-set"
+              ],
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid X-API-Key header."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "No strategy report has been persisted for this strategy."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Adapter unavailable (db_write_enabled is false or DSN missing)."
+          }
+        },
+        "summary": "Most-recent persisted strategy report",
         "tags": [
           "history"
         ]
