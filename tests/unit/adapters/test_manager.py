@@ -315,7 +315,10 @@ async def test_missing_gateway_dsn_logs_warning_and_gateway_none(
         mongo_uri=None,
         db_gateway_dsn=None,
     )
-    with caplog.at_level(logging.WARNING, logger="csm.adapters"):
+    # INFO, not WARNING: an unset db_gateway_dsn disables a *legacy, optional*
+    # read-only slot, which is not a fault. Genuine misconfigurations next to it
+    # (db_write_enabled with no mongo_uri) still log at WARNING.
+    with caplog.at_level(logging.INFO, logger="csm.adapters"):
         manager = await AdapterManager.from_settings(s)
 
     assert manager.gateway is None
