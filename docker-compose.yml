@@ -44,6 +44,21 @@ services:
       CSM_PUBLIC_MODE: "true"
       CSM_LOG_LEVEL: "INFO"
       CSM_CORS_ALLOW_ORIGINS: "*"
+      # Pin the OHLCV source. Since 2026-06-02 the code default is "db", which
+      # *requires* CSM_MARKET_DATA_ENGINE_BASE_URL — unset here, so Settings()
+      # raises at startup and the container never becomes healthy. That is why
+      # this image has been undeployable since that commit and why docker-smoke
+      # cannot start the service.
+      #
+      # "parquet" is the tvkit path, which is exactly what the live container has
+      # been running all along, so this changes no behaviour — it only makes the
+      # current code startable. Set on the BASE service on purpose: Settings() is
+      # constructed in public mode too, so the validator fires in both modes.
+      #
+      # To move to the engine instead, set CSM_OHLCV_SOURCE=db together with
+      # CSM_MARKET_DATA_ENGINE_BASE_URL=http://quant-marketdata-engine:8000 —
+      # a deliberate data-source change, not a default to drift into.
+      CSM_OHLCV_SOURCE: "parquet"
     volumes:
       - ./results:/app/results:ro
     healthcheck:
