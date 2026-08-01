@@ -579,3 +579,119 @@ def test_migrate_legacy_raw_no_op_when_dir_missing(tmp_path: Path) -> None:
     raw_root = tmp_path / "raw_nonexistent"
     # Should not raise
     _migrate_legacy_raw(raw_root)
+
+
+# ---------------------------------------------------------------------------
+# --refresh
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py"])
+    assert _parse_args().refresh is False
+
+
+def test_refresh_flag_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--refresh"])
+    assert _parse_args().refresh is True
+
+
+@pytest.mark.asyncio
+async def test_refresh_refetches_already_stored_symbols(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--refresh must fetch stored symbols too — the whole point is making a stale store current."""
+    symbols = ["SET:AOT", "SET:PTT", "SET:KBANK"]
+    _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
+
+    mock_store = MagicMock()
+    # Everything is already stored — without --refresh this would be a no-op.
+    mock_store.exists.return_value = True
+    mock_store.save = MagicMock()
+
+    mock_loader = MagicMock()
+    mock_loader.fetch_batch = AsyncMock(
+        return_value={s: _minimal_df() for s in [INDEX_SYMBOL, *symbols]}
+    )
+
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path), "--refresh"])
+
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings()),
+        patch("scripts.fetch_history.ParquetStore", return_value=mock_store),
+        patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+    ):
+        await main()
+
+    mock_loader.fetch_batch.assert_called_once()
+    fetched = _fetch_symbols_arg(mock_loader.fetch_batch.call_args)
+    for s in symbols:
+        assert s in fetched, f"--refresh skipped the already-stored {s}"
+    assert INDEX_SYMBOL in fetched
+    # and they are written back, overwriting the stale files
+    saved = {_save_key(c) for c in mock_store.save.call_args_list}
+    assert set(symbols) <= saved
+
+
+@pytest.mark.asyncio
+async def test_without_refresh_stored_symbols_are_still_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default must be unchanged — --refresh is opt-in, not a behaviour change."""
+    symbols = ["SET:AOT", "SET:PTT"]
+    _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
+
+    mock_store = MagicMock()
+    mock_store.exists.return_value = True
+    mock_store.save = MagicMock()
+
+    mock_loader = MagicMock()
+    mock_loader.fetch_batch = AsyncMock(return_value={})
+
+    monkeypatch.setattr(sys, "argv", ["fetch_history.py", "--data-dir", str(tmp_path)])
+
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings()),
+        patch("scripts.fetch_history.ParquetStore", return_value=mock_store),
+        patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+    ):
+        await main()
+
+    mock_loader.fetch_batch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_fetches_full_bar_depth_not_a_tail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refresh must request the full --bars depth: adjustment restates history, so a
+    partial tail appended to old bars would mix adjustment factors within one series."""
+    symbols = ["SET:AOT"]
+    _write_symbols_json(tmp_path / "universe" / "symbols.json", symbols)
+
+    mock_store = MagicMock()
+    mock_store.exists.return_value = True
+    mock_store.save = MagicMock()
+
+    mock_loader = MagicMock()
+    # INDEX_SYMBOL is prepended by main(); omitting it would trip the failure threshold.
+    mock_loader.fetch_batch = AsyncMock(
+        return_value={s: _minimal_df() for s in [INDEX_SYMBOL, *symbols]}
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["fetch_history.py", "--data-dir", str(tmp_path), "--refresh", "--bars", "5040"],
+    )
+
+    with (
+        patch("scripts.fetch_history.Settings", return_value=_make_settings()),
+        patch("scripts.fetch_history.ParquetStore", return_value=mock_store),
+        patch("scripts.fetch_history.OHLCVLoader", return_value=mock_loader),
+    ):
+        await main()
+
+    call = mock_loader.fetch_batch.call_args
+    bars = call.args[2] if len(call.args) > 2 else call.kwargs["bars"]
+    assert bars == 5040, f"refresh requested {bars} bars, not the configured full depth"

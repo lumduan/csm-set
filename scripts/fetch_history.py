@@ -2,11 +2,29 @@
 
 Usage (owner only — requires tvkit credentials in .env):
     uv run python scripts/fetch_history.py [--data-dir PATH] [--bars N]
-        [--adjustment {splits,dividends}] [--failure-threshold F]
+        [--adjustment {splits,dividends}] [--failure-threshold F] [--refresh]
 
 Idempotent: skips symbols already present in <data-dir>/raw/<adjustment>/.
 Reads the universe symbol list from <data-dir>/universe/symbols.json (produced by
 build_universe.py).
+
+Refreshing an existing store
+----------------------------
+Without ``--refresh`` this script only ever *adds* symbols, so a store that has
+already been populated never becomes current — the raw store silently went two
+months stale this way (see docs/live-test/monthly/2026-07.md). ``--refresh``
+re-fetches symbols that are already present and overwrites them:
+
+    uv run python scripts/fetch_history.py --refresh
+
+The refresh re-fetches the **full** ``--bars`` depth and replaces each file
+wholesale. It deliberately does not fetch only the missing tail and append it:
+both adjustment modes *restate history* — a split or a dividend rewrites every
+prior bar — so appending new bars onto old ones would silently produce a series
+whose early bars carry one adjustment factor and whose late bars carry another.
+A full replacement is the only form that is correct under either mode. It also
+costs little extra: per-symbol time is dominated by the tvkit auth bootstrap and
+WebSocket handshake, not by the number of bars returned.
 
 Storage layout:
     data/raw/splits/    — split-adjusted only (legacy Phase 1.6 data)
@@ -90,6 +108,15 @@ def _parse_args() -> argparse.Namespace:
             "Price adjustment mode. Overrides CSM_TVKIT_ADJUSTMENT env var. "
             "Use 'dividends' (default) for total-return momentum backtesting. "
             "Use 'splits' to reproduce legacy Phase 1.6 data."
+        ),
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help=(
+            "Re-fetch symbols already present in the store and overwrite them, instead "
+            "of skipping them. Replaces each file at full --bars depth; it does not "
+            "append only the missing tail, because both adjustment modes restate history."
         ),
     )
     parser.add_argument(
@@ -209,13 +236,20 @@ async def main() -> None:
     store = ParquetStore(raw_dir)
     loader = OHLCVLoader(settings=app_settings)
 
-    pending: list[str] = [s for s in symbols if store.exists(s) is False]
-    skipped = len(symbols) - len(pending)
+    missing: list[str] = [s for s in symbols if store.exists(s) is False]
+    stored_count: int = len(symbols) - len(missing)
+    # Refresh mode re-fetches everything and overwrites; each file is replaced whole
+    # rather than appended to — see the module docstring on why an incremental
+    # tail-append is unsound under either adjustment mode.
+    pending: list[str] = list(symbols) if args.refresh else missing
     logger.info(
-        "Found %d symbols in universe; skipping %d already fetched; fetching %d "
-        "(adjustment=%s, store=%s)",
+        "Found %d symbols in universe; %s; fetching %d (adjustment=%s, store=%s)",
         len(symbols),
-        skipped,
+        (
+            f"REFRESH: re-fetching {stored_count} already stored + {len(missing)} new"
+            if args.refresh
+            else f"skipping {stored_count} already fetched"
+        ),
         len(pending),
         adjustment_mode,
         raw_dir,
