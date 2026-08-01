@@ -17,7 +17,7 @@ the most consequential of the three for anything that reads the gateway tables.
 | # | Defect | Blast radius | Status |
 |---|---|---|---|
 | 1 | **Universe silently truncated** to 136 of 211 symbols for three months | Changed the published August trade list | **RESOLVED** 2026-08-01 |
-| 2 | **Phantom rows written on closed days** into `daily_performance` + `portfolio_snapshot` | Fabricated return observations in every statistic computed off those tables | **OPEN** |
+| 2 | **Phantom rows written on closed days** into `daily_performance` + `portfolio_snapshot` + `strategy_report_snapshot` | Fabricated return observations in every statistic computed off those tables | **rows DELETED 2026-08-01** — the write path is still uncalendared, so it recurs |
 | 3 | **`equity_curve` duplicated** — 97 rows across 60 dates | None on values; every date since the restart carried a duplicate | **RESOLVED** — `b76d709` |
 
 Defect 2 turned out to be **broader than the July review recorded**: it is not a July one-off. See
@@ -110,9 +110,46 @@ the gateway path, not the market data, is at fault.
 **Current mitigation is manual and does not scale.** Both the June and July reviews computed their
 statistics by excluding these rows by hand. That works only for as long as a human remembers.
 
-**Not fixed here, deliberately.** Deleting the rows is a mutation of a live cross-strategy table and
-is out of scope for a documentation pass. The durable fix is a market-calendar check before the
-gateway write — see Follow-up.
+### Rows deleted 2026-08-01 — and a third affected table
+
+The historical rows were removed on **2026-08-01** at the operator's instruction. The count grew
+twice during that work: the July review recorded **2** rows; re-querying found **8** across two
+tables; and auditing the third gateway table found **`strategy_report_snapshot` carries them too** —
+**12 rows** in total, 4 per table on the 4 closed dates.
+
+The arithmetic on that third table is the cleanest single confirmation of the whole defect:
+`strategy_report_snapshot` began on 2026-05-22 and held **51** rows, while `equity_curve` records
+**47** real sessions in the same span. 47 + 4 = 51 exactly.
+
+**Each of the 12 was verified phantom four independent ways** before deletion — no price bar in
+`prices_latest.parquet`, no `equity_curve` row, no daily log, and a `report` JSONB **byte-identical**
+to the prior real session (`md5(2026-07-27) == md5(07-28) == md5(07-29)`; `md5(06-01) == md5(05-29)`;
+`md5(06-03) == md5(06-02)`).
+
+```
+                            before    after
+daily_performance (csm-set)     65  ->    61
+portfolio_snapshot (all)        65  ->    61
+strategy_report_snapshot        51  ->    47
+```
+
+A fingerprint over every **surviving** row was captured before the delete and re-checked after —
+**identical**, so nothing outside the 12 was touched. `equity_curve` stayed at 60, as it should: it
+never had the phantom rows. The residual 61-vs-60 gap is `2026-05-04`, the inception day, which has a
+gateway row but no NAV row.
+
+A full `INSERT`-statement restore script for all 12 rows is at
+`/home/batt/backups/2026-08-01-phantom-holiday-rows-restore.sql` (outside the repo). It was **proven
+by replay** into a scratch database before the deletion, not merely written: the replayed rows
+fingerprint identically to the production originals.
+
+**Scoped to `csm-set` deliberately.** `cash-and-carry-set-tfex` has the **same defect** on
+2026-07-28/29 (2 rows, `total_value = 0`) and those rows were **left in place** — that strategy
+belongs to another session. Flagged, not acted on.
+
+**The write path is unchanged, so this recurs.** Deleting rows is a cleanup, not a fix. The scheduler
+still holds no market calendar and will write the same carry-forward on the next closure — the known
+next candidate is **2026-08-12**. See Follow-up #1.
 
 ---
 
@@ -175,8 +212,10 @@ of `daily_performance` has no way to know they should.
    `settfex.get_holidays()` returns **HTTP 401 for 2026** and csm-set's pinned `settfex` (0.1.0)
    ships no holiday module, so the calendar source is itself an open question — the cheapest correct
    guard is "no new price bar ⇒ no write", which is exactly what `equity_curve` already does right.
-2. **Backfill-delete the 8 existing phantom rows** once #1 is in place, so the historical series is
-   clean. Requires an explicit operator decision — it mutates a live cross-strategy table.
+2. ~~**Backfill-delete the existing phantom rows.**~~ ✅ **DONE 2026-08-01** — 12 rows (not 8; the
+   third gateway table was found during the work), backed up with a replay-verified restore script,
+   deleted in one transaction, survivors fingerprint-identical. Note this was done **before** #1, so
+   the series is clean *today* but will re-dirty on the next market closure.
 3. **Fix the false-liveness retry defect** in `daily_refresh` — an all-NaN column must not count as a
    recovered symbol.
 4. **Close the ranking-pipeline gap** — still open, now the third rebalance running. Cross-referenced
