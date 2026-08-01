@@ -413,7 +413,18 @@ def _reconstruct_live_equity(
 ) -> pd.Series:
     """Reprice the live config across the full prices panel to derive a NAV series.
 
-    The returned series spans from ``entry_date`` onward and is tz-aware UTC.
+    The returned series spans from ``entry_date`` onward and is tz-aware UTC, with the
+    index **normalized to midnight** — one key per calendar day.
+
+    The normalization is load-bearing, not cosmetic. This series is upserted into
+    ``db_csm_set.equity_curve`` on ``(time, strategy_id)`` — the *full* timestamp — and the
+    whole ``[entry_date, today]`` window is rewritten on every daily refresh. The raw index
+    carries the market-data bar's time-of-day, which is vendor-controlled and has changed
+    more than once (09:00 → 10:00 → 09:55 BKK over 2026-05..07). Without normalizing, any
+    such change re-keys every row in the window, so the refresh *inserts* a duplicate set
+    instead of updating in place — which is exactly how the table reached 97 rows across 60
+    dates. Matches ``_series_to_equity_curve``, which already emits at most one point per
+    UTC date.
     """
 
     symbols: list[str] = [p.qualified_symbol for p in live_config.positions]
@@ -441,6 +452,10 @@ def _reconstruct_live_equity(
         nav.index = nav.index.tz_localize("UTC")
     elif str(nav.index.tz) != "UTC":
         nav.index = nav.index.tz_convert("UTC")
+    # Date-key the series: equity_curve is one row per day, and the upsert conflict
+    # target is the full timestamp. Normalize AFTER the UTC conversion so the day
+    # boundary is the UTC one, matching how the rows are read back.
+    nav.index = nav.index.normalize()
     nav.name = "equity"
     return nav
 
