@@ -170,7 +170,7 @@ async def _fetch_batch_with_retry(
         # empty/all-NaN frame also satisfies — so a symbol that returned nothing
         # dropped out of `remaining`, was never retried, and was reported as a
         # success. That false liveness is how SET:BANPU read as healthy from
-        # 2026-07-17 until a month-end audit caught it (it was a ticker rename).
+        # 2026-07-17 until a month-end audit caught it.
         recovered: list[str] = [s for s in remaining if _has_usable_data(result.get(s))]
         # Merge only the usable frames. An unusable one must not reach the caller
         # either: it would land in prices_latest as an all-NaN column and count
