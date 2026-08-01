@@ -37,11 +37,17 @@ def _equity_series(n: int = 10) -> pd.Series:
 
 
 def _trades_df() -> pd.DataFrame:
+    """Seed trades. ``side`` must be UPPERCASE.
+
+    ``trade_history_side_check`` allows only ``LONG``/``SHORT``/``BUY``/``SELL``/``HOLD``,
+    and production writes ``TradeSide.BUY == "BUY"``. The lowercase values this
+    helper used to carry never matched production and violated the constraint.
+    """
     return pd.DataFrame(
         {
             "time": pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"], utc=True),
             "symbol": ["PTT", "PTT", "BBL"],
-            "side": ["buy", "sell", "buy"],
+            "side": ["BUY", "SELL", "BUY"],
             "quantity": [100.0, 100.0, 50.0],
             "price": [40.0, 42.0, 150.0],
             "commission": [6.42, 6.74, 12.05],

@@ -140,9 +140,11 @@ Defects found during the live test that are **not yet fixed**. Each links to its
 | **Price adjustment never applied** — the `adjustment` kwarg is resolved, validated, then discarded, so `data/raw/dividends/` is split-adjusted only | Every momentum factor computed in the live test to date is on split-adjusted prices while documented as total-return | [2026-08-01](events/2026-08-01-price-adjustment-never-applied.md) |
 | **Ranking-pipeline gap** — `daily_refresh` builds features without `SET:SET` and without `symbol_sectors` | `residual_momentum`, `sharpe_momentum` and `sector_rel_strength` are never written; the authoritative composite needs a **manual re-fetch** at every month-end. `residual_momentum` is the only signal that passed the ICIR > 0.15 gate | [2026-06-30](events/2026-06-30-rebalance-systematic-and-pipeline-gap.md) |
 | **False-liveness retry** — an all-NaN column reads as a "recovered" symbol | A symbol that returned no data is counted as a successful fetch | [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) |
-| **Unscoped `DELETE` in the `infra_db` fixture** — `tests/integration/adapters/conftest.py:120` and `:180` | Running that suite against a populated database empties the live `portfolio_snapshot`. It has already happened once (restored) | [2026-08-01](events/2026-08-01-portfolio-snapshot-wiped-by-test-fixture.md) |
 | **Benchmark series null** — `^SET.BK` is not among the fetched columns | `extended_data.benchmark_series` is null in every daily-report POST; no benchmark comparison is possible | — |
 
 _Resolved during the July month-end sweep: the truncated universe (136 → 211 symbols) and the
 duplicated `equity_curve` (97 → 60 rows) — both in
-[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md)._
+[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md). Resolved 2026-08-01: the **unscoped
+`DELETE` in the `infra_db` fixture** — deletes are now scoped to self-identifying test rows and the
+suite refuses to run against a database holding rows it did not create, verified against the live
+`db_gateway` with zero mutations ([2026-08-01](events/2026-08-01-portfolio-snapshot-wiped-by-test-fixture.md))._

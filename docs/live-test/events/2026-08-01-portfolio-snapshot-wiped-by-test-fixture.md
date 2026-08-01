@@ -3,7 +3,8 @@
 **Date:** 2026-08-01
 **Category:** Operational incident — data loss (fully restored)
 **Severity:** High (production cross-strategy table emptied; complete recovery achieved, no permanent loss)
-**Status:** **Data restored and verified** / **root cause still open** — the fixture is unchanged
+**Status:** **CLOSED 2026-08-01** — data restored and verified; root cause fixed and the fix proven
+against the live database (see Follow-up)
 
 ---
 
@@ -13,8 +14,9 @@ The `infra_db`-marked integration suite was run against **production** DSNs. Its
 unscoped `DELETE FROM portfolio_snapshot`, which emptied the live cross-strategy table in
 `db_gateway` — **all 65 rows**, spanning 2026-05-04 → 2026-07-31.
 
-All 65 rows were restored and verified identical. The defect that caused it is **still present in the
-repository** and will do the same thing to anyone who runs that suite against a populated database.
+All 65 rows were restored and verified identical. The defect that caused it was **fixed the same
+day** — the same invocation now refuses to run and changes nothing (see Follow-up). The narrative
+below is written in the past tense of the incident; the fixture no longer behaves this way.
 
 This was a self-inflicted error by the assistant, not a latent failure that surfaced on its own: the
 suite was pointed at production deliberately, to get better verification than mocks provide, and its
@@ -124,26 +126,58 @@ that can be checked, and derivable-identical on the rest.
 **No trading or capital impact.** `portfolio_snapshot` is a read-only reporting aggregate; nothing
 routes orders or computes signals from it. No strategy consumed it during the outage window.
 
-**The residual risk is not the lost data — it is that the cause is still live.** Any session, agent,
-or contributor who runs `uv run pytest tests/integration/adapters/ -m infra_db` with production DSNs
-in the environment will empty the table again. The restore is repeatable, but the next occurrence
-might not be noticed.
+**The residual risk was never the lost data — it was that the cause stayed live.** Until it was
+fixed, any session, agent, or contributor who ran
+`uv run pytest tests/integration/adapters/ -m infra_db` with production DSNs in the environment would
+have emptied the table again, and the restore being repeatable was no comfort: the next occurrence
+might not have been noticed. That window closed the same day — the fix is verified against the live
+database in Follow-up.
 
 ---
 
-## Follow-up
+## Follow-up — all closed 2026-08-01
 
-1. **Scope or remove the two unscoped deletes** — `conftest.py:120` and `:180`. *(Open. Belongs to
-   the outstanding "fix the infra_db test drift" work, which also covers 13 failing tests in that
-   suite; this report exists so the landmine stays visible until then.)*
-2. **Refuse to run against a non-test database.** A fixture-level assertion — a required
-   `CSM_TEST_DB_OK=1`, or a check that the DSN's database name carries a test marker — turns this
-   from "remember not to do that" into a mechanical impossibility. This is the fix that generalises;
-   #1 only fixes the two statements that happen to be wrong today.
-3. **Audit the other integration fixtures** in the repo for the same pattern — an unscoped mutation
-   on a table with no natural scoping key.
-4. **Prefer a disposable database for `infra_db` runs.** The suite's value is exercising real SQL, not
-   real *data*; that is fully served by an empty scratch database.
+1. **Scope the two unscoped deletes** — ✅ **DONE.** `conftest.py` now seeds every test snapshot with
+   `TEST_STRATEGY_ID` as an `allocation` key, at a deliberately odd time-of-day
+   (`03:07:11.000123`), and both deletes became
+   `DELETE FROM portfolio_snapshot WHERE allocation ? 'test-csm-set'`. The odd time-of-day matters as
+   much as the marker: `uq_portfolio_snapshot_time` is unique on `time` **alone** and production
+   writes only midnight buckets, so a test row can no longer *overwrite* a production row either.
+2. **Refuse to run against a non-test database** — ✅ **DONE**, though not by either mechanism
+   proposed above. A DSN-name check would break the CI job, which legitimately uses
+   production-looking DSNs against a throwaway stack; a `CSM_TEST_DB_OK=1` opt-in is one line in a
+   local `.env` away from being permanently disabled, which is close to how this incident happened.
+   Instead `_assert_no_foreign_snapshots` keys on the invariant actually being protected — *"does
+   this table hold rows I did not create?"* — and fails the test rather than deleting them.
+3. **Audit the other integration fixtures** — ✅ **DONE.** Swept every `DELETE`/`TRUNCATE`/
+   `delete_many` under `tests/`. The two `portfolio_snapshot` statements were the only unscoped ones;
+   everything else keys on `strategy_id` or a `run_id` prefix. Confirms the original blast-radius
+   finding rather than extending it.
+4. **Prefer a disposable database** — ✅ **enforced, not merely recommended.** The guard now makes a
+   populated database fail fast, so this is a property of the code instead of a discipline someone
+   has to remember.
+
+### The fix is proven, not merely wired
+
+Re-running the suite with `CSM_DB_GATEWAY_DSN` pointed **deliberately at production** — the exact
+invocation that caused this incident — now yields **19 errors and zero mutations**:
+
+```
+production portfolio_snapshot BEFORE : 65 rows, sum=70846854.34
+  -> pytest ... -m infra_db  =>  16 passed, 19 errors
+     "Refusing to run: portfolio_snapshot holds 65 row(s) this suite did not create."
+production portfolio_snapshot AFTER  : 65 rows, sum=70846854.34
+```
+
+`daily_performance` (65), `strategy_report_snapshot` (51) and `equity_curve` (60) were likewise
+unchanged, and no `test-csm-set` rows were left behind. Against disposable databases the same suite
+is **35 passed, 0 failed** (was 13 failed).
+
+**The guard also caught a real bug during its own development** — the first seed helper passed
+`json.dumps(allocation)` into a column whose asyncpg codec already encodes dicts, double-encoding the
+value into a JSON *string*. `allocation ? key` then matched nothing, cleanup silently skipped the
+row, and the next test's guard reported it as foreign. A guard that only ever passes proves nothing;
+this one failed loudly on a genuine defect on its first run.
 
 ---
 
