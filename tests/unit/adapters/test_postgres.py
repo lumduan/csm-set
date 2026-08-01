@@ -222,6 +222,25 @@ class TestWriteBacktestLog:
 
 
 class TestReads:
+    async def test_read_equity_curve_filters_by_day_window_not_row_limit(self) -> None:
+        """``days`` must mean calendar days. It used to map straight to LIMIT, so the
+        parameter meant "rows" while its name, the OpenAPI description and every caller
+        meant "days" — and duplicate rows per date silently shrank the window further."""
+        pool = _make_pool()
+        pool.fetch = AsyncMock(return_value=[])
+        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+            adapter = PostgresAdapter(DSN)
+            await adapter.connect()
+            await adapter.read_equity_curve("csm-set", days=90)
+
+        sql, strategy_id, days = pool.fetch.await_args.args
+        assert "LIMIT" not in sql.upper(), "days is still being applied as a row limit"
+        assert "make_interval(days =>" in sql
+        # day-aligned in UTC explicitly, not via session-timezone date_trunc
+        assert "now() AT TIME ZONE 'UTC'" in sql
+        assert "ORDER BY time ASC" in sql
+        assert (strategy_id, days) == ("csm-set", 90)
+
     async def test_read_equity_curve_returns_models(self) -> None:
         pool = _make_pool()
         records = [

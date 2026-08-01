@@ -24,6 +24,25 @@ def _make_pool() -> AsyncMock:
 
 
 class TestLifecycle:
+    async def test_days_readers_filter_by_window_not_row_limit(self) -> None:
+        """Both gateway ``days`` readers shared the same LIMIT idiom as
+        read_equity_curve; fixing one copy and leaving these would keep the bug."""
+        pool = _make_pool()
+        pool.fetch = AsyncMock(return_value=[])
+        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+            adapter = GatewayAdapter(DSN)
+            await adapter.connect()
+            await adapter.read_daily_performance("csm-set", days=30)
+            dp_sql = pool.fetch.await_args.args[0]
+            await adapter.read_portfolio_snapshots(days=30)
+            ps_sql = pool.fetch.await_args.args[0]
+
+        for sql in (dp_sql, ps_sql):
+            assert "LIMIT" not in sql.upper(), "days is still being applied as a row limit"
+            assert "make_interval(days =>" in sql
+            assert "now() AT TIME ZONE 'UTC'" in sql
+            assert "ORDER BY time ASC" in sql
+
     async def test_connect_creates_pool_with_expected_args(self) -> None:
         pool = _make_pool()
         create = AsyncMock(return_value=pool)

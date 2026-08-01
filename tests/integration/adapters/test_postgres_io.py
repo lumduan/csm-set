@@ -24,8 +24,15 @@ TEST_STRATEGY_ID: str = "test-csm-set"
 
 
 def _equity_series(n: int = 10) -> pd.Series:
-    base = datetime(2024, 1, 2, tzinfo=UTC)
-    index = pd.DatetimeIndex([base + timedelta(days=i) for i in range(n)], tz="UTC")
+    """The most recent ``n`` UTC days, ending today, midnight-aligned.
+
+    Dates must be *recent*: ``read_equity_curve`` filters on a rolling window of
+    calendar days, so a fixed historical base would fall outside it and return
+    nothing. Midnight alignment matches the production convention of one row per
+    UTC day.
+    """
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    index = pd.DatetimeIndex([today - timedelta(days=n - 1 - i) for i in range(n)], tz="UTC")
     return pd.Series([100.0 + i for i in range(n)], index=index, dtype="float64")
 
 
