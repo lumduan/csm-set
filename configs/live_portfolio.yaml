@@ -78,19 +78,53 @@ strategy_id: csm-set
 #   [entry_date, today], so it must restart here to avoid overwriting the
 #   historical 06-05..06-30 equity rows with a fictional FORTH-instead-of-
 #   MCOT mark.
-entry_date: "2026-07-01"
-starting_nav: 1100000.0
-cash: 10870.35
+# 2026-08-03: August rebalance — the live test's second fully systematic
+# rotation, and its first 2-out / 2-in.  Executed at ATO.  Plan:
+# docs/live-test/monthly/2026-07.md §Rebalance, as AMENDED 2026-08-01 against
+# the corrected 211-symbol universe (the superseded 1-out/1-in SELL DELTA /
+# BUY KKP plan is preserved at a5d7e25 and was never executed).  The two
+# evictions fire on two DIFFERENT rules.
+#   SELL DELTA (300 sh @ 272.00) → gross 81,600.00 − fees @0.16799% 137.08 =
+#     net 81,462.92; realized P/L vs cost basis 95,855.34 = −14,392.42
+#     (−15.01%).  Evicted solely by the EMA100 fast exit (Jul 31 close 278.00
+#     < EMA100 296.16, −6.13%); it tripped neither the 0.35 rank floor
+#     (composite pct 0.873, top 13% of 204) nor the 0.25 buffer (+0.127).
+#   SELL PTTGC (3,000 sh @ 36.00) → gross 108,000.00 − fees 181.43 = net
+#     107,818.57; realized P/L vs cost basis 123,201.60 = −15,383.03
+#     (−12.49%).  Evicted by the buffer: composite pct 0.676 against a best
+#     eligible challenger of 1.000, gap +0.324 vs the 0.25 threshold.  Under
+#     the truncated 136-symbol universe it had survived by 0.029.
+#   BUY SMT (20,400 sh @ 5.80) → gross 118,320.00 + fees 198.77 = all-in
+#     118,518.77; avg_cost = 118,518.77 / 20,400 = 5.8097 (4-dp).  Universe
+#     rank #1, composite +2.205 (pct 1.000), SET-official ETRON; steps into
+#     DELTA's ETRON slot.
+#   BUY MGC (9,200 sh @ 10.70) → gross 98,440.00 + fees 165.37 = all-in
+#     98,605.37; avg_cost = 98,605.37 / 9,200 = 10.7180 (4-dp).  Universe rank
+#     #3, composite +2.084 (pct 0.990), SET-official AUTO — a sector the book
+#     has never held.
+#   Cash: 10,870.35 + 20,000.00 injected + 81,462.92 + 107,818.57 −
+#     118,518.77 − 98,605.37 = 3,027.70.
+#   CAPITAL INJECTION 20,000.00 THB — the rotation was NOT self-funding.  The
+#   plan sized SMT's 20,400 shares at the 4.78 Jul 31 indicative (97,675.81
+#   all-in); the ATO printed 5.80, making the same share count cost
+#   118,518.77, while both sells filled under their indicatives (272.00 vs
+#   ~278.00, 36.00 vs ~36.75) and raised 4,043.20 less than planned.  The two
+#   gaps compound to a 16,972.30 shortfall against 200,151.84 of available
+#   cash.  starting_nav bumped 1,100,000 → 1,120,000 so the injected capital
+#   is not booked as a return and Total Return on NAV stays a true
+#   performance measure — same treatment as the 2026-06-04 MCOT injection.
+#   entry_date reset to 2026-08-03 because book composition, cash and the
+#   capital base all changed: the equity reconstruction reprices the *current*
+#   book back over [entry_date, today] and UPSERTs every row, so leaving
+#   entry_date at 2026-07-01 would overwrite the historical 07-01..07-31
+#   equity rows with a fictional SMT/MGC-instead-of-DELTA/PTTGC mark.
+entry_date: "2026-08-03"
+starting_nav: 1120000.0
+cash: 3027.70
 positions:
-  - symbol: DELTA
-    shares: 300
-    avg_cost: 319.5178
   - symbol: IRPC
     shares: 56600
     avg_cost: 2.3037
-  - symbol: PTTGC
-    shares: 3000
-    avg_cost: 41.0672
   - symbol: HANA
     shares: 3000
     avg_cost: 35.8070
@@ -112,3 +146,9 @@ positions:
   - symbol: FORTH
     shares: 5300
     avg_cost: 16.1270
+  - symbol: SMT
+    shares: 20400
+    avg_cost: 5.8097
+  - symbol: MGC
+    shares: 9200
+    avg_cost: 10.7180
