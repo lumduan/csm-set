@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from csm.data.calendar import (
+    FALLBACK_SET_HOLIDAYS,
     CalendarUnavailableError,
     fetch_set_holidays,
     is_set_holiday,
@@ -124,27 +125,85 @@ class TestIsSetHoliday:
         assert is_holiday is False
         assert name == ""
 
+    async def test_live_calendar_overrides_the_fallback(self) -> None:
+        """The live payload is authoritative — the two sources are never OR-ed.
+
+        A closure withdrawn upstream must stop being a closure here, so a
+        successful fetch has to *replace* the committed table rather than be
+        unioned with it. 2026-08-12 is in the fallback; a live calendar that
+        omits it must win.
+        """
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(return_value=_calendar(("2026-09-21", "Some new closure"))),
+        ):
+            is_holiday, name = await is_set_holiday(date(2026, 8, 12))
+
+        assert is_holiday is False, "a successful fetch must override the committed table"
+        assert name == ""
+
+
+class TestFallbackWhenTheCalendarIsDown:
+    """The 2026-08-04 → 08-06 outage state: settfex 401s on every year.
+
+    Failing closed on any error was rejected precisely because of this — it
+    would have skipped every session from 08-04 onward. The fallback answers
+    known closures offline while leaving unknown dates open.
+    """
+
     @pytest.mark.parametrize(
         "failure",
         [RuntimeError("network down"), TimeoutError(), ValueError("garbage payload")],
         ids=["network", "timeout", "garbage"],
     )
-    async def test_fails_open_on_any_upstream_failure(self, failure: Exception) -> None:
-        """The test that matters most.
-
-        A calendar outage must degrade to "treat it as a trading day". The
-        opposite — suppressing a real session's refresh because settfex was
-        unreachable — would lose live data that cannot be backfilled, which is a
-        strictly worse failure than the wasted fetch this optimisation avoids.
-        """
+    async def test_known_closure_is_caught_offline(self, failure: Exception) -> None:
+        """The point of the change: 2026-08-12 skips with the endpoint down."""
         with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(side_effect=failure)):
             is_holiday, name = await is_set_holiday(date(2026, 8, 12))
 
-        assert is_holiday is False, "an unavailable calendar must not suppress a refresh"
+        assert is_holiday is True, "a committed closure must survive a calendar outage"
+        assert "Queen Sirikit" in name
+
+    async def test_trading_day_still_runs_offline(self) -> None:
+        """The other half — the fallback must not over-skip.
+
+        2026-08-07 is a normal Friday session. If an outage made this return
+        True the refresh would be suppressed on a live trading day, which is the
+        failure this module exists to prevent.
+        """
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(side_effect=RuntimeError("401")),
+        ):
+            is_holiday, name = await is_set_holiday(date(2026, 8, 7))
+
+        assert is_holiday is False
         assert name == ""
 
-    async def test_fail_open_is_logged_loudly(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Silent degradation is not acceptable — the operator must be able to see it."""
+    async def test_uncovered_year_fails_open_loudly(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The only remaining open path, and it must be audible.
+
+        2027 has no committed table. Losing a real session is worse than a
+        wasted fetch, so this stays open — but silently degrading is not
+        acceptable, hence ERROR rather than WARNING.
+        """
+        assert 2027 not in FALLBACK_SET_HOLIDAYS, "test presumes 2027 is uncovered"
+        with (
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("boom")),
+            ),
+            caplog.at_level("ERROR", logger="csm.data.calendar"),
+        ):
+            is_holiday, name = await is_set_holiday(date(2027, 8, 12))
+
+        assert is_holiday is False
+        assert name == ""
+        assert "no committed fallback covers 2027" in caplog.text
+        assert "proceeding as a trading day" in caplog.text
+
+    async def test_fallback_use_is_logged_loudly(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Running on stale committed data must never be invisible."""
         with (
             patch(
                 "settfex.services.set.holiday.get_holidays",
@@ -154,4 +213,42 @@ class TestIsSetHoliday:
         ):
             await is_set_holiday(date(2026, 8, 12))
 
-        assert "proceeding as a trading day" in caplog.text
+        assert "committed" in caplog.text
+        assert "fallback" in caplog.text
+
+
+class TestFallbackTableIntegrity:
+    """Structural checks on the committed table.
+
+    A wrong entry here suppresses a real session's refresh — the one outcome
+    the module exists to prevent — and a typo is the likeliest way to get one.
+    """
+
+    def test_every_date_matches_its_year_key(self) -> None:
+        for year, holidays in FALLBACK_SET_HOLIDAYS.items():
+            for day in holidays:
+                assert day.year == year, f"{day} filed under {year}"
+
+    def test_no_entry_falls_on_a_weekend(self) -> None:
+        """SET is shut at weekends anyway, so a weekend entry signals a typo."""
+        for holidays in FALLBACK_SET_HOLIDAYS.values():
+            for day in holidays:
+                assert day.weekday() < 5, f"{day} is a {day:%A} — not a market day to begin with"
+
+    def test_every_entry_carries_a_description(self) -> None:
+        for holidays in FALLBACK_SET_HOLIDAYS.values():
+            for day, description in holidays.items():
+                assert description.strip(), f"{day} has an empty description"
+
+    def test_the_2026_closures_verified_from_the_live_fetch_are_all_present(self) -> None:
+        """Guards against an entry being dropped in a future edit.
+
+        These five are the subset whose dates *and* official wording came from
+        the authoritative 2026-08-01 fetch, so they are the strongest entries in
+        the table and the ones a regression would hurt most.
+        """
+        table = FALLBACK_SET_HOLIDAYS[2026]
+        for iso, description in _REAL_2026:
+            day = date.fromisoformat(iso)
+            assert day in table, f"{iso} missing from the committed 2026 table"
+            assert table[day] == description, f"{iso} wording drifted from the fetched calendar"

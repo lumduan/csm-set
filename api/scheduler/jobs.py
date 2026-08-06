@@ -278,11 +278,13 @@ async def daily_refresh(
     # is then correctly refused by the no-fresh-bar guard at the write. This skips
     # the wasted fetch and records why.
     #
-    # `is_set_holiday` FAILS OPEN — a calendar outage returns "trading day" — so a
-    # settfex problem can never suppress a real session's refresh. The no-bar
-    # guard downstream remains the ground truth for whether anything is written,
-    # and it also covers what no calendar can: the market traded but our fetch
-    # came back empty.
+    # `is_set_holiday` resolves live calendar -> committed fallback table -> open.
+    # It fails open ONLY when neither source covers the year, so a settfex outage
+    # cannot suppress a real session's refresh while a *known* closure is still
+    # caught with the endpoint down — which since 2026-08-04 is the normal state.
+    # The no-bar guard downstream remains the ground truth for whether anything is
+    # written, and it also covers what no calendar can: the market traded but our
+    # fetch came back empty.
     today_bkk: date = datetime.now(tz=ZoneInfo(TIMEZONE)).date()
     holiday, holiday_name = await is_set_holiday(today_bkk)
     if holiday:

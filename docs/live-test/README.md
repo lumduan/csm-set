@@ -149,7 +149,12 @@ and the **phantom rows on closed days** — the 12 historical rows were deleted 
 takes its date from the price bar rather than the wall clock, skipping the gateway POST entirely when
 no bar arrived for today ([2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) follow-up #1).
 **The unattended proof of that guard lands at the next SET closure, candidate 2026-08-12** — expect no
-row dated that day and a WARNING in the container log._
+row dated that day and a WARNING in the container log._ **Amended 2026-08-06:** the calendar gained a
+committed fallback table that evening, so 2026-08-12 now skips at Phase 0 in seconds and does **not**
+reach the no-fresh-bar guard. "No row dated 2026-08-12" still holds and is still the check; the
+container line to expect is the holiday skip, not the stale-bar WARNING, and the unattended proof of
+the no-bar guard moves to the first unlisted closure — see the amended note in
+[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) §2.
 
 _Also resolved 2026-08-01: the **ranking-pipeline gap**. `daily_refresh` now fetches `SET:SET` and
 passes `symbol_sectors` from the universe, so all **six** factors compute — `residual_momentum`

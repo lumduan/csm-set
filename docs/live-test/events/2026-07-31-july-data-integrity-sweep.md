@@ -206,6 +206,26 @@ time the guard runs without anyone watching. Expected on that date:
 If a row dated 2026-08-12 appears, the guard did not deploy — check that the image was **rebuilt**,
 not just the pin bumped: `src/` is baked into the image, not mounted.
 
+> ⚠️ **AMENDED 2026-08-06 — the second bullet will NOT be observed, and its absence is not a
+> failure.** `csm.data.calendar` gained a committed fallback holiday table the same evening (see the
+> 2026-08-06 daily log, Risk Note 9), because the settfex endpoint had 401'd on four consecutive
+> refreshes and a live probe found it 401ing for 2025, 2026 and 2027 alike. 2026-08-12 is in that
+> table, so `daily_refresh` now **declines at Phase 0 and never fetches**. The revised expectation:
+>
+> - **first bullet unchanged** — still no row dated 2026-08-12 anywhere. This remains the outcome
+>   that matters and the one to check.
+> - **instead of the no-fresh-bar WARNING**, expect an INFO
+>   `daily refresh: 2026-08-12 is a SET holiday (H.M. Queen Sirikit …) — skipping the fetch entirely`,
+>   a WARNING that the calendar was resolved from the **committed fallback**, a `last_refresh.json`
+>   carrying `"skipped_reason": "set_holiday"`, and a run lasting **seconds rather than ~6 minutes**.
+>
+> **The cost of that is stated rather than hidden: 2026-08-12 no longer exercises the no-fresh-bar
+> guard**, because the early skip means the write path is never reached. That guard is not
+> unverified — `tests/unit/adapters/test_hooks.py::test_skips_post_when_latest_bar_is_not_today`
+> covers it — but its *unattended* proof now moves to the first closure the fallback table does not
+> list (Q4 2026 is deliberately unlisted; see `FALLBACK_SET_HOLIDAYS`). If you want the original
+> proof on 2026-08-12 instead, remove that one date from the table before the session.
+
 ---
 
 ## 3 — `equity_curve` duplicated: 97 rows across 60 dates (RESOLVED)

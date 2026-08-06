@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Generator
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -334,6 +335,27 @@ def _held_config(*symbols: str) -> LivePortfolioConfig:
     )
 
 
+_BKK = ZoneInfo("Asia/Bangkok")
+
+
+def _frozen_jobs_clock(moment: datetime) -> object:
+    """Pin ``daily_refresh``'s notion of "today" to *moment*.
+
+    ``daily_refresh`` derives the date it classifies from ``datetime.now()``, so
+    any test whose meaning depends on *which* date that is has to fix it — see
+    ``test_calendar_outage_does_not_suppress_a_refresh``. Subclassing rather
+    than mocking keeps the module's other ``datetime.now(UTC)`` call (the marker
+    timestamp) returning a real datetime.
+    """
+
+    class _Frozen(datetime):
+        @classmethod
+        def now(cls, tz: object = None) -> datetime:  # type: ignore[override]
+            return moment.astimezone(tz) if tz is not None else moment.replace(tzinfo=None)
+
+    return patch("api.scheduler.jobs.datetime", _Frozen)
+
+
 class TestHolidaySkipsTheFetch:
     """On a published SET closure the refresh skips the fetch entirely.
 
@@ -343,8 +365,10 @@ class TestHolidaySkipsTheFetch:
     it decline earlier and say why.
 
     The failure asymmetry is what these tests really pin. Skipping a *real*
-    session loses live data that cannot be backfilled, so the calendar must fail
-    open — an outage means "trade as normal", never "assume closed".
+    session loses live data that cannot be backfilled, so an outage may never
+    mean "assume closed" for a date nothing attests. It resolves live calendar →
+    committed fallback → open, so a *known* closure is still caught with the
+    endpoint down while an unknown date still trades as normal.
     """
 
     @pytest.fixture(autouse=True)
@@ -404,16 +428,21 @@ class TestHolidaySkipsTheFetch:
     async def test_calendar_outage_does_not_suppress_a_refresh(
         self, settings_override: Settings, mock_store: MagicMock
     ) -> None:
-        """Fail-open, end to end.
+        """A settfex outage on an ordinary session still fetches, end to end.
 
         ``is_set_holiday`` swallows its own errors, so this drives the real
-        helper with a broken settfex rather than stubbing the helper out — the
-        point is that a calendar outage reaches ``daily_refresh`` as "trading
-        day" and the session is still fetched.
+        helper with a broken settfex rather than stubbing the helper out.
+
+        The date is pinned rather than taken from the wall clock. Reading
+        ``datetime.now()`` made this test's meaning depend on the day it ran:
+        once the committed fallback landed it would have passed all week and
+        gone red on 2026-08-12 itself, reporting a calendar regression on the
+        one day the new behaviour is correct.
         """
         with (
             patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
             patch("api.scheduler.jobs.FeaturePipeline"),
+            _frozen_jobs_clock(datetime(2026, 8, 7, 18, 0, tzinfo=_BKK)),
             patch(
                 "settfex.services.set.holiday.get_holidays",
                 new=AsyncMock(side_effect=RuntimeError("settfex unreachable")),
@@ -426,6 +455,35 @@ class TestHolidaySkipsTheFetch:
 
         assert "skipped_reason" not in result
         assert result["symbols_fetched"] == 3
+
+    async def test_known_closure_skips_even_with_the_calendar_down(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """The whole point of the committed fallback, proven end to end.
+
+        Same broken settfex as the test above — only the date differs. Before
+        the fallback this fetched 210 symbols on a closed market and relied
+        entirely on the downstream no-fresh-bar guard to refuse the write; now
+        it declines up front and records why.
+        """
+        with (
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline") as MockPipeline,
+            _frozen_jobs_clock(datetime(2026, 8, 12, 18, 0, tzinfo=_BKK)),
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("settfex unreachable")),
+            ),
+        ):
+            MockLoader.return_value.fetch_batch = _echoing_fetch_batch()
+            result = await daily_refresh(settings=settings_override, store=mock_store)
+
+            MockLoader.return_value.fetch_batch.assert_not_awaited()
+            MockPipeline.return_value.build.assert_not_called()
+
+        assert result["skipped_reason"] == "set_holiday"
+        assert "Queen Sirikit" in result["skipped_detail"]
+        assert result["symbols_fetched"] == 0
 
 
 class TestIndexSymbolIsAlwaysFetched:
