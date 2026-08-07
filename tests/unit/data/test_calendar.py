@@ -143,6 +143,111 @@ class TestIsSetHoliday:
         assert name == ""
 
 
+class TestTableDriftIsReported:
+    """The committed table is a snapshot; these make it say when it has rotted.
+
+    This is what replaces a dated reminder to capture 2027: the first session
+    that reaches a serving endpoint reports the gap, and keeps reporting it.
+    """
+
+    async def test_missing_year_is_reported_with_the_dates_to_capture(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The 2027-01-01 case, which is the whole point.
+
+        The endpoint serves only the current year, so this warning is the only
+        notice that the capture window is open.
+        """
+        assert 2027 not in FALLBACK_SET_HOLIDAYS
+        live = _calendar(("2027-01-01", "New Year's Day"), ("2027-04-06", "Chakri Memorial Day"))
+        with (
+            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
+            caplog.at_level("WARNING", logger="csm.data.calendar"),
+        ):
+            await is_set_holiday(date(2027, 1, 1))
+
+        assert "no committed fallback table for 2027" in caplog.text
+        assert "2027-01-01" in caplog.text and "2027-04-06" in caplog.text
+        assert "current year" in caplog.text
+
+    async def test_a_closure_added_after_the_snapshot_is_reported(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """SET inserting a new special closure mid-year — otherwise invisible."""
+        live = _calendar(*_REAL_2026, ("2026-11-20", "Additional special holiday *"))
+        with (
+            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
+            caplog.at_level("WARNING", logger="csm.data.calendar"),
+        ):
+            await is_set_holiday(date(2026, 8, 3))
+
+        assert "STALE" in caplog.text
+        assert "promote: 2026-11-20" in caplog.text
+
+    async def test_drift_is_reported_even_on_an_ordinary_trading_day(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Staleness must not depend on today happening to be a closure.
+
+        2026-08-03 is a normal Monday; the check runs before the lookup, so the
+        report does not wait for the next holiday to surface.
+        """
+        live = _calendar(("2026-11-20", "Additional special holiday *"))
+        with (
+            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
+            caplog.at_level("WARNING", logger="csm.data.calendar"),
+        ):
+            is_holiday, _ = await is_set_holiday(date(2026, 8, 3))
+
+        assert is_holiday is False
+        assert "STALE" in caplog.text
+
+    async def test_in_sync_is_stated_rather_than_silent(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """ "Matches" must be distinguishable from "the check never ran"."""
+        live = _calendar(
+            *[(d.isoformat(), desc) for d, desc in FALLBACK_SET_HOLIDAYS[2026].items()]
+        )
+        with (
+            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
+            caplog.at_level("INFO", logger="csm.data.calendar"),
+        ):
+            await is_set_holiday(date(2026, 8, 3))
+
+        assert "matches the live calendar (20 closures)" in caplog.text
+        assert "STALE" not in caplog.text
+
+    async def test_drift_reporting_never_changes_the_verdict(self) -> None:
+        """Observational only. A stale table must not alter what is returned."""
+        live = _calendar(("2026-11-20", "Additional special holiday *"))
+        with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)):
+            # 2026-08-12 is in the committed table but NOT in this live payload,
+            # so the live answer must still win despite the drift warning.
+            assert await is_set_holiday(date(2026, 8, 12)) == (False, "")
+            assert await is_set_holiday(date(2026, 11, 20)) == (
+                True,
+                "Additional special holiday *",
+            )
+
+    async def test_no_drift_report_when_the_endpoint_is_down(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The fallback cannot drift from itself — reporting it would be noise
+        that trains the operator to ignore the real signal."""
+        with (
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("401")),
+            ),
+            caplog.at_level("INFO", logger="csm.data.calendar"),
+        ):
+            await is_set_holiday(date(2026, 8, 12))
+
+        assert "STALE" not in caplog.text
+        assert "matches the live calendar" not in caplog.text
+
+
 class TestFallbackWhenTheCalendarIsDown:
     """The 2026-08-04 → 08-06 outage state: settfex 401s on every year.
 

@@ -77,6 +77,22 @@ SET's official wording. The one date deliberately withheld, 2026-10-16
 still right: it rested on a single unverified source, and the rule is judged on
 what it protects against, not on whether a given omission happens to be safe.
 
+Keeping the snapshot honest
+--------------------------
+A committed table is a snapshot, and a snapshot rots quietly. Two ways:
+
+1. **SET adds closures mid-year** — 2026-10-16 is literally "Additional special
+   holiday". One announced after the snapshot was taken is simply missing.
+2. **The capture window for a year opens once**, on its first day, and is easy
+   to miss.
+
+So every *successful* fetch is compared against the committed table by
+:func:`_log_table_drift`, which names the dates to promote, drop or reword. It
+changes no behaviour; it only removes the need to remember. A missing year is
+reported the first time the endpoint serves it, and reported again every session
+until it is committed — a dated reminder gets one attempt against an endpoint
+that has proven it can be unavailable for four days running.
+
 The data-derived guard downstream — no fresh price bar ⇒ no gateway write — is
 still the ground truth and stays in place regardless. This module only lets the
 scheduler skip the *fetch* early; it never decides whether a row is written.
@@ -188,6 +204,64 @@ async def fetch_set_holidays(year: int) -> dict[date, str]:
         ) from exc
 
 
+def _iso_list(days: list[date]) -> str:
+    """Render *days* for a log line, or ``"-"`` when empty."""
+    return ", ".join(d.isoformat() for d in days) if days else "-"
+
+
+def _log_table_drift(year: int, live: dict[date, str]) -> None:
+    """Report how :data:`FALLBACK_SET_HOLIDAYS` compares to the live calendar.
+
+    **Observational only — this never changes what :func:`is_set_holiday`
+    returns.** It exists because the committed table is a *snapshot*, and two
+    things make snapshots go stale silently:
+
+    - **SET adds closures mid-year.** 2026-10-16 is literally "Additional
+      special holiday". A closure announced after the snapshot was taken is
+      absent from the table, and nothing else would say so.
+    - **A year can only be captured while it is the current one** (see the
+      module docstring), so the window to capture 2027 opens on 2027-01-01 and
+      is easy to miss. Rather than depend on a dated reminder, the first session
+      that reaches a serving endpoint says what is missing — and keeps saying it
+      every session until someone commits it.
+
+    All three outcomes are logged, including the good one, so "in sync" is
+    distinguishable from "this check never ran" (an outage logs its own
+    warning on the fallback path instead).
+
+    Args:
+        year: The year that was fetched.
+        live: The freshly fetched calendar for *year*.
+    """
+    committed: dict[date, str] | None = FALLBACK_SET_HOLIDAYS.get(year)
+    if committed is None:
+        logger.warning(
+            "no committed fallback table for %d — the live calendar publishes %d closure(s): "
+            "%s. Capture them into FALLBACK_SET_HOLIDAYS while %d is the current year; the "
+            "endpoint will not serve it afterwards.",
+            year,
+            len(live),
+            _iso_list(sorted(live)),
+            year,
+        )
+        return
+
+    if committed == live:
+        logger.info(
+            "committed %d fallback table matches the live calendar (%d closures)", year, len(live)
+        )
+        return
+
+    logger.warning(
+        "committed %d fallback table is STALE vs the live calendar — promote: %s | drop: %s | "
+        "reword: %s",
+        year,
+        _iso_list(sorted(set(live) - set(committed))),
+        _iso_list(sorted(set(committed) - set(live))),
+        _iso_list(sorted(d for d in set(live) & set(committed) if live[d] != committed[d])),
+    )
+
+
 async def is_set_holiday(day: date) -> tuple[bool, str]:
     """Return ``(is_holiday, description)`` for *day*. Never raises.
 
@@ -231,6 +305,11 @@ async def is_set_holiday(day: date) -> tuple[bool, str]:
             exc,
         )
         holidays = fallback
+    else:
+        # Only meaningful against a live payload — the fallback cannot drift
+        # from itself. Deliberately after the fetch and before the lookup, so a
+        # stale table is reported even on a day that is not a closure.
+        _log_table_drift(day.year, holidays)
 
     description: str | None = holidays.get(day)
     if description is None:
