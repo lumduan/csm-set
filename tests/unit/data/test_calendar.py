@@ -252,3 +252,53 @@ class TestFallbackTableIntegrity:
             day = date.fromisoformat(iso)
             assert day in table, f"{iso} missing from the committed 2026 table"
             assert table[day] == description, f"{iso} wording drifted from the fetched calendar"
+
+    def test_2026_holds_all_twenty_published_closures(self) -> None:
+        """2026 is complete — a short table means entries were lost, not that
+        SET published fewer. The count is pinned separately from the dates so a
+        failure says *which* of the two went wrong."""
+        assert len(FALLBACK_SET_HOLIDAYS[2026]) == 20
+
+    @pytest.mark.parametrize(
+        ("iso", "description"),
+        [
+            ("2026-10-13", "H.M. King Bhumibol Adulyadej the Great Memorial Day"),
+            ("2026-10-16", "Additional special holiday *"),
+            ("2026-10-23", "H.M. King Chulalongkorn the Great Memorial Day"),
+            (
+                "2026-12-07",
+                "Substitution for H.M. King Bhumibol Adulyadej the Great's Birthday / "
+                "National Day / Father's Day (Saturday 5th December 2026)",
+            ),
+            ("2026-12-10", "Constitution Day"),
+            ("2026-12-31", "New Year's Eve"),
+        ],
+    )
+    def test_q4_closures_promoted_from_the_2026_08_07_fetch(
+        self, iso: str, description: str
+    ) -> None:
+        """The six Q4 dates, promoted once the endpoint came back.
+
+        None is derivable from the price panel — they are all still in the
+        future — so the live payload is their only source and the wording is
+        asserted verbatim rather than by prefix.
+        """
+        table = FALLBACK_SET_HOLIDAYS[2026]
+        day = date.fromisoformat(iso)
+        assert day in table, f"{iso} was not promoted"
+        assert table[day] == description
+
+    def test_the_footnote_marker_is_not_stripped(self) -> None:
+        """``" *"`` is SET's own marker for an additional special closure.
+
+        settfex preserves it deliberately — ``Holiday`` is the one SET model that
+        does not enable ``str_strip_whitespace`` — so "tidying" it here would
+        silently diverge from the upstream payload this table is a copy of.
+        """
+        assert FALLBACK_SET_HOLIDAYS[2026][date(2026, 10, 16)].endswith(" *")
+
+    def test_2027_is_absent_because_it_cannot_yet_be_captured(self) -> None:
+        """Not an oversight: the endpoint serves only the current year, so a
+        2027 table can only be built from 2027-01-01. Pinning this stops it
+        being "fixed" by inventing dates."""
+        assert 2027 not in FALLBACK_SET_HOLIDAYS

@@ -154,7 +154,10 @@ committed fallback table that evening, so 2026-08-12 now skips at Phase 0 in sec
 reach the no-fresh-bar guard. "No row dated 2026-08-12" still holds and is still the check; the
 container line to expect is the holiday skip, not the stale-bar WARNING, and the unattended proof of
 the no-bar guard moves to the first unlisted closure — see the amended note in
-[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) §2.
+[2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) §2. **Amended again 2026-08-07:** settfex
+recovered and all 20 published 2026 closures were promoted, so **no unlisted 2026 closure remains** and
+the holiday route to that proof is closed until a 2027 date. The guard's other job — a session where
+the market traded but the fetch came back empty — is untouched and can still fire any day.
 
 _Also resolved 2026-08-01: the **ranking-pipeline gap**. `daily_refresh` now fetches `SET:SET` and
 passes `symbol_sectors` from the universe, so all **six** factors compute — `residual_momentum`

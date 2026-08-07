@@ -223,8 +223,26 @@ not just the pin bumped: `src/` is baked into the image, not mounted.
 > guard**, because the early skip means the write path is never reached. That guard is not
 > unverified — `tests/unit/adapters/test_hooks.py::test_skips_post_when_latest_bar_is_not_today`
 > covers it — but its *unattended* proof now moves to the first closure the fallback table does not
-> list (Q4 2026 is deliberately unlisted; see `FALLBACK_SET_HOLIDAYS`). If you want the original
-> proof on 2026-08-12 instead, remove that one date from the table before the session.
+> list. If you want the original proof on 2026-08-12 instead, remove that one date from the table
+> before the session.
+>
+> ⚠️ **FURTHER AMENDED 2026-08-07 — there is now NO unlisted 2026 closure, so the holiday route to
+> that proof is closed for the rest of the year.** settfex recovered that morning and all **20**
+> published 2026 closures were promoted into `FALLBACK_SET_HOLIDAYS`, so every remaining closure —
+> 08-12, 10-13, 10-16, 10-23, 12-07, 12-10, 12-31 — will skip at Phase 0. The sentence above about
+> "the first closure the fallback table does not list" has no 2026 referent; the next candidate is a
+> **2027** date, because the endpoint serves only the current year and a 2027 table cannot be
+> captured before 2027-01-01.
+>
+> **This narrows the loss rather than widening it, and the distinction matters.** The no-fresh-bar
+> guard has *two* jobs, and only one is pre-empted:
+>
+> - **holiday route — now pre-empted** for all of 2026, since the calendar answers first;
+> - **"the market traded but our fetch came back empty" — untouched, and still able to fire on any
+>   session.** No calendar can cover that case, which is why the guard was always the ground truth
+>   and not a duplicate of the calendar check.
+>
+> So what 2026-08-12 loses is the *holiday-shaped* rehearsal, not the guard's coverage.
 
 ---
 

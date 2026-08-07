@@ -21,6 +21,20 @@ error text says the API "returns 401 both for years it does not serve … and
 transiently under load"; its docs add that 401 is the *only* failure code it
 emits and is therefore ambiguous by construction.
 
+On **2026-08-07** it served the full 20-entry calendar again — and then timed out
+on the **next two** attempts within the following ten minutes. So "recovered" is
+not a state this endpoint durably occupies; availability flickers on a timescale
+shorter than a single working session. That is the case for keeping the fallback
+permanently rather than treating it as a stopgap for one outage.
+
+**A year can only ever be captured while it is the current one.** settfex's docs
+(gotcha 1, live-verified 2026-07-27) record that every year other than the
+current one returns 401 — reconfirmed here on 2026-08-06, when 2025 and 2027
+failed alongside 2026. So :data:`FALLBACK_SET_HOLIDAYS` is inherently populated
+one year at a time: a 2027 table cannot be built in advance and can only be
+captured from 2027-01-01 onward, on a day the endpoint happens to be serving.
+Until then 2027 dates take the fail-open path below.
+
 A failed lookup costs **~7 s** (settfex retries internally) and is bounded at
 :data:`CALENDAR_TIMEOUT_SECS`. Against a refresh that runs ~6 minutes that is
 ~2% — cheap enough to keep, given it saves the entire fetch when it does fire.
@@ -52,7 +66,16 @@ works offline, while an unknown date still degrades to "trading day".
   one outcome this module exists to prevent.
 
 So a date is listed only when it is independently verified, and the table is
-deliberately allowed to be incomplete.
+allowed to be incomplete rather than padded with guesses.
+
+That rule was **tested by outcome on 2026-08-07**, when the endpoint came back
+and the whole 2026 calendar could be compared against the table built without
+it: of the 14 dates admitted on the conservative rule, **14 were correct** — no
+date wrong, none missing that the price panel knew, and 10 already byte-exact on
+SET's official wording. The one date deliberately withheld, 2026-10-16
+(``Additional special holiday *``), turned out to be **real**. Excluding it was
+still right: it rested on a single unverified source, and the rule is judged on
+what it protects against, not on whether a given omission happens to be safe.
 
 The data-derived guard downstream — no fresh price bar ⇒ no gateway write — is
 still the ground truth and stays in place regardless. This module only lets the
@@ -73,67 +96,51 @@ logger: logging.Logger = logging.getLogger(__name__)
 #: refresh; on timeout the caller falls back to the committed table.
 CALENDAR_TIMEOUT_SECS: float = 15.0
 
-#: Description used where a closure's *date* is verified but SET's official
-#: wording is not. The date is what the guard acts on; inventing plausible
-#: official text would make an unverified string indistinguishable from a
-#: fetched one.
-_DESCRIPTION_UNAVAILABLE: str = "SET closure (official description unavailable offline)"
-
 #: SET closures consulted when the live calendar cannot be reached, by year.
 #:
-#: Provenance tag per entry — every date carries at least one:
+#: **2026 is complete: all 20 published closures**, captured verbatim from
+#: ``get_holidays(year=2026, lang="en")`` on **2026-08-07 ~10:25 BKK**, during a
+#: window when the endpoint was serving. Every date and description below is that
+#: payload — none is inferred, and none is edited. Descriptions are **verbatim**,
+#: including the trailing ``" *"`` on 2026-10-16, which is SET's own footnote
+#: marker for an additional special closure and which settfex deliberately does
+#: not strip (its ``Holiday`` model alone omits ``str_strip_whitespace``).
 #:
-#: ``[fetch]``  verbatim from the authoritative settfex fetch of 2026-08-01, the
-#:              last time the endpoint served. Recorded in
-#:              ``docs/live-test/monthly/2026-07.md`` and pinned in
-#:              ``tests/unit/data/test_calendar.py::_REAL_2026``.
-#: ``[panel]``  derived from ``data/processed/prices_latest.parquet`` on
-#:              2026-08-06: a 2026 weekday carrying **no bar for any symbol**
-#:              while every trading date in the panel carries 210–211. This is
-#:              the same method that originally identified the four closures
-#:              whose phantom gateway rows were deleted on 2026-07-31, and it
-#:              agreed with the official calendar on all four.
-#: ``[docs]``   description cross-checked against settfex's holiday docs
-#:              (live-verified 2026-07-27).
+#: Independently corroborated: the **13** entries at or before 2026-08-06 each
+#: carry **no bar for any of the 211 symbols** in
+#: ``data/processed/prices_latest.parquet``, and conversely the panel knows no
+#: 2026 closure this table omits. That is the method that first identified the
+#: four closures whose phantom gateway rows were deleted on 2026-07-31.
 #:
-#: KNOWN INCOMPLETE. The 2026-08-01 fetch reported **20** closures; 14 are listed
-#: below. The remainder fall after 2026-08-06, so they are not yet derivable from
-#: the price panel and no second source attests them. One is probable but
-#: deliberately **not** listed: 2026-10-16, "Additional special holiday *",
-#: which appears in settfex's docs but has only that single source — under the
-#: asymmetry above a lone unverified future date is exactly what must not go in.
-#: Promote it (and the rest of Q4) once the live endpoint recovers or the dates
-#: pass into the panel.
+#: **2027 is absent and cannot be added yet** — see the module docstring: the
+#: endpoint serves only the current year, so a 2027 table can only be captured
+#: from 2027-01-01 onward. Until then 2027 dates take the fail-open path, which
+#: is loud (ERROR) by design.
 FALLBACK_SET_HOLIDAYS: dict[int, dict[date, str]] = {
     2026: {
-        # -- [fetch] + [panel] ------------------------------------------------
-        # Date and official wording both from the 2026-08-01 calendar; all four
-        # are additionally confirmed by the panel. The strongest entries here.
-        date(2026, 6, 1): "Substitution for Visakha Bucha Day (Sunday 31st May 2026)",
-        date(2026, 6, 3): "H.M. Queen Suthida Bajrasudhabimalalakshana's Birthday",
-        date(2026, 7, 28): "H.M. King Maha Vajiralongkorn Phra Vajiraklaochaoyuhua's Birthday",
-        date(2026, 7, 29): "Asarnha Bucha Day",
-        # -- [fetch] ----------------------------------------------------------
-        # Still ahead of the panel, so the 2026-08-01 fetch is its only source —
-        # but that source is the official calendar, and three committed docs
-        # record the same date. This is the closure the fallback exists for.
-        date(2026, 8, 12): "H.M. Queen Sirikit The Queen Mother's Birthday / Mother's Day",
-        # -- [panel] + [docs] -------------------------------------------------
-        # Date proven by the panel; wording corroborated by settfex's holiday
-        # docs (live-verified 2026-07-27), which agreed with the panel on every
-        # date it could be checked against.
         date(2026, 1, 1): "New Year's Day",
+        date(2026, 1, 2): "Additional special holiday",
+        date(2026, 3, 3): "Makha Bucha Day",
         date(2026, 4, 6): "Chakri Memorial Day",
         date(2026, 4, 13): "Songkran Festival",
         date(2026, 4, 14): "Songkran Festival",
         date(2026, 4, 15): "Songkran Festival",
-        # -- [panel] ----------------------------------------------------------
-        # Date proven by the panel; no second source for SET's official wording.
-        # The date is what the guard acts on, so these are safe to list.
-        date(2026, 1, 2): _DESCRIPTION_UNAVAILABLE,
-        date(2026, 3, 3): _DESCRIPTION_UNAVAILABLE,
-        date(2026, 5, 1): _DESCRIPTION_UNAVAILABLE,
-        date(2026, 5, 4): _DESCRIPTION_UNAVAILABLE,
+        date(2026, 5, 1): "National Labor Day",
+        date(2026, 5, 4): "Coronation Day",
+        date(2026, 6, 1): "Substitution for Visakha Bucha Day (Sunday 31st May 2026)",
+        date(2026, 6, 3): "H.M. Queen Suthida Bajrasudhabimalalakshana's Birthday",
+        date(2026, 7, 28): "H.M. King Maha Vajiralongkorn Phra Vajiraklaochaoyuhua's Birthday",
+        date(2026, 7, 29): "Asarnha Bucha Day",
+        date(2026, 8, 12): "H.M. Queen Sirikit The Queen Mother's Birthday / Mother's Day",
+        date(2026, 10, 13): "H.M. King Bhumibol Adulyadej the Great Memorial Day",
+        date(2026, 10, 16): "Additional special holiday *",
+        date(2026, 10, 23): "H.M. King Chulalongkorn the Great Memorial Day",
+        date(2026, 12, 7): (
+            "Substitution for H.M. King Bhumibol Adulyadej the Great's Birthday / "
+            "National Day / Father's Day (Saturday 5th December 2026)"
+        ),
+        date(2026, 12, 10): "Constitution Day",
+        date(2026, 12, 31): "New Year's Eve",
     },
 }
 
