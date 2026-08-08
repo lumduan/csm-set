@@ -1,6 +1,11 @@
 # Live-Test Charts — how these are generated
 
-_Last regenerated: **2026-08-01**, covering 2026-05-04 → 2026-07-31 (60 NAV points)._
+_PNGs last regenerated: **2026-08-01**, covering 2026-05-04 → 2026-07-31 (60 NAV points)._
+_`pnl.csv` extended to **2026-08-07** on 2026-08-07 (the weekly report's own step) — so the **CSV leads
+the chart by five sessions**, deliberately. `pnl_realized_unrealized.png` still shows the pre-rebalance
+pair and is correct only through 2026-07-31; the August 3 realisation appears in the CSV, not the PNG,
+until the month-end regeneration. `nav_actual.csv` / `nav_twr.csv` are **not** extended and still end
+2026-07-31._
 
 Four PNGs, built from **three** committed input CSVs by **two** generator scripts. The three NAV
 charts are **not** produced by a single run — they come from two different series via two runs of the
@@ -18,8 +23,9 @@ Read this before regenerating. Running the NAV generator once against a plain NA
 
 ## Why two series
 
-A **100,000 THB capital injection** landed in June. That is a *cash flow*, not a *return*, so the two
-questions the charts answer need different bases:
+**Two capital injections have landed: 100,000 THB in June (2026-06-04) and 20,000 THB in August
+(2026-08-03)**, taking the capital base 1,000,000 → 1,100,000 → **1,120,000**. Those are *cash
+flows*, not *returns*, so the two questions the charts answer need different bases:
 
 | Chart | Series | Question it answers |
 |---|---|---|
@@ -80,10 +86,15 @@ The realisations to date:
 | Date | Event | Realized | Cumulative |
 |---|---|---:|---:|
 | 2026-06-02 | Rebalance — NEX +6,591.99 · AGE −3,558.45 · JTS −7,385.41 | **−4,351.87** | −4,351.87 |
-| 2026-07-01 | SELL MCOT (16,700 @ 5.15 vs 6.0374 basis) | **−14,964.06** | **−19,315.93** |
+| 2026-07-01 | SELL MCOT (16,700 @ 5.15 vs 6.0374 basis) | **−14,964.06** | −19,315.93 |
+| 2026-08-03 | Rebalance — SELL DELTA (300 @ 272.00 vs 319.5178) −14,392.42 · SELL PTTGC (3,000 @ 36.00 vs 41.0672) −15,383.03 | **−29,775.45** | **−49,091.38** |
 
-At 2026-07-31: realized **−19,315.93** · unrealized **+147,665.89** · total **+128,349.96** ·
-commission **−3,052.51 THB**.
+At 2026-08-07: realized **−49,091.38** · unrealized **+154,713.35** · total **+105,621.97** ·
+commission **−3,735.16 THB**.
+
+&gt; The 2026-07-31 figures previously quoted here — realized −19,315.93 · unrealized +147,665.89 ·
+&gt; total +128,349.96 · commission −3,052.51 — were **superseded by the 2026-08-03 rebalance**. They
+&gt; remain correct *as of that date* and are the last row the PNG shows.
 
 ### The commission ledger
 
@@ -101,11 +112,20 @@ separate line in NAV — which is exactly why it needs its own column to be visi
 | 2026-06-04 | MCOT tranche 1 | — | 80.96 | **80.96** | `live_portfolio.yaml` |
 | 2026-06-05 | MCOT tranche 2 | — | 88.13 | **88.13** | `live_portfolio.yaml` |
 | 2026-07-01 | MCOT → FORTH | 144.48 | 143.35 | **287.83** | `live_portfolio.yaml` |
-| | **Total** | **615.36** | **2,437.15** | **3,052.51** | |
+| 2026-08-03 | Rebalance 2-out / 2-in — DELTA 137.08 + PTTGC 181.43 sell; SMT 198.77 + MGC 165.37 buy | 318.51 | 364.14 | **682.65** | `live_portfolio.yaml`, [08-03 log](../daily/2026-08-03.md) |
+| | **Total** | **933.87** | **2,801.29** | **3,735.16** | |
 
-**Scale check:** 3,052.51 THB is **0.25% of NAV** over three months — but **15.8% of the realized
-loss**, and rotation friction is the part that scales with turnover. The August 2-out/2-in will add
-roughly 570 THB. Report both denominators; the NAV one alone makes it look free.
+**Scale check:** 3,735.16 THB is **0.31% of NAV** over four months — but **7.6% of the realized
+loss**, and rotation friction is the part that scales with turnover. Report both denominators; the NAV
+one alone makes it look free.
+
+&gt; ⚠️ **The estimate under-predicted, and the reason matters more than the gap.** This section
+&gt; previously read *"The August 2-out/2-in will add roughly 570 THB."* The executed figure is
+&gt; **682.65** — **19.8% higher** — because the fee is charged on *traded value*, and both buys filled
+&gt; above their indicatives (SMT at 5.80 against a 4.78 indicative, +21.34%). A commission estimate
+&gt; built from indicative prices inherits every bit of the execution slippage. Note also that the
+&gt; **fee is the small half**: the same fills cost **−14,360.00 in slippage** against **−682.65** in
+&gt; commission. Sizing friction off the commission line alone understates it by ~21×.
 
 **Not plotted, deliberately.** At ~3k against a ±150k axis a fourth line renders as a smear on zero,
 and a secondary axis would imply a comparability that isn't there. It appears in the chart title and
@@ -113,18 +133,28 @@ in the report tables instead.
 
 ### Reconciliation residual — known, constant, unexplained
 
-`realized_cum + unrealized` overstates `NAV − capital base` by a **constant 1,609.61 THB** (0.13% of
-NAV) from the 2026-06-02 rotation onward:
+`realized_cum + unrealized` overstates `NAV − capital base` by a **constant 1,610.27 THB** (0.13% of
+NAV) from the 2026-08-03 rotation onward, and by **1,609.61** between 2026-05-29 and 2026-07-31:
 
 ```
+2026-08-07   total P/L  +105,621.97
+             NAV − cap  +104,011.70   (1,224,011.70 − 1,120,000)
+             residual      1,610.27
+
 2026-07-31   total P/L  +128,349.96
              NAV − cap  +126,740.35   (1,226,740.35 − 1,100,000)
              residual      1,609.61
 ```
 
-It is stable to the cent across every session since 2026-05-29, so it is a **fixed historical
+It is stable to the cent across every session within each era, so it is a **fixed historical
 amount** originating in the 2026-05-05 entry (before then it is larger and moving, because capital
 was still being deployed).
+
+**The +0.66 step at 2026-08-03 is expected, and is not a missed realisation.** It is the 4-decimal
+`avg_cost` convention applied to the two entrants: SMT + MGC cost **217,124.14** all-in but are
+carried at `shares × avg_cost` = **217,123.48**. A residual that *drifts* means a realisation was
+missed; a **one-time step of exactly the rounding amount, then flat again**, is the convention doing
+what it is documented to do. Expect a further sub-THB step at each future rotation.
 
 **It is the entry commission, counted twice.** At the 2026-05-05 close,
 `cost_basis + cash = 960,686.43 + 37,699.71 = 998,386.14`, i.e. **1,613.86 THB short of the
@@ -168,6 +198,24 @@ index-based ones.
 If another capital flow ever occurs, extend the TWR series with a second scale factor at that date —
 do not re-derive `k` from the new NAV.
 
+&gt; 🔴 **That conditional has now FIRED — read it before the August regeneration.** A **second capital
+&gt; injection of 20,000.00 THB landed 2026-08-03** (`starting_nav` rebased 1,100,000 → **1,120,000**).
+&gt; The August month-end rebuild is therefore **the first that must chain two scale factors**, and
+&gt; running the July procedure unchanged will silently book the injection as an August return — the
+&gt; same class of error the top of this file warns about for June:
+&gt;
+&gt; ```
+&gt; k₁ = (1,095,967.18 − 100,000) / 1,095,967.18 = 0.9087563918   applied from 2026-06-05
+&gt; k₂ = (1,247,760.70 −  20,000) / 1,247,760.70 = 0.9839712855   applied from 2026-08-03
+&gt; ```
+&gt;
+&gt; Apply `k₁ × k₂` from 2026-08-03 onward. **Do not re-derive either factor from the new NAV.**
+&gt;
+&gt; **One asymmetry versus June:** `2026-06-04` is dropped from `nav_actual.csv` because that day's mark
+&gt; carried injection cash not yet deployed. **2026-08-03 must NOT be dropped** — the injection was
+&gt; deployed in the same session (closing cash 3,027.70), so the mark is a real, fully-invested account
+&gt; value. Drop it and the series loses a genuine point.
+
 ## Checks that must pass
 
 | Check | Expected |
@@ -177,9 +225,11 @@ do not re-derive `k` from the new NAV.
 | `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) |
 | `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
-| `pnl_realized_unrealized.png` | realized **−19,315.93** · unrealized **+147,665.89** · commission **−3,052.51** THB; the realized line is **flat except at 2026-06-02 and 2026-07-01** |
-| P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,609.61** and constant. A *changing* residual means a realisation was missed |
-| `commission_cum` | rises **only on the 5 fill dates**; a rise on any other day means a non-trading day was credited with a fill |
+| `pnl_realized_unrealized.png` *(the 2026-08-01 PNG, through 07-31)* | realized **−19,315.93** · unrealized **+147,665.89** · commission **−3,052.51** THB; the realized line is **flat except at 2026-06-02 and 2026-07-01** |
+| `pnl.csv` last row *(the CSV leads the PNG — see the header)* | 2026-08-07: realized **−49,091.38** · unrealized **+154,713.35** · total **+105,621.97** · commission **3,735.16** THB |
+| **After** the August regeneration, `pnl_realized_unrealized.png` | must show the CSV values above, and the realized line **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps, not two |
+| P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.27** from 2026-08-03 (**1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
+| `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
 
