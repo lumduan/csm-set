@@ -14,8 +14,8 @@ Retry contract:
     retry.
 
 Adjustment:
-    The local ``Adjustment`` enum mirrors the API planned for tvkit v0.11.0.
-    Replace this local definition with ``from tvkit.api.chart import Adjustment``
+    Re-exported from ``tvkit.api.chart`` (the local mirror was replaced 2026-08-09 when the
+    tvkit>=0.11.0 kwarg landed — TK-0277). Import it from here or from tvkit; same enum.
     and add ``adjustment=adj_enum`` to ``client.get_historical_ohlcv()`` once
     tvkit>=0.11.0 ships.
 """
@@ -23,28 +23,15 @@ Adjustment:
 import asyncio
 import logging
 import warnings
-from enum import StrEnum
 
 import pandas as pd
-from tvkit.api.chart import OHLCV
+from tvkit.api.chart import OHLCV, Adjustment
 from tvkit.api.chart.exceptions import StreamConnectionError
 from tvkit.api.chart.models.ohlcv import OHLCVBar
 
 from csm.config.constants import TIMEZONE
 from csm.config.settings import Settings
 from csm.data.exceptions import DataAccessError, FetchError
-
-
-class Adjustment(StrEnum):
-    """Price adjustment mode for historical OHLCV fetches.
-
-    Mirrors the Adjustment enum planned for tvkit v0.11.0.
-    Replace this local definition with the tvkit import once tvkit>=0.11.0 ships.
-    """
-
-    SPLITS = "splits"
-    DIVIDENDS = "dividends"
-
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -116,9 +103,11 @@ class OHLCVLoader:
 
         effective: str = adjustment if adjustment is not None else self._settings.tvkit_adjustment
         # Validate early — raises ValueError before any network I/O on unknown strings.
-        # TODO: pass adj_enum to client.get_historical_ohlcv() once tvkit>=0.11.0 ships.
-        _adj_enum: Adjustment = Adjustment(effective)
-        _ = _adj_enum  # referenced to satisfy linters until the tvkit kwarg is added
+        # ⚠️ TK-0277: this enum was validated and then DISCARDED for the entire live test — every
+        # fetch silently got tvkit's default (SPLITS), so `data/raw/dividends/` held split-adjusted
+        # prices while being documented as total-return, and every momentum factor ranked on them.
+        # The kwarg below is the fix; the propagation tests are what keep it from regressing.
+        adj_enum: Adjustment = Adjustment(effective)
 
         parsed_cookies = self._settings.tvkit_cookies
         cookies: dict[str, str] | None = (
@@ -133,6 +122,7 @@ class OHLCVLoader:
                         symbol,
                         interval=interval,
                         bars_count=bars,
+                        adjustment=adj_enum,
                     )
                 break
             except _TRANSIENT_EXCEPTIONS as exc:
