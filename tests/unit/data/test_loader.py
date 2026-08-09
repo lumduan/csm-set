@@ -63,6 +63,7 @@ class _FakeOHLCV:
         symbol: str,
         interval: str,
         bars_count: int,
+        adjustment: Adjustment = Adjustment.SPLITS,
     ) -> list[_FakeBar]:
         return [
             _FakeBar("2024-01-01T00:00:00Z", 10.0),
@@ -135,6 +136,7 @@ async def test_fetch_batch_continues_after_symbol_failure(
             symbol: str,
             interval: str,
             bars_count: int,
+            adjustment: Adjustment = Adjustment.SPLITS,
         ) -> list[_FakeBar]:
             call_count["count"] += 1
             if symbol == "SET:FAIL":
@@ -181,6 +183,7 @@ async def test_fetch_retries_on_transient_error(
             symbol: str,
             interval: str,
             bars_count: int,
+            adjustment: Adjustment = Adjustment.SPLITS,
         ) -> list[_FakeBar]:
             call_count["count"] += 1
             if call_count["count"] <= 2:
@@ -221,6 +224,7 @@ async def test_fetch_raises_fetch_error_when_all_retries_exhausted(
             symbol: str,
             interval: str,
             bars_count: int,
+            adjustment: Adjustment = Adjustment.SPLITS,
         ) -> list[_FakeBar]:
             raise OSError("connection reset")
 
@@ -274,6 +278,7 @@ async def test_fetch_unknown_adjustment_raises_value_error_before_network(
             symbol: str,
             interval: str,
             bars_count: int,
+            adjustment: Adjustment = Adjustment.SPLITS,
         ) -> list[_FakeBar]:
             called["called"] = True
             return []
@@ -285,16 +290,62 @@ async def test_fetch_unknown_adjustment_raises_value_error_before_network(
     assert not called["called"], "tvkit should not be called for an invalid adjustment string"
 
 
+class _AdjRecordingOHLCV(_FakeOHLCV):
+    """Records the adjustment the CLIENT actually received.
+
+    ⚠️ TK-0277 — why this fake exists: for the entire live test, ``fetch()`` validated the
+    adjustment and then silently dropped it, so every fetch got tvkit's default (SPLITS) while the
+    ``dividends`` store was documented as total-return. No test asserted PROPAGATION — only that
+    the call succeeded — which is exactly how a discarded kwarg stays green for three months. The
+    assertions below are the regression guard: they fail if the kwarg ever stops reaching tvkit.
+    """
+
+    received: list[Adjustment] = []
+
+    async def get_historical_ohlcv(
+        self,
+        symbol: str,
+        interval: str,
+        bars_count: int,
+        adjustment: Adjustment = Adjustment.SPLITS,
+    ) -> list[_FakeBar]:
+        _AdjRecordingOHLCV.received.append(adjustment)
+        return await super().get_historical_ohlcv(symbol, interval, bars_count)
+
+
 async def test_fetch_defaults_adjustment_to_settings_value(
     monkeypatch: pytest.MonkeyPatch,
     settings_override: Settings,
 ) -> None:
-    """fetch() uses settings.tvkit_adjustment when adjustment param is None."""
-    monkeypatch.setattr("csm.data.loader.OHLCV", _FakeOHLCV)
+    """fetch() uses settings.tvkit_adjustment when adjustment param is None — and the client
+    RECEIVES it (the pre-fix version of this test passed while the value was being discarded)."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _AdjRecordingOHLCV)
+    _AdjRecordingOHLCV.received = []
     loader: OHLCVLoader = OHLCVLoader(settings_override)
     # settings_override has tvkit_adjustment="dividends" by default in conftest
     frame: pd.DataFrame = await loader.fetch(symbol="SET:AOT", interval="1D", bars=2)
     assert isinstance(frame, pd.DataFrame)
+    assert _AdjRecordingOHLCV.received == [Adjustment.DIVIDENDS]
+
+
+@pytest.mark.parametrize("mode", [Adjustment.DIVIDENDS, Adjustment.SPLITS])
+async def test_fetch_propagates_the_explicit_adjustment_to_the_client(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+    mode: Adjustment,
+) -> None:
+    """The TK-0277 regression guard proper: an explicit adjustment reaches tvkit as the enum.
+
+    ⚠️ Only the DIVIDENDS case discriminates: tvkit's own default is SPLITS, so the SPLITS case
+    passes even if the kwarg is dropped again (proven by mutation). It stays for symmetry, but the
+    guard is DIVIDENDS + the settings-default test."""
+    monkeypatch.setattr("csm.data.loader.OHLCV", _AdjRecordingOHLCV)
+    _AdjRecordingOHLCV.received = []
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    await loader.fetch(symbol="SET:AOT", interval="1D", bars=2, adjustment=mode.value)
+    assert _AdjRecordingOHLCV.received == [mode], (
+        "the adjustment must REACH the client — validated-then-discarded is the exact defect"
+    )
 
 
 async def test_fetch_batch_forwards_adjustment_to_each_symbol(
