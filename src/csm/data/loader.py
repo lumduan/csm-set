@@ -16,8 +16,8 @@ Retry contract:
 Adjustment:
     Re-exported from ``tvkit.api.chart`` (the local mirror was replaced 2026-08-09 when the
     tvkit>=0.11.0 kwarg landed — TK-0277). Import it from here or from tvkit; same enum.
-    and add ``adjustment=adj_enum`` to ``client.get_historical_ohlcv()`` once
-    tvkit>=0.11.0 ships.
+    ``fetch`` forwards it to ``client.get_historical_ohlcv(adjustment=...)``; the mode
+    defaults to ``Settings.tvkit_adjustment`` (``"dividends"``).
 """
 
 import asyncio
