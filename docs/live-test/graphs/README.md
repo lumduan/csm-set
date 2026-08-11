@@ -1,9 +1,10 @@
 # Live-Test Charts — how these are generated
 
 _PNGs last regenerated: **2026-08-01**, covering 2026-05-04 → 2026-07-31 (60 NAV points)._
-_`pnl.csv` extended to **2026-08-07** on 2026-08-07 (the weekly report's own step) — so the **CSV leads
-the chart by five sessions**, deliberately. `pnl_realized_unrealized.png` still shows the pre-rebalance
-pair and is correct only through 2026-07-31; the August 3 realisation appears in the CSV, not the PNG,
+_`pnl.csv` extended to **2026-08-11** on 2026-08-11 (the daily log's own step, adding the 08-10 and
+08-11 rows to the 2026-08-07 extent) — so the **CSV leads the chart by seven sessions**, deliberately.
+`pnl_realized_unrealized.png` still shows the pre-rebalance pair and is correct only through
+2026-07-31; the August 3 realisation appears in the CSV, not the PNG,
 until the month-end regeneration. `nav_actual.csv` / `nav_twr.csv` are **not** extended and still end
 2026-07-31._
 
@@ -89,8 +90,9 @@ The realisations to date:
 | 2026-07-01 | SELL MCOT (16,700 @ 5.15 vs 6.0374 basis) | **−14,964.06** | −19,315.93 |
 | 2026-08-03 | Rebalance — SELL DELTA (300 @ 272.00 vs 319.5178) −14,392.42 · SELL PTTGC (3,000 @ 36.00 vs 41.0672) −15,383.03 | **−29,775.45** | **−49,091.38** |
 
-At 2026-08-07: realized **−49,091.38** · unrealized **+154,713.35** · total **+105,621.97** ·
-commission **−3,735.16 THB**.
+At 2026-08-11: realized **−49,091.38** · unrealized **+129,844.35** · total **+80,752.97** ·
+commission **−3,735.16 THB**. (At 2026-08-07 the unrealized/total pair read +154,713.35 / +105,621.97;
+it fell on the 2026-08-10 MGC collapse, with no realisation involved.)
 
 &gt; The 2026-07-31 figures previously quoted here — realized −19,315.93 · unrealized +147,665.89 ·
 &gt; total +128,349.96 · commission −3,052.51 — were **superseded by the 2026-08-03 rebalance**. They
@@ -137,8 +139,8 @@ in the report tables instead.
 NAV) from the 2026-08-03 rotation onward, and by **1,609.61** between 2026-05-29 and 2026-07-31:
 
 ```
-2026-08-07   total P/L  +105,621.97
-             NAV − cap  +104,011.70   (1,224,011.70 − 1,120,000)
+2026-08-11   total P/L   +80,752.97
+             NAV − cap   +79,142.70   (1,199,142.70 − 1,120,000)
              residual      1,610.27
 
 2026-07-31   total P/L  +128,349.96
@@ -226,7 +228,7 @@ do not re-derive `k` from the new NAV.
 | `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
 | `pnl_realized_unrealized.png` *(the 2026-08-01 PNG, through 07-31)* | realized **−19,315.93** · unrealized **+147,665.89** · commission **−3,052.51** THB; the realized line is **flat except at 2026-06-02 and 2026-07-01** |
-| `pnl.csv` last row *(the CSV leads the PNG — see the header)* | 2026-08-07: realized **−49,091.38** · unrealized **+154,713.35** · total **+105,621.97** · commission **3,735.16** THB |
+| `pnl.csv` last row *(the CSV leads the PNG — see the header)* | 2026-08-11: realized **−49,091.38** · unrealized **+129,844.35** · total **+80,752.97** · commission **3,735.16** THB; **67 rows**, matching `equity_curve`'s 67 |
 | **After** the August regeneration, `pnl_realized_unrealized.png` | must show the CSV values above, and the realized line **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps, not two |
 | P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.27** from 2026-08-03 (**1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
 | `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
