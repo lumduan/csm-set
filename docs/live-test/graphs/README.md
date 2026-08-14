@@ -4,10 +4,13 @@ _**The four PNGs are no longer on a single date — read them separately.** The 
 (`equity_curve`, `drawdown`, `monthly_returns`) were last regenerated **2026-08-01**, covering
 2026-05-04 → 2026-07-31 (60 NAV points). **`pnl_realized_unrealized.png` was regenerated 2026-08-12**,
 covering 2026-05-05 → 2026-08-11 (67 points)._
-_`pnl.csv` reached its **2026-08-11** extent on 2026-08-11 (the daily log's own step, adding the 08-10
-and 08-11 rows) and the P/L chart was rebuilt from it on 2026-08-12 — so **the CSV and
-`pnl_realized_unrealized.png` are now in sync**, and the deliberate CSV-leads-the-PNG gap that ran
-from 2026-08-03 to 2026-08-12 is closed. The August 3 realisation now appears in **both**.
+_`pnl.csv` was extended to **2026-08-14** on 2026-08-14 (adding the 08-13 and 08-14 rows), so it now
+runs **69 rows, 2026-05-05 → 2026-08-14**, and **the CSV leads the PNG by two rows again**. ➡️ The
+sync recorded here between 2026-08-12 and 2026-08-14 — *"the CSV and `pnl_realized_unrealized.png`
+are now in sync, and the deliberate CSV-leads-the-PNG gap that ran from 2026-08-03 to 2026-08-12 is
+closed"* — **was true when written and is SUPERSEDED**; it held for exactly two trading sessions.
+The August 3 realisation still appears in **both** — the current gap is two days of *unrealized*
+marks only, and `realized_cum` / `commission_cum` are identical across the two artifacts._
 `nav_actual.csv` / `nav_twr.csv` are **not** extended and still end 2026-07-31, so the three NAV
 charts remain a July month-end artifact._
 
@@ -93,9 +96,13 @@ The realisations to date:
 | 2026-07-01 | SELL MCOT (16,700 @ 5.15 vs 6.0374 basis) | **−14,964.06** | −19,315.93 |
 | 2026-08-03 | Rebalance — SELL DELTA (300 @ 272.00 vs 319.5178) −14,392.42 · SELL PTTGC (3,000 @ 36.00 vs 41.0672) −15,383.03 | **−29,775.45** | **−49,091.38** |
 
-At 2026-08-11: realized **−49,091.38** · unrealized **+129,844.35** · total **+80,752.97** ·
-commission **−3,735.16 THB**. (At 2026-08-07 the unrealized/total pair read +154,713.35 / +105,621.97;
-it fell on the 2026-08-10 MGC collapse, with no realisation involved.)
+At 2026-08-14 (the CSV's last row): realized **−49,091.38** · unrealized **+183,951.35** · total
+**+134,859.97** · commission **−3,735.16 THB**. **Only the unrealized leg has moved since 2026-08-03** —
+realized and commission have not changed since that rebalance, and will not until the September one.
+(The pair read +129,844.35 / +80,752.97 at 2026-08-11, after falling on the 2026-08-10 MGC collapse
+with no realisation involved, then recovered on the 2026-08-13 all-up session. **Read this line as the
+CSV's last row, not as a live figure — the instrument is `pnl.csv` itself, and the owning record is
+that day's log under `docs/live-test/daily/`.**)
 
 &gt; The 2026-07-31 figures previously quoted here — realized −19,315.93 · unrealized +147,665.89 ·
 &gt; total +128,349.96 · commission −3,052.51 — were **superseded by the 2026-08-03 rebalance**. They
@@ -231,12 +238,23 @@ do not re-derive `k` from the new NAV.
 | `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
 | `pnl_realized_unrealized.png` *(the 2026-08-12 PNG, through 08-11)* | realized **−49,091.38** · unrealized **+129,844.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-01 render showed −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
-| `pnl.csv` last row *(the CSV leads the PNG — see the header)* | 2026-08-11: realized **−49,091.38** · unrealized **+129,844.35** · total **+80,752.97** · commission **3,735.16** THB; **67 rows**, matching `equity_curve`'s 67 |
+| `pnl.csv` last row *(the CSV leads the PNG by two rows — see the header)* | 2026-08-14: realized **−49,091.38** · unrealized **+183,951.35** · total **+134,859.97** · commission **3,735.16** THB; **69 rows**, matching `equity_curve`'s 69 |
 | The August regeneration *(**done** 2026-08-12)* | ✅ satisfied — the PNG title reads `realized -49,091 · unrealized +129,844 · commission −3,735 THB`, the series ends 2026-08-11 at 67 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
 | P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.27** from 2026-08-03 (**1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
 | `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
+
+**`pnl.csv` extended through 2026-08-14** on 2026-08-14, appending the **2026-08-13** and
+**2026-08-14** rows in one step. Two rows rather than one because the 08-13 row was flagged as
+outstanding in that day's log and not appended at the time, so it compounded by exactly one session —
+the reason the daily log's Risk Note 9 escalated it from "ordinary maintenance" to a named follow-up.
+No 2026-08-12 row exists and none should: the SET was closed (H.M. Queen Sirikit The Queen Mother's
+Birthday). `realized_cum` and `commission_cum` are unchanged across both rows — **no trade has
+occurred since the 2026-08-03 rotation** — so the entire movement is the unrealized leg
+(+129,844.35 → +176,806.35 → +183,951.35), and the reconciliation residual holds at **1,610.27** on
+both. **`pnl_realized_unrealized.png` was NOT regenerated**, so it remains the 2026-08-12 render
+through 08-11 and the CSV leads it by two rows.
 
 **`pnl_realized_unrealized.png` regenerated 2026-08-12**, off-cycle rather than at a month-end,
 because `pnl.csv` had been extended through 2026-08-11 and the PNG was the last artifact still
