@@ -5,12 +5,9 @@ _**The four PNGs are no longer on a single date — read them separately.** The 
 2026-05-04 → 2026-07-31 (60 NAV points). **`pnl_realized_unrealized.png` was regenerated 2026-08-12**,
 covering 2026-05-05 → 2026-08-11 (67 points)._
 _`pnl.csv` was extended to **2026-08-14** on 2026-08-14 (adding the 08-13 and 08-14 rows), so it now
-runs **69 rows, 2026-05-05 → 2026-08-14**, and **the CSV leads the PNG by two rows again**. ➡️ The
-sync recorded here between 2026-08-12 and 2026-08-14 — *"the CSV and `pnl_realized_unrealized.png`
-are now in sync, and the deliberate CSV-leads-the-PNG gap that ran from 2026-08-03 to 2026-08-12 is
-closed"* — **was true when written and is SUPERSEDED**; it held for exactly two trading sessions.
-The August 3 realisation still appears in **both** — the current gap is two days of *unrealized*
-marks only, and `realized_cum` / `commission_cum` are identical across the two artifacts._
+runs **69 rows, 2026-05-05 → 2026-08-14**, and **`pnl_realized_unrealized.png` was regenerated from it
+the same day, so the CSV and the P/L PNG are in sync at 69 points**. The CSV-leads-the-PNG gap that
+reopened for a few hours on 2026-08-14 was closed within the session and never reached a commit._
 `nav_actual.csv` / `nav_twr.csv` are **not** extended and still end 2026-07-31, so the three NAV
 charts remain a July month-end artifact._
 
@@ -237,9 +234,10 @@ do not re-derive `k` from the new NAV.
 | `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) |
 | `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
-| `pnl_realized_unrealized.png` *(the 2026-08-12 PNG, through 08-11)* | realized **−49,091.38** · unrealized **+129,844.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-01 render showed −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
-| `pnl.csv` last row *(the CSV leads the PNG by two rows — see the header)* | 2026-08-14: realized **−49,091.38** · unrealized **+183,951.35** · total **+134,859.97** · commission **3,735.16** THB; **69 rows**, matching `equity_curve`'s 69 |
-| The August regeneration *(**done** 2026-08-12)* | ✅ satisfied — the PNG title reads `realized -49,091 · unrealized +129,844 · commission −3,735 THB`, the series ends 2026-08-11 at 67 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
+| `pnl_realized_unrealized.png` *(the 2026-08-14 PNG, through 08-14)* | realized **−49,091.38** · unrealized **+183,951.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-12 render showed −49,091.38 / +129,844.35 at 67 points; the 2026-08-01 one showed −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
+| `pnl.csv` last row *(the CSV and the P/L PNG are in sync — see the header)* | 2026-08-14: realized **−49,091.38** · unrealized **+183,951.35** · total **+134,859.97** · commission **3,735.16** THB; **69 rows**, matching `equity_curve`'s 69 |
+| The August regeneration *(**done** 2026-08-12, **superseded** by the 2026-08-14 render)* | ✅ satisfied — the current PNG title reads `realized -49,091 · unrealized +183,951 · commission −3,735 THB`, the series ends 2026-08-14 at 69 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
+| Only ONE PNG may change on a P/L regeneration | ✅ `gen_pnl_chart.py:118` writes `pnl_realized_unrealized.png` and nothing else. Checksum the four PNGs before and after: the three NAV charts must be **byte-identical** and keep their 2026-08-01 mtimes. Verified 2026-08-14 — only the P/L PNG's md5 moved |
 | P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.27** from 2026-08-03 (**1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
 | `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
 
@@ -253,8 +251,19 @@ No 2026-08-12 row exists and none should: the SET was closed (H.M. Queen Sirikit
 Birthday). `realized_cum` and `commission_cum` are unchanged across both rows — **no trade has
 occurred since the 2026-08-03 rotation** — so the entire movement is the unrealized leg
 (+129,844.35 → +176,806.35 → +183,951.35), and the reconciliation residual holds at **1,610.27** on
-both. **`pnl_realized_unrealized.png` was NOT regenerated**, so it remains the 2026-08-12 render
-through 08-11 and the CSV leads it by two rows.
+both. **`pnl_realized_unrealized.png` was regenerated from the extended CSV in the same session**, so
+the two artifacts end together at 69 points and the CSV-leads-the-PNG gap never reached a commit.
+Only that one PNG changed — the three NAV charts were checksummed before and after and are
+byte-identical, still carrying their 2026-08-01 mtimes.
+
+**The regenerated chart shows a divergence worth reading deliberately, because it is the whole reason
+these series are plotted separately.** **Unrealized P/L set a live-test high at +183,951.35**, edging
+past the 2026-07-22 peak of +183,325.89 by **625.46** — while **total P/L is NOT at a high**: it reads
+**+134,859.97** against 2026-07-22's **+164,009.96**, sitting **29,149.99** below it. The gap is almost
+entirely the 2026-08-03 realisation of **−29,775.45**, and the two reconcile exactly:
+`29,775.45 − 29,149.99 = 625.46`, the unrealized excess. **A chart of NAV alone would show neither
+fact**; a chart of unrealized alone would report a record while concealing that a rotation was banked
+at a loss in between.
 
 **`pnl_realized_unrealized.png` regenerated 2026-08-12**, off-cycle rather than at a month-end,
 because `pnl.csv` had been extended through 2026-08-11 and the PNG was the last artifact still
