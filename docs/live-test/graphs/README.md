@@ -3,12 +3,12 @@
 _**The four PNGs are no longer on a single date — read them separately.** The three **NAV** charts
 (`equity_curve`, `drawdown`, `monthly_returns`) were last regenerated **2026-08-01**, covering
 2026-05-04 → 2026-07-31 (60 NAV points)._
-_`pnl.csv` was extended to **2026-08-20** on 2026-08-20 (adding the 08-20 row), so it now
-runs **73 rows, 2026-05-05 → 2026-08-20**, and **`pnl_realized_unrealized.png` was regenerated from it
-the same day, so the CSV and the P/L PNG are in sync at 73 points**. Extending the CSV and
+_`pnl.csv` was extended to **2026-08-21** on 2026-08-21 (adding the 08-21 row), so it now
+runs **74 rows, 2026-05-05 → 2026-08-21**, and **`pnl_realized_unrealized.png` was regenerated from it
+the same day, so the CSV and the P/L PNG are in sync at 74 points**. Extending the CSV and
 regenerating the chart in the same session is the established practice — it is what kept the
-CSV-leads-the-PNG gap from reaching a commit on 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19 and
-2026-08-20._
+CSV-leads-the-PNG gap from reaching a commit on 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19,
+2026-08-20 and 2026-08-21._
 `nav_actual.csv` / `nav_twr.csv` are **not** extended and still end 2026-07-31, so the three NAV
 charts remain a July month-end artifact._
 
@@ -94,13 +94,14 @@ The realisations to date:
 | 2026-07-01 | SELL MCOT (16,700 @ 5.15 vs 6.0374 basis) | **−14,964.06** | −19,315.93 |
 | 2026-08-03 | Rebalance — SELL DELTA (300 @ 272.00 vs 319.5178) −14,392.42 · SELL PTTGC (3,000 @ 36.00 vs 41.0672) −15,383.03 | **−29,775.45** | **−49,091.38** |
 
-At 2026-08-20 (the CSV's last row): realized **−49,091.38** · unrealized **+222,599.35** · total
-**+173,507.97** · commission **−3,735.16 THB**. **Only the unrealized leg has moved since 2026-08-03** —
+At 2026-08-21 (the CSV's last row): realized **−49,091.38** · unrealized **+249,619.35** · total
+**+200,527.97** · commission **−3,735.16 THB**. **Only the unrealized leg has moved since 2026-08-03** —
 realized and commission have not changed since that rebalance, and will not until the September one.
 (The pair read +129,844.35 / +80,752.97 at 2026-08-11, after falling on the 2026-08-10 MGC collapse
 with no realisation involved, then recovered across 2026-08-13, 08-14, 08-17 and 08-18 before easing
-−2,834.00 on 2026-08-19 and a further **−35,094.00 on 2026-08-20** — the largest single-session fall
-of the holding period, and again with no realisation involved. **Read this line as
+−2,834.00 on 2026-08-19 and a further −35,094.00 on 2026-08-20 — the largest single-session fall
+of the holding period — then recovering **+27,020.00 on 2026-08-21**, which returns total P/L above
+the 200,000 line; none of it involved a realisation. **Read this line as
 the CSV's last row, not as a live figure — the instrument is `pnl.csv` itself, and the owning record
 is that day's log under `docs/live-test/daily/`.**)
 
@@ -237,14 +238,32 @@ do not re-derive `k` from the new NAV.
 | `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) |
 | `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
-| `pnl_realized_unrealized.png` *(the 2026-08-20 PNG, through 08-20)* | realized **−49,091.38** · unrealized **+222,599.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-19 render showed −49,091.38 / +257,693.35 at 72 points; the 2026-08-18 one showed −49,091.38 / +260,527.35 at 71 points; the 2026-08-17 one showed −49,091.38 / +231,713.35 at 70 points; the 2026-08-14 one −49,091.38 / +183,951.35 at 69 points; the 2026-08-12 one −49,091.38 / +129,844.35 at 67 points; the 2026-08-01 one −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
-| `pnl.csv` last row *(the CSV and the P/L PNG are in sync — see the header)* | 2026-08-20: realized **−49,091.38** · unrealized **+222,599.35** · total **+173,507.97** · commission **3,735.16** THB; **73 rows**, matching `equity_curve`'s 73 |
-| The August regeneration *(**done** 2026-08-12, **superseded** by the 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19 and then the 2026-08-20 render)* | ✅ satisfied — the current PNG title reads `realized -49,091 · unrealized +222,599 · commission −3,735 THB`, the series ends 2026-08-20 at 73 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
-| Only ONE PNG may change on a P/L regeneration | ✅ `gen_pnl_chart.py:118` writes `pnl_realized_unrealized.png` and nothing else. Checksum the four PNGs before and after: the three NAV charts must be **byte-identical** and keep their 2026-08-01 mtimes. Verified 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19 and 2026-08-20 — only the P/L PNG's hash moved on all five |
+| `pnl_realized_unrealized.png` *(the 2026-08-21 PNG, through 08-21)* | realized **−49,091.38** · unrealized **+249,619.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-20 render showed −49,091.38 / +222,599.35 at 73 points; the 2026-08-19 one showed −49,091.38 / +257,693.35 at 72 points; the 2026-08-18 one showed −49,091.38 / +260,527.35 at 71 points; the 2026-08-17 one showed −49,091.38 / +231,713.35 at 70 points; the 2026-08-14 one −49,091.38 / +183,951.35 at 69 points; the 2026-08-12 one −49,091.38 / +129,844.35 at 67 points; the 2026-08-01 one −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
+| `pnl.csv` last row *(the CSV and the P/L PNG are in sync — see the header)* | 2026-08-21: realized **−49,091.38** · unrealized **+249,619.35** · total **+200,527.97** · commission **3,735.16** THB; **74 rows**, matching `equity_curve`'s 74 |
+| The August regeneration *(**done** 2026-08-12, **superseded** by the 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20 and then the 2026-08-21 render)* | ✅ satisfied — the current PNG title reads `realized -49,091 · unrealized +249,619 · commission −3,735 THB`, the series ends 2026-08-21 at 74 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
+| Only ONE PNG may change on a P/L regeneration | ✅ `gen_pnl_chart.py:118` writes `pnl_realized_unrealized.png` and nothing else. Checksum the four PNGs before and after: the three NAV charts must be **byte-identical** and keep their 2026-08-01 mtimes. Verified 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20 and 2026-08-21 — only the P/L PNG's hash moved on all six |
 | P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.27** from 2026-08-03 (**1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
 | `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
+
+**`pnl.csv` extended through 2026-08-21** on 2026-08-21, appending the **2026-08-21** row — one row,
+continuing the same-session practice for a sixth consecutive session. `realized_cum` and
+`commission_cum` are unchanged (**no trade since the 2026-08-03 rotation**), so the whole movement is
+the unrealized leg (+222,599.35 → **+249,619.35**, a **+27,020.00** session), and the reconciliation
+residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated from the extended CSV
+in the same session**, so the two artifacts end together at **74 points**; the three NAV charts were
+checksummed before and after and are byte-identical with their 2026-08-01 mtimes intact.
+
+**The session recovered 77.0% of the record loss of 2026-08-20**, on breadth of **4 up / 1 down /
+5 flat** — five unchanged closes, the most of the holding period, each one independently re-fetched
+because a half-unchanged book is the shape a partially-failed refresh produces. Total P/L returns to
+**+200,527.97**, back above the 200,000 line for the second time; unrealized rises to
+**+249,619.35**, leaving NAV **0.82% off its 2026-08-18 peak**. **INSET and SMT both set fresh
+live-test highs**, and **SMT's 5.80 is the new maximum close of its entire 600-bar window** — which
+**withdraws** the characterisation of that level as a bound made in the 2026-08-20 daily log.
+⚠️ **The 2026-08-20 entry below is accurate as of that date and was superseded the next session** —
+read it as history, not as the current figure. Owning record: `docs/live-test/daily/2026-08-21.md`.
 
 **`pnl.csv` extended through 2026-08-20** on 2026-08-20, appending the **2026-08-20** row — one row,
 continuing the same-session practice for a fifth consecutive session. `realized_cum` and
@@ -259,9 +278,10 @@ measure**, and it came with **every one of the ten positions down** — the firs
 the 2026-08-03 rotation, and the exact mirror of 2026-08-13's 10/0/0. Total P/L falls to
 **+173,507.97**, back below the 200,000 line it first cleared on 2026-08-18 and held for two sessions;
 unrealized falls to **+222,599.35**, leaving NAV **2.85% off its 2026-08-18 peak**. **The SET rose
-+0.01% on the same day**, so the fall was the book's rather than the market's. ⚠️ **The 2026-08-19
-entry below is accurate as of that date and was superseded the next session** — read it as history,
-not as the current figure. Owning record: `docs/live-test/daily/2026-08-20.md`.
++0.01% on the same day**, so the fall was the book's rather than the market's. ➡️ **SUPERSEDED THE
+NEXT SESSION — see the 2026-08-21 entry above**, which recovered +27,020.00 of this fall. ⚠️ **The
+2026-08-19 entry below is accurate as of that date and was superseded the next session** — read it
+as history, not as the current figure. Owning record: `docs/live-test/daily/2026-08-20.md`.
 
 **`pnl.csv` extended through 2026-08-19** on 2026-08-19, appending the **2026-08-19** row — one row,
 continuing the same-session practice for a fourth consecutive session. `realized_cum` and
