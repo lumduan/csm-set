@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from settfex.services.set.holiday import HolidayService
 
 from csm.data.calendar import (
     FALLBACK_SET_HOLIDAYS,
@@ -660,3 +661,87 @@ class TestIsSetHolidayDoesNoNetworkIO:
             )
 
         assert result[0] is True
+
+
+class TestSettfexOwnLoggingIsMutedDuringAPoll:
+    """The unit tests above assert *our* logger stays quiet. That is necessary
+    and was not sufficient.
+
+    ``settfex`` keeps its own loguru logger and emits an ERROR from
+    ``_fetch_with_retry`` on every exhausted fetch. With ~48 polls/day that is
+    ~48 ERROR lines/day in the container log — precisely the noise the poller
+    exists to remove — and no amount of ``caplog`` assertion would have seen it,
+    because loguru does not route through ``logging``. It was found by an
+    end-to-end smoke test on 2026-08-25, so the regression test asserts against
+    a real loguru sink.
+    """
+
+    def _loguru_sink(self) -> tuple[list[str], object]:
+        from loguru import logger as loguru_logger  # noqa: PLC0415
+
+        captured: list[str] = []
+        sink_id = loguru_logger.add(lambda m: captured.append(str(m)), level="DEBUG")
+        return captured, sink_id
+
+    async def test_settfex_error_does_not_reach_loguru_during_a_poll(
+        self, _isolated_cache: Path
+    ) -> None:
+        from loguru import logger as loguru_logger
+
+        captured, sink_id = self._loguru_sink()
+        try:
+            with patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("HTTP 401")),
+            ):
+                await capture_set_holidays(2026, _isolated_cache)
+        finally:
+            loguru_logger.remove(sink_id)
+
+        assert captured == [], f"settfex logging leaked during a poll: {captured}"
+
+    async def test_the_mute_is_released_afterwards(self, _isolated_cache: Path) -> None:
+        """A mute that never lifts would hide genuine settfex errors forever —
+        the positive control that makes the test above mean something."""
+        from loguru import logger as loguru_logger
+
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(side_effect=RuntimeError("HTTP 401")),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        captured, sink_id = self._loguru_sink()
+        try:
+            HolidayService()  # logs "HolidayService initialized" from inside settfex
+        finally:
+            loguru_logger.remove(sink_id)
+
+        assert any("HolidayService initialized" in line for line in captured), (
+            "settfex logging must be re-enabled after the poll returns"
+        )
+
+    async def test_the_mute_is_released_even_when_the_fetch_raises_hard(
+        self, _isolated_cache: Path
+    ) -> None:
+        """capture_set_holidays only catches CalendarUnavailableError. An
+        unexpected exception must still lift the mute on the way out, or one
+        surprise permanently silences settfex for the process."""
+        from loguru import logger as loguru_logger
+
+        with (
+            patch(
+                "csm.data.calendar.fetch_set_holidays",
+                new=AsyncMock(side_effect=MemoryError("unexpected")),
+            ),
+            pytest.raises(MemoryError),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        captured, sink_id = self._loguru_sink()
+        try:
+            HolidayService()
+        finally:
+            loguru_logger.remove(sink_id)
+
+        assert any("HolidayService initialized" in line for line in captured)

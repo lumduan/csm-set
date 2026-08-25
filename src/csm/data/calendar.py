@@ -159,6 +159,8 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -472,6 +474,38 @@ def write_holiday_cache(year: int, holidays: dict[date, str], path: Path | None 
         raise
 
 
+@contextmanager
+def _settfex_logging_muted() -> Iterator[None]:
+    """Silence settfex's own loguru output for the duration of one poll.
+
+    ⚠️ **Without this the poller is not actually quiet, and the whole logging
+    design collapses.** ``settfex`` keeps its *own* loguru logger and emits an
+    ``ERROR`` from ``_fetch_with_retry`` on every exhausted fetch — independent
+    of this module's ``logging`` calls. Muting *our* line while settfex emits
+    its own would put ~48 ERROR lines/day into the container log, which is
+    exactly the noise the poller exists to remove. Caught by an end-to-end smoke
+    test on 2026-08-25, after the unit tests had (correctly, and uselessly)
+    confirmed that *our* logger stayed silent.
+
+    Scope is deliberately narrow — the mute lasts only for the wrapped call.
+    ``logger.disable`` is process-global, so this is safe here only because
+    ``csm.data.calendar`` is the sole settfex consumer in this codebase and the
+    poll job runs with ``max_instances=1``. A concurrent *direct* call to
+    :func:`fetch_set_holidays` could have its settfex ERROR swallowed; the cost
+    is one suppressed log line, never a wrong answer.
+
+    Imported lazily, mirroring :func:`fetch_set_holidays` — loguru reaches us
+    only as a settfex dependency, and module import stays cheap.
+    """
+    from loguru import logger as _loguru  # noqa: PLC0415
+
+    _loguru.disable("settfex")
+    try:
+        yield
+    finally:
+        _loguru.enable("settfex")
+
+
 async def capture_set_holidays(year: int, path: Path | None = None) -> bool:
     """Try the live endpoint once and bank the result. **Never raises.**
 
@@ -483,15 +517,16 @@ async def capture_set_holidays(year: int, path: Path | None = None) -> bool:
         ``True`` if the endpoint served and the cache was written, else ``False``.
     """
     path = path or HOLIDAY_CACHE_PATH
-    try:
-        live = await fetch_set_holidays(year)
-    except CalendarUnavailableError as exc:
-        # DEBUG, not WARNING: the poller runs dozens of times a day against an
-        # endpoint whose normal state is down. Logging each failure would emit
-        # ~48 lines/day and bury the one line that matters. Calendar health is
-        # reported once per day instead, by is_set_holiday.
-        logger.debug("holiday poll for %d found the endpoint down: %s", year, exc)
-        return False
+    with _settfex_logging_muted():
+        try:
+            live = await fetch_set_holidays(year)
+        except CalendarUnavailableError as exc:
+            # DEBUG, not WARNING: the poller runs dozens of times a day against an
+            # endpoint whose normal state is down. Logging each failure would emit
+            # ~48 lines/day and bury the one line that matters. Calendar health is
+            # reported once per day instead, by is_set_holiday.
+            logger.debug("holiday poll for %d found the endpoint down: %s", year, exc)
+            return False
 
     if not live:
         # A 200 carrying an empty array is not a usable capture; banking it
