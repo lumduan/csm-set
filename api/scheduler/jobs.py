@@ -7,7 +7,7 @@ import json
 import logging
 import random
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -15,10 +15,11 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from csm.config.constants import INDEX_SYMBOL, TIMEZONE
 from csm.config.settings import Settings
-from csm.data.calendar import is_set_holiday
+from csm.data.calendar import HOLIDAY_CACHE_PATH, capture_set_holidays, is_set_holiday
 from csm.data.sources import OHLCVSource, build_ohlcv_loader
 from csm.data.store import ParquetStore
 from csm.features.pipeline import FeaturePipeline
@@ -257,6 +258,34 @@ def _held_symbols_from_config(path: Path) -> list[str]:
     return sorted({pos.qualified_symbol for pos in config.positions})
 
 
+def _holiday_cache_path(settings: Settings) -> Path:
+    """Resolve the banked-calendar path under the configured results directory.
+
+    Derived from ``settings.results_dir`` rather than using
+    :data:`~csm.data.calendar.HOLIDAY_CACHE_PATH` directly, so the cache lands
+    beside ``last_refresh.json`` in whatever results directory is configured —
+    the same ``results/.tmp/`` that :func:`_write_marker` already writes to.
+    """
+    return settings.results_dir / ".tmp" / HOLIDAY_CACHE_PATH.name
+
+
+async def holiday_poll(settings: Settings) -> bool:
+    """One opportunistic attempt at the SET holiday calendar. Never raises.
+
+    Deliberately trivial: the value is in *when* and *how often* this runs, not
+    in what it does. The current Bangkok year is the only year the endpoint will
+    ever serve, so no year argument is needed — and at the year boundary this
+    starts asking for the new one on its own, which is what closes the
+    "capture 2027 on 2027-01-01" hole that previously relied on someone
+    remembering.
+
+    Returns:
+        ``True`` when the endpoint served and the cache was written.
+    """
+    year: int = datetime.now(tz=ZoneInfo(TIMEZONE)).year
+    return await capture_set_holidays(year, _holiday_cache_path(settings))
+
+
 async def daily_refresh(
     settings: Settings,
     store: ParquetStore,
@@ -463,6 +492,37 @@ def create_scheduler(
         id="daily_refresh",
         replace_existing=True,
         misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
+    )
+
+    async def _holiday_poll_wrapper() -> None:
+        # capture_set_holidays never raises, but the wrapper is defensive for the
+        # same reason _job_wrapper is: an exception escaping into APScheduler's
+        # executor would be logged and swallowed there, out of our log format.
+        try:
+            await holiday_poll(settings=settings)
+        except Exception:
+            logger.exception("Scheduled holiday_poll failed")
+
+    # Opportunistic, NOT a retry loop. The SET holiday endpoint's normal state is
+    # a hard origin 401 whose successes are only visible through a 60-second edge
+    # cache, so what buys coverage is *independent attempts spread across the day*
+    # — not a longer backoff inside the daily refresh. See csm.data.calendar's
+    # module docstring, "Why a poller, and not a longer retry".
+    #
+    # `next_run_time` fires one attempt shortly after boot rather than waiting a
+    # full interval, so a container that starts the morning of a closure still has
+    # a chance to bank the calendar before the 18:00 refresh reads it.
+    scheduler.add_job(
+        _holiday_poll_wrapper,
+        trigger=IntervalTrigger(minutes=settings.holiday_poll_minutes),
+        id="holiday_poll",
+        replace_existing=True,
+        next_run_time=datetime.now(tz=ZoneInfo("Asia/Bangkok")) + timedelta(seconds=30),
+        # A missed poll is worth nothing after the fact — the next one is minutes
+        # away and samples a fresh cache window. Never queue a backlog.
+        misfire_grace_time=60,
         coalesce=True,
         max_instances=1,
     )

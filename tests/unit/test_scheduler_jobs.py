@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Generator
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -20,9 +20,11 @@ from api.scheduler.jobs import (
     _has_usable_data,
     create_scheduler,
     daily_refresh,
+    holiday_poll,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from csm.config.constants import INDEX_SYMBOL
 from csm.config.settings import Settings
@@ -808,3 +810,77 @@ class TestDailyRefreshResilience:
             "index_fetched",
         ):
             assert key in marker, f"new key {key!r} missing from marker file"
+
+
+class TestHolidayPollJob:
+    """The opportunistic SET holiday poller (added 2026-08-25).
+
+    Its value is entirely in cadence — see ``csm.data.calendar``'s "Why a
+    poller, and not a longer retry". These pin the wiring that delivers it.
+    """
+
+    def test_registered_alongside_daily_refresh(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        scheduler = create_scheduler(settings_override, mock_store)
+        assert scheduler is not None
+        assert scheduler.get_job("holiday_poll") is not None
+        assert scheduler.get_job("daily_refresh") is not None, "must not displace the refresh"
+
+    def test_not_registered_in_public_mode(
+        self, public_settings: Settings, mock_store: MagicMock
+    ) -> None:
+        """Public mode builds no scheduler at all, so the poller cannot fire —
+        the same guard that keeps the refresh from running there."""
+        assert create_scheduler(public_settings, mock_store) is None
+
+    def test_interval_matches_settings(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        scheduler = create_scheduler(settings_override, mock_store)
+        assert scheduler is not None
+        trigger = scheduler.get_job("holiday_poll").trigger
+        assert isinstance(trigger, IntervalTrigger)
+        assert trigger.interval == timedelta(minutes=settings_override.holiday_poll_minutes)
+
+    def test_first_run_is_soon_after_boot_not_a_full_interval_away(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """A container starting the morning of a closure must still get a chance
+        to bank the calendar before the 18:00 refresh reads it."""
+        scheduler = create_scheduler(settings_override, mock_store)
+        assert scheduler is not None
+        job = scheduler.get_job("holiday_poll")
+        delay = job.next_run_time - datetime.now(tz=ZoneInfo("Asia/Bangkok"))
+        assert delay < timedelta(minutes=2), "first poll must not wait a full interval"
+
+    def test_misfires_are_dropped_never_queued(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        """A poll is worth nothing after the fact — the next one is minutes away
+        and samples a fresh 60-second cache window. A backlog would fire a burst
+        of pointless attempts after any pause."""
+        scheduler = create_scheduler(settings_override, mock_store)
+        assert scheduler is not None
+        job = scheduler.get_job("holiday_poll")
+        assert job.coalesce is True
+        assert job.misfire_grace_time is not None
+        assert job.misfire_grace_time <= 60
+
+    async def test_polls_the_current_bangkok_year(self, settings_override: Settings) -> None:
+        """The endpoint only ever serves the current year, so the year argument
+        is not configurable — and at the year boundary this starts asking for
+        the new one unprompted, which is what closes the 2027 capture hole."""
+        with patch(
+            "api.scheduler.jobs.capture_set_holidays", new=AsyncMock(return_value=True)
+        ) as capture:
+            assert await holiday_poll(settings=settings_override) is True
+
+        year, path = capture.await_args.args
+        assert year == datetime.now(tz=ZoneInfo("Asia/Bangkok")).year
+        assert path == settings_override.results_dir / ".tmp" / "set_holidays.json"
+
+    async def test_a_failed_poll_is_not_an_error(self, settings_override: Settings) -> None:
+        """The endpoint's normal state is down; returning False is routine."""
+        with patch("api.scheduler.jobs.capture_set_holidays", new=AsyncMock(return_value=False)):
+            assert await holiday_poll(settings=settings_override) is False
