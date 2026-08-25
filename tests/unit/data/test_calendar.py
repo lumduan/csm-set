@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
@@ -19,11 +20,40 @@ import pytest
 from csm.data.calendar import (
     FALLBACK_SET_HOLIDAYS,
     CalendarUnavailableError,
+    cache_captured_at,
+    capture_set_holidays,
     fetch_set_holidays,
     is_set_holiday,
+    read_holiday_cache,
+    write_holiday_cache,
 )
 
 _BKK = ZoneInfo("Asia/Bangkok")
+
+
+@pytest.fixture(autouse=True)
+def _isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the module default at a per-test file.
+
+    Autouse and unconditional: the real default is ``results/.tmp/set_holidays.json``
+    *relative to the working directory*, so without this a test run inside a
+    deployed checkout would read — and ``write_holiday_cache`` would clobber —
+    live runtime state. Every test then exercises the same default-resolution
+    path production does, rather than a parameter production never passes.
+    """
+    cache = tmp_path / "set_holidays.json"
+    monkeypatch.setattr("csm.data.calendar.HOLIDAY_CACHE_PATH", cache)
+    return cache
+
+
+def _seed_cache(path: Path, *entries: tuple[str, str], year: int = 2026) -> None:
+    """Bank *entries* as though the poller had captured them.
+
+    Deliberately routed through the real ``write_holiday_cache`` rather than
+    hand-written JSON, so a test can never assert against a file shape the
+    writer does not actually produce.
+    """
+    write_holiday_cache(year, {date.fromisoformat(d): desc for d, desc in entries}, path)
 
 
 def _calendar(*entries: tuple[str, str]) -> SimpleNamespace:
@@ -125,21 +155,18 @@ class TestIsSetHoliday:
         assert is_holiday is False
         assert name == ""
 
-    async def test_live_calendar_overrides_the_fallback(self) -> None:
-        """The live payload is authoritative — the two sources are never OR-ed.
+    async def test_banked_cache_overrides_the_fallback(self, _isolated_cache: Path) -> None:
+        """The banked payload is authoritative — the two sources are never OR-ed.
 
         A closure withdrawn upstream must stop being a closure here, so a
-        successful fetch has to *replace* the committed table rather than be
-        unioned with it. 2026-08-12 is in the fallback; a live calendar that
-        omits it must win.
+        captured calendar has to *replace* the committed table rather than be
+        unioned with it. 2026-08-12 is in the fallback; a cache that omits it
+        must win.
         """
-        with patch(
-            "settfex.services.set.holiday.get_holidays",
-            new=AsyncMock(return_value=_calendar(("2026-09-21", "Some new closure"))),
-        ):
-            is_holiday, name = await is_set_holiday(date(2026, 8, 12))
+        _seed_cache(_isolated_cache, ("2026-09-21", "Some new closure"))
+        is_holiday, name = await is_set_holiday(date(2026, 8, 12))
 
-        assert is_holiday is False, "a successful fetch must override the committed table"
+        assert is_holiday is False, "a banked capture must override the committed table"
         assert name == ""
 
 
@@ -151,7 +178,7 @@ class TestTableDriftIsReported:
     """
 
     async def test_missing_year_is_reported_with_the_dates_to_capture(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
         """The 2027-01-01 case, which is the whole point.
 
@@ -159,11 +186,13 @@ class TestTableDriftIsReported:
         notice that the capture window is open.
         """
         assert 2027 not in FALLBACK_SET_HOLIDAYS
-        live = _calendar(("2027-01-01", "New Year's Day"), ("2027-04-06", "Chakri Memorial Day"))
-        with (
-            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
-            caplog.at_level("WARNING", logger="csm.data.calendar"),
-        ):
+        _seed_cache(
+            _isolated_cache,
+            ("2027-01-01", "New Year's Day"),
+            ("2027-04-06", "Chakri Memorial Day"),
+            year=2027,
+        )
+        with caplog.at_level("WARNING", logger="csm.data.calendar"):
             await is_set_holiday(date(2027, 1, 1))
 
         assert "no committed fallback table for 2027" in caplog.text
@@ -171,64 +200,55 @@ class TestTableDriftIsReported:
         assert "current year" in caplog.text
 
     async def test_a_closure_added_after_the_snapshot_is_reported(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
         """SET inserting a new special closure mid-year — otherwise invisible."""
-        live = _calendar(*_REAL_2026, ("2026-11-20", "Additional special holiday *"))
-        with (
-            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
-            caplog.at_level("WARNING", logger="csm.data.calendar"),
-        ):
+        _seed_cache(_isolated_cache, *_REAL_2026, ("2026-11-20", "Additional special holiday *"))
+        with caplog.at_level("WARNING", logger="csm.data.calendar"):
             await is_set_holiday(date(2026, 8, 3))
 
         assert "STALE" in caplog.text
         assert "promote: 2026-11-20" in caplog.text
 
     async def test_drift_is_reported_even_on_an_ordinary_trading_day(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
         """Staleness must not depend on today happening to be a closure.
 
         2026-08-03 is a normal Monday; the check runs before the lookup, so the
         report does not wait for the next holiday to surface.
         """
-        live = _calendar(("2026-11-20", "Additional special holiday *"))
-        with (
-            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
-            caplog.at_level("WARNING", logger="csm.data.calendar"),
-        ):
+        _seed_cache(_isolated_cache, ("2026-11-20", "Additional special holiday *"))
+        with caplog.at_level("WARNING", logger="csm.data.calendar"):
             is_holiday, _ = await is_set_holiday(date(2026, 8, 3))
 
         assert is_holiday is False
         assert "STALE" in caplog.text
 
     async def test_in_sync_is_stated_rather_than_silent(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
         """ "Matches" must be distinguishable from "the check never ran"."""
-        live = _calendar(
-            *[(d.isoformat(), desc) for d, desc in FALLBACK_SET_HOLIDAYS[2026].items()]
+        _seed_cache(
+            _isolated_cache,
+            *[(d.isoformat(), desc) for d, desc in FALLBACK_SET_HOLIDAYS[2026].items()],
         )
-        with (
-            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)),
-            caplog.at_level("INFO", logger="csm.data.calendar"),
-        ):
+        with caplog.at_level("INFO", logger="csm.data.calendar"):
             await is_set_holiday(date(2026, 8, 3))
 
         assert "matches the live calendar (20 closures)" in caplog.text
         assert "STALE" not in caplog.text
 
-    async def test_drift_reporting_never_changes_the_verdict(self) -> None:
+    async def test_drift_reporting_never_changes_the_verdict(self, _isolated_cache: Path) -> None:
         """Observational only. A stale table must not alter what is returned."""
-        live = _calendar(("2026-11-20", "Additional special holiday *"))
-        with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)):
-            # 2026-08-12 is in the committed table but NOT in this live payload,
-            # so the live answer must still win despite the drift warning.
-            assert await is_set_holiday(date(2026, 8, 12)) == (False, "")
-            assert await is_set_holiday(date(2026, 11, 20)) == (
-                True,
-                "Additional special holiday *",
-            )
+        _seed_cache(_isolated_cache, ("2026-11-20", "Additional special holiday *"))
+        # 2026-08-12 is in the committed table but NOT in this banked payload,
+        # so the banked answer must still win despite the drift warning.
+        assert await is_set_holiday(date(2026, 8, 12)) == (False, "")
+        assert await is_set_holiday(date(2026, 11, 20)) == (
+            True,
+            "Additional special holiday *",
+        )
 
     async def test_no_drift_report_when_the_endpoint_is_down(
         self, caplog: pytest.LogCaptureFixture
@@ -304,7 +324,7 @@ class TestFallbackWhenTheCalendarIsDown:
 
         assert is_holiday is False
         assert name == ""
-        assert "no committed fallback covers 2027" in caplog.text
+        assert "neither banked nor covered by a committed fallback for 2027" in caplog.text
         assert "proceeding as a trading day" in caplog.text
 
     async def test_fallback_use_is_logged_loudly(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -407,3 +427,236 @@ class TestFallbackTableIntegrity:
         2027 table can only be built from 2027-01-01. Pinning this stops it
         being "fixed" by inventing dates."""
         assert 2027 not in FALLBACK_SET_HOLIDAYS
+
+
+class TestHolidayCacheFile:
+    """The banked cache is now the primary source, so its parser is load-bearing.
+
+    Every rejection test here carries a **positive control** — the same call
+    against a valid file — because ``read_holiday_cache`` returning ``{}`` is
+    satisfied by literally any failure, including one that never parsed
+    anything. Without the control, a parser that always returned ``{}`` would
+    pass the whole class.
+    """
+
+    def test_roundtrip(self, _isolated_cache: Path) -> None:
+        write_holiday_cache(2026, {date(2026, 8, 12): "Mother's Day"}, _isolated_cache)
+        assert read_holiday_cache(_isolated_cache) == {2026: {date(2026, 8, 12): "Mother's Day"}}
+        assert cache_captured_at(_isolated_cache) is not None
+
+    def test_missing_file_is_empty_not_an_error(self, tmp_path: Path) -> None:
+        assert read_holiday_cache(tmp_path / "nope.json") == {}
+        assert cache_captured_at(tmp_path / "nope.json") is None
+
+    def test_a_second_year_does_not_destroy_the_first(self, _isolated_cache: Path) -> None:
+        """The 2026/2027 boundary. A year is only capturable while it is current,
+        so a 2027 capture overwriting the banked 2026 would be unrecoverable."""
+        write_holiday_cache(2026, {date(2026, 8, 12): "Mother's Day"}, _isolated_cache)
+        write_holiday_cache(2027, {date(2027, 1, 1): "New Year's Day"}, _isolated_cache)
+
+        banked = read_holiday_cache(_isolated_cache)
+        assert set(banked) == {2026, 2027}
+        assert banked[2026] == {date(2026, 8, 12): "Mother's Day"}
+
+    def test_recapturing_a_year_replaces_it_rather_than_merging(
+        self, _isolated_cache: Path
+    ) -> None:
+        """A closure withdrawn upstream must disappear, not linger via a union."""
+        write_holiday_cache(2026, {date(2026, 8, 12): "A", date(2026, 9, 9): "B"}, _isolated_cache)
+        write_holiday_cache(2026, {date(2026, 8, 12): "A"}, _isolated_cache)
+
+        assert read_holiday_cache(_isolated_cache)[2026] == {date(2026, 8, 12): "A"}
+
+    @pytest.mark.parametrize(
+        ("payload", "reason"),
+        [
+            ("{ not json", "unparseable"),
+            ('{"schema": 99, "years": {"2026": {"2026-08-12": "x"}}}', "schema mismatch"),
+            ('{"schema": 1}', "no years mapping"),
+            ('{"schema": 1, "years": {"2026": {}}}', "empty year is a failed capture"),
+            ('{"schema": 1, "years": {"2026": {"2027-01-01": "x"}}}', "date under the wrong year"),
+            ('{"schema": 1, "years": {"2026": {"not-a-date": "x"}}}', "unparseable date"),
+            ('{"schema": 1, "years": {"2026": {"2026-08-12": ""}}}', "blank description"),
+            ('{"schema": 1, "years": {"2026": {"2026-08-12": 7}}}', "non-string description"),
+            ('{"schema": 1, "years": {"2026": ["2026-08-12"]}}', "year is not a mapping"),
+        ],
+    )
+    def test_malformed_cache_is_dropped(
+        self, _isolated_cache: Path, payload: str, reason: str
+    ) -> None:
+        """Dropping is the SAFE direction: the caller falls through to the
+        committed fallback, which is exactly the pre-cache behaviour. Salvaging
+        a partial file risks the one outcome this module must never produce —
+        wrongly reporting a trading day as closed."""
+        _isolated_cache.write_text(payload, encoding="utf-8")
+        assert read_holiday_cache(_isolated_cache).get(2026) is None, reason
+
+    def test_positive_control_for_the_rejection_cases(self, _isolated_cache: Path) -> None:
+        """The control the class docstring demands: a *well-formed* file at the
+        same path, through the same call, must parse. Without this, a parser
+        that unconditionally returned {} would pass every case above."""
+        _isolated_cache.write_text(
+            '{"schema": 1, "years": {"2026": {"2026-08-12": "Mother\'s Day"}}}', encoding="utf-8"
+        )
+        assert read_holiday_cache(_isolated_cache) == {2026: {date(2026, 8, 12): "Mother's Day"}}
+
+    def test_write_leaves_no_partial_file_behind(self, _isolated_cache: Path) -> None:
+        """A crash mid-write must not leave a truncated file the next read has
+        to interpret — the write is tmp + os.replace for exactly this."""
+        with (
+            patch("csm.data.calendar.json.dump", side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            write_holiday_cache(2026, {date(2026, 8, 12): "x"}, _isolated_cache)
+
+        assert not _isolated_cache.exists()
+        assert list(_isolated_cache.parent.glob(".set_holidays-*")) == []
+
+
+class TestCaptureSetHolidays:
+    """The poller's single attempt. It must never raise and never bank junk."""
+
+    async def test_success_banks_the_calendar(self, _isolated_cache: Path) -> None:
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(return_value=_calendar(*_REAL_2026)),
+        ):
+            assert await capture_set_holidays(2026, _isolated_cache) is True
+
+        assert read_holiday_cache(_isolated_cache)[2026][date(2026, 8, 12)].startswith("H.M. Queen")
+
+    async def test_failure_returns_false_and_writes_nothing(self, _isolated_cache: Path) -> None:
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(side_effect=RuntimeError("401")),
+        ):
+            assert await capture_set_holidays(2026, _isolated_cache) is False
+
+        assert not _isolated_cache.exists()
+
+    async def test_failure_does_not_clobber_an_existing_capture(
+        self, _isolated_cache: Path
+    ) -> None:
+        """The endpoint is down ~97% of the time, so this path runs constantly.
+        A failure that wiped the cache would make the poller strictly harmful."""
+        _seed_cache(_isolated_cache, ("2026-08-12", "Mother's Day"))
+        with patch(
+            "settfex.services.set.holiday.get_holidays",
+            new=AsyncMock(side_effect=RuntimeError("401")),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        assert read_holiday_cache(_isolated_cache)[2026] == {date(2026, 8, 12): "Mother's Day"}
+
+    async def test_an_empty_200_is_not_banked(self, _isolated_cache: Path) -> None:
+        """A 200 carrying an empty array is a failed capture, not a year with no
+        holidays. Banking it would mask EVERY closure in the year — the exact
+        wrong-direction error the module is built to avoid."""
+        with (
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(return_value=_calendar()),
+            ),
+            patch("csm.data.calendar.write_holiday_cache") as writer,
+        ):
+            assert await capture_set_holidays(2026, _isolated_cache) is False
+
+        writer.assert_not_called()
+
+    async def test_routine_failure_is_SILENT(
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
+    ) -> None:
+        """~48 polls/day against an endpoint whose normal state is down. If each
+        failure logged at WARNING it would emit ~48 lines/day and bury the one
+        line that matters, which is the failure mode the poller exists to fix."""
+        with (
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(side_effect=RuntimeError("401")),
+            ),
+            caplog.at_level("INFO", logger="csm.data.calendar"),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        assert caplog.text == "", "a routine poll failure must not log above DEBUG"
+
+    async def test_first_capture_is_announced(
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
+    ) -> None:
+        """The rare, genuinely newsworthy event — and the counterpart control to
+        the silence test above, proving the logger is wired at all."""
+        with (
+            patch(
+                "settfex.services.set.holiday.get_holidays",
+                new=AsyncMock(return_value=_calendar(*_REAL_2026)),
+            ),
+            caplog.at_level("INFO", logger="csm.data.calendar"),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        assert "BANKED 2026 for the first time" in caplog.text
+
+    async def test_an_unchanged_recapture_is_quiet(
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
+    ) -> None:
+        """The overwhelmingly common success case, once banked."""
+        live = _calendar(*_REAL_2026)
+        with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=live)):
+            await capture_set_holidays(2026, _isolated_cache)
+            caplog.clear()
+            with caplog.at_level("INFO", logger="csm.data.calendar"):
+                await capture_set_holidays(2026, _isolated_cache)
+
+        assert caplog.text == "", "an unchanged recapture must not log above DEBUG"
+
+    async def test_a_changed_calendar_is_loud(
+        self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
+    ) -> None:
+        """SET adding a closure mid-year is exactly what nothing else would catch."""
+        _seed_cache(_isolated_cache, *_REAL_2026)
+        added = _calendar(*_REAL_2026, ("2026-11-20", "Additional special holiday *"))
+        with (
+            patch("settfex.services.set.holiday.get_holidays", new=AsyncMock(return_value=added)),
+            caplog.at_level("WARNING", logger="csm.data.calendar"),
+        ):
+            await capture_set_holidays(2026, _isolated_cache)
+
+        assert "CHANGED since the last capture" in caplog.text
+        assert "added: 2026-11-20" in caplog.text
+
+
+class TestIsSetHolidayDoesNoNetworkIO:
+    """The contract change of 2026-08-25, and the reason the poller exists.
+
+    ``is_set_holiday`` runs on the daily refresh's critical path. It used to
+    spend a fixed ~7 s there on settfex retries for a ~10% chance of a fresh
+    answer. If a future edit reintroduces an inline fetch, this fails.
+    """
+
+    async def test_no_fetch_when_the_cache_answers(self, _isolated_cache: Path) -> None:
+        _seed_cache(_isolated_cache, *_REAL_2026)
+        with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock()) as fetcher:
+            assert (await is_set_holiday(date(2026, 8, 12)))[0] is True
+
+        fetcher.assert_not_called()
+
+    async def test_no_fetch_when_falling_back_either(self, tmp_path: Path) -> None:
+        """The cache-miss path is the one that used to make the network call."""
+        with patch("settfex.services.set.holiday.get_holidays", new=AsyncMock()) as fetcher:
+            assert (await is_set_holiday(date(2026, 8, 12), tmp_path / "absent.json"))[0] is True
+
+        fetcher.assert_not_called()
+
+    async def test_a_hanging_endpoint_cannot_stall_the_refresh(self, tmp_path: Path) -> None:
+        """Previously bounded only by CALENDAR_TIMEOUT_SECS=15. Now unreachable:
+        with no inline fetch there is nothing to time out."""
+
+        async def _never_returns(*_a: object, **_k: object) -> None:
+            await asyncio.sleep(3600)
+
+        with patch("settfex.services.set.holiday.get_holidays", new=_never_returns):
+            result = await asyncio.wait_for(
+                is_set_holiday(date(2026, 8, 12), tmp_path / "absent.json"), timeout=2.0
+            )
+
+        assert result[0] is True

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
         api_key: Shared secret for ``X-API-Key`` auth on private-mode protected endpoints.
         ui_port: NiceGUI port.
         refresh_cron: Cron expression for owner-side refresh jobs.
+        holiday_poll_minutes: Interval for the opportunistic SET holiday-calendar poller.
         tvkit_auth_token: Parsed TradingView session cookies, or ``None`` for anonymous mode.
             Read from the ``TVKIT_AUTH_TOKEN`` env var (no ``CSM_`` prefix — the unprefixed
             name is used so the variable can be shared between csm-set and any other
@@ -112,6 +113,18 @@ class Settings(BaseSettings):
     refresh_cron: str = Field(
         default="0 18 * * 1-5",
         description="Cron schedule for owner-side refresh jobs.",
+    )
+    holiday_poll_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        description=(
+            "Interval in minutes for the opportunistic SET holiday-calendar poller. "
+            "The endpoint's normal state is a hard 401 whose successes are visible only "
+            "through a 60-second edge cache, so attempts are worth far more spread across "
+            "the day than bunched into the daily refresh's 7-second retry budget. Set to a "
+            "large value to effectively disable polling; the committed fallback still answers."
+        ),
     )
     refresh_held_max_attempts: int = Field(
         default=4,
