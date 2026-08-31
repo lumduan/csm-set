@@ -1,8 +1,9 @@
 # Live-Test Charts — how these are generated
 
-_**The four PNGs are no longer on a single date — read them separately.** The three **NAV** charts
-(`equity_curve`, `drawdown`, `monthly_returns`) were last regenerated **2026-08-01**, covering
-2026-05-04 → 2026-07-31 (60 NAV points)._
+_🟢 **All four PNGs are back on ONE date.** The three **NAV** charts (`equity_curve`, `drawdown`,
+`monthly_returns`) were regenerated at the **August month-end, 2026-08-31**, covering
+2026-05-04 → 2026-08-31 (**80 NAV points**), from freshly rebuilt `nav_actual.csv` / `nav_twr.csv`.
+The July-month-end split that this paragraph described from 2026-08-01 to 2026-08-31 is closed._
 _`pnl.csv` was extended to **2026-08-31** on 2026-08-31 (adding the 08-31 row), so it now
 runs **80 rows, 2026-05-05 → 2026-08-31**, and **`pnl_realized_unrealized.png` was regenerated from it
 in the same session, so the CSV and the P/L PNG are in sync at 80 points**. Extending the CSV and
@@ -245,9 +246,10 @@ do not re-derive `k` from the new NAV.
 | Check | Expected |
 |---|---|
 | July bar is identical on **both** bases | **+9.53%** — no flow in July, so `k` cancels. Disagreement means the CSVs are wrong |
-| `equity_curve.png` last point | **1,226,740.35** @ 2026-07-31 |
-| `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) |
-| `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** |
+| `equity_curve.png` last point | **1,317,530.70** @ 2026-08-31 *(was 1,226,740.35 @ 2026-07-31 until the 2026-08-31 rebuild)* |
+| `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) — **unchanged by the August rebuild**; August's own worst was −4.73% |
+| `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** · Aug **+5.68%** |
+| **August bar is the TWR figure** | **+5.68%**, NOT the reported +7.40% and NOT the ex-injection +5.77%. Feeding `nav_actual.csv` instead reproduces the documented failure mode — **Jun +11.62%** and Aug +7.40% |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
 | `pnl_realized_unrealized.png` *(the 2026-08-31 PNG, through 08-31)* | realized **−49,091.38** · unrealized **+248,232.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps. *(The superseded 2026-08-28 render showed −49,091.38 / +239,078.35 at 79 points; the 2026-08-27 one showed −49,091.38 / +245,069.35 at 78 points; the 2026-08-26 one showed −49,091.38 / +232,605.35 at 77 points; the 2026-08-25 one showed −49,091.38 / +197,671.35 at 76 points; the 2026-08-24 one showed −49,091.38 / +210,441.35 at 75 points; the 2026-08-21 one showed −49,091.38 / +249,619.35 at 74 points; the 2026-08-20 one showed −49,091.38 / +222,599.35 at 73 points; the 2026-08-19 one showed −49,091.38 / +257,693.35 at 72 points; the 2026-08-18 one showed −49,091.38 / +260,527.35 at 71 points; the 2026-08-17 one showed −49,091.38 / +231,713.35 at 70 points; the 2026-08-14 one −49,091.38 / +183,951.35 at 69 points; the 2026-08-12 one −49,091.38 / +129,844.35 at 67 points; the 2026-08-01 one −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
 | `pnl.csv` last row *(the CSV and the P/L PNG are in sync — see the header)* | 2026-08-31: realized **−49,091.38** · unrealized **+248,232.35** · total **+199,140.97** · commission **3,735.16** THB; **80 rows**, matching `equity_curve`'s 80 **in row count only** — the values diverge historically after the KCE, INSET, MGC *and* FORTH restatements (see the header caveat) |
@@ -257,6 +259,33 @@ do not re-derive `k` from the new NAV.
 | `commission_cum` | rises **only on the 6 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, **08-03**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
+
+**AUGUST MONTH-END REGENERATION — 2026-08-31.** All three input CSVs rebuilt and all four PNGs
+regenerated; the four artifacts are back on a single date for the first time since 2026-08-01.
+`nav_actual.csv` **60 → 80 rows** (seed + every `equity_curve` row minus 2026-06-04, keeping
+2026-08-03), `nav_twr.csv` likewise, `pnl.csv` at 80 rows.
+
+🔴 **This was the first rebuild that had to chain TWO capital-flow scale factors**, and the fired
+conditional above was executed as written: `k₁ = 0.9087563918` from 2026-06-05, `k₁ × k₂` with
+`k₂ = 0.9839712855` from 2026-08-03. **Neither factor was re-derived** — which mattered more than
+usual, because the 2026-08-03 `equity_curve` anchor `k₂` was originally derived from
+(**1,247,760.70**) has since been restated to **1,240,806.78** by the FORTH ex-dividend adjustment.
+Re-deriving would have moved a published historical figure to chase a number that itself moved.
+
+**Regression, run before publishing:** all **60** previously-committed rows of both NAV CSVs are
+**value-identical** (max |diff| 0.000000), and the three prior monthly bars are unchanged at
+**May +0.33% · Jun +1.44% · Jul +9.53%**, with August landing at **+5.68%**. The same rebuild driven
+from `nav_actual.csv` instead yields **Jun +11.62%** — the exact documented failure mode — which is
+the control proving the TWR series is the one that reached the chart. All four PNGs were checked
+against the rendered images, not only the generators' stdout. ✅ Only `monthly_returns.png` came from
+the scratch-directory TWR run; `equity_curve.png` and `drawdown.png` came from the actual-NAV run, as
+the recipe requires.
+
+⚠️ **Why no historical row moved despite four restatements.** The reconstruction reprices the
+*current* book back over `[entry_date, today]`, and `entry_date` is **2026-08-03** — so every
+`equity_curve` row from 08-03 forward moved, and **nothing before it did.** June and July bars were
+therefore never at risk this month. **That will not hold at the next rotation**, which resets
+`entry_date` and widens the rewritable window.
 
 **`pnl.csv` extended through 2026-08-31** on 2026-08-31, appending the **2026-08-31** row — one row,
 continuing the same-session practice for a **twelfth** consecutive session. `realized_cum` and
