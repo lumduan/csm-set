@@ -31,7 +31,9 @@ from csm.execution.trade_pairing import ClosedTrade
 from csm.live import (
     LivePortfolioConfig,
     LivePortfolioMetrics,
+    collapse_to_daily_bars,
     compute_live_portfolio_metrics,
+    drop_unpriced_days,
     load_live_portfolio,
 )
 from csm.research.exceptions import ReportError
@@ -525,6 +527,15 @@ def _reconstruct_live_equity(
             entry_ts.tz_localize(index_tz) if entry_ts.tz is None else entry_ts.tz_convert(index_tz)
         )
     panel: pd.DataFrame = prices.loc[prices.index >= entry_ts, symbols]
+    if panel.empty:
+        return pd.Series(dtype="float64")
+    # Normalizing the index (below) is not sufficient on its own: two bars for the
+    # same day collapse onto ONE key, and the upsert takes the last write. On
+    # 2026-09-01 that silently replaced the banked 2026-08-31 row (1,317,530.70)
+    # with a two-symbol valuation (303,397.70). Collapse to one row per day BEFORE
+    # repricing, and drop any day the book cannot be fully valued on.
+    panel = collapse_to_daily_bars(panel)
+    panel = drop_unpriced_days(panel, context="live equity reconstruction")
     if panel.empty:
         return pd.Series(dtype="float64")
     shares: pd.Series = pd.Series(

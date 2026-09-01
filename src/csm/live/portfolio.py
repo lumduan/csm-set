@@ -154,6 +154,99 @@ def load_live_portfolio(path: Path) -> LivePortfolioConfig | None:
     )
 
 
+def collapse_to_daily_bars(prices: pd.DataFrame) -> pd.DataFrame:
+    """Collapse a price panel to exactly one row per trading day.
+
+    The panel's contract is *one row per trading day*, and until 2026-09-01 that
+    held for 948 consecutive bars without ever being asserted. On that date the
+    vendor began emitting a **second** daily bar (a 10:00 BKK stamp beside the
+    long-standing 09:55 one) covering a *subset* of symbols — 16 of 211 on
+    2026-08-31, 41 of 211 on 2026-09-01 — so a single session arrived as two
+    sparse, complementary rows.
+
+    Anything reading the panel's last row then priced the book off whichever
+    symbols happened to carry the later stamp. That is what wrote a NAV of
+    373,561.70 against a true 1,273,881.70 (7 of 10 holdings unpriced, and
+    silently worth zero — see :func:`drop_unpriced_days`), and what overwrote
+    the banked 2026-08-31 ``equity_curve`` row with a two-symbol valuation.
+
+    Within a day the bars are complementary and agree wherever they overlap, so
+    the session is their union: ``GroupBy.last()`` takes the last **non-null**
+    value per column, which is that union.
+
+    The result is re-keyed to each day's **last original timestamp** rather than
+    to local midnight. That is load-bearing: callers convert to UTC and then
+    normalize, and a local-midnight key (00:00+07) converts to 17:00 UTC on the
+    *previous* day, which would shift every date back by one. The real bar
+    stamps (09:55/10:00 +07 → 02:55/03:00 UTC) share the calendar day with their
+    UTC form, so re-keying to them keeps every downstream date correct.
+
+    Args:
+        prices: Price panel indexed by bar timestamp, one column per symbol.
+
+    Returns:
+        The panel with at most one row per trading day. Returned unchanged when
+        it already satisfies that (the common case), so this is a no-op on every
+        panel written before 2026-08-31.
+    """
+    if prices.empty or not isinstance(prices.index, pd.DatetimeIndex):
+        return prices
+    day_key: pd.DatetimeIndex = prices.index.normalize()
+    duplicated: Any = day_key.duplicated()
+    if not bool(duplicated.any()):
+        return prices
+    dupe_days: list[str] = [str(d.date()) for d in day_key[duplicated].unique()]
+    logger.warning(
+        "price panel carries %d day(s) with more than one bar — collapsing to the "
+        "union of each day's bars: %s",
+        len(dupe_days),
+        dupe_days,
+    )
+    collapsed: pd.DataFrame = prices.groupby(day_key).last()
+    last_ts: pd.Series = prices.index.to_series().groupby(day_key).last()
+    collapsed.index = pd.DatetimeIndex(last_ts)
+    collapsed.index.name = prices.index.name
+    return collapsed
+
+
+def drop_unpriced_days(panel: pd.DataFrame, *, context: str) -> pd.DataFrame:
+    """Drop days on which any held symbol has no price, and say which.
+
+    ``DataFrame.sum(axis=1)`` defaults to ``skipna=True``, so an unpriced holding
+    contributes **zero market value** rather than propagating NaN. That turns a
+    missing input into a confident, plausible, wrong number — it is what made the
+    2026-09-01 corruption silent rather than obviously broken, and it is why this
+    guard exists in addition to :func:`collapse_to_daily_bars`.
+
+    A day on which the book cannot be fully valued is **undefined, not smaller**,
+    so it is dropped rather than valued. Callers fail closed on the result: an
+    empty panel yields no metrics and no row is written, which keeps "we could not
+    price the book" distinguishable from "the book fell".
+
+    No cross-day forward-fill is applied. Carrying a stale price into a session
+    the instrument did not trade is a valuation-policy change, not a bug fix.
+
+    Args:
+        panel: Price panel restricted to the held symbols.
+        context: Caller name, for the log line.
+
+    Returns:
+        The panel with any incompletely-priced day removed.
+    """
+    unpriced: pd.Series = panel.isna().any(axis=1)
+    if not bool(unpriced.any()):
+        return panel
+    for ts in panel.index[unpriced]:
+        row: pd.Series = panel.loc[ts]
+        logger.warning(
+            "%s: dropping %s — no price for %s; the book cannot be valued on that day",
+            context,
+            pd.Timestamp(ts).date(),
+            sorted(row.index[row.isna()].tolist()),
+        )
+    return panel.loc[~unpriced]
+
+
 def compute_live_portfolio_metrics(
     config: LivePortfolioConfig,
     prices: pd.DataFrame,
@@ -189,6 +282,18 @@ def compute_live_portfolio_metrics(
     if panel.empty:
         logger.warning(
             "live_portfolio: no rows in prices_latest at or after entry_date=%s",
+            config.entry_date.isoformat(),
+        )
+        return None
+    # One row per BAR is not one row per DAY, and `nav.iloc[-1]` below assumes the
+    # latter. Collapse first, then refuse to value any day that is not fully priced
+    # — the `missing` check above only proves the COLUMNS exist, never the values.
+    panel = collapse_to_daily_bars(panel)
+    panel = drop_unpriced_days(panel, context="live_portfolio")
+    if panel.empty:
+        logger.warning(
+            "live_portfolio: no fully-priced trading day at or after entry_date=%s — "
+            "refusing to derive metrics rather than valuing an incomplete book",
             config.entry_date.isoformat(),
         )
         return None
@@ -247,6 +352,8 @@ __all__: list[str] = [
     "LivePosition",
     "SHARPE_MIN_SAMPLE",
     "TRADING_DAYS_PER_YEAR",
+    "collapse_to_daily_bars",
+    "drop_unpriced_days",
     "compute_live_portfolio_metrics",
     "load_live_portfolio",
 ]

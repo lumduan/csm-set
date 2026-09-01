@@ -14,12 +14,14 @@ import pytest
 
 from csm.adapters import AdapterManager
 from csm.adapters.hooks import (
+    _reconstruct_live_equity,
     run_post_backtest_hook,
     run_post_rebalance_hook,
     run_post_refresh_hook,
 )
 from csm.adapters.payload import _series_to_equity_curve
 from csm.data.store import ParquetStore
+from csm.live import LivePortfolioConfig, LivePosition
 from csm.research.backtest import (
     BacktestConfig,
     BacktestResult,
@@ -818,3 +820,87 @@ class TestErrorIsolation:
         assert any("write_equity_curve failed" in m for m in warnings)
         assert any("write_signal_snapshot failed" in m for m in warnings)
         assert any("gateway daily-report POST failed" in m for m in warnings)
+
+
+# ---------------------------------------------------------------------------
+# Regression: the 2026-09-01 dual-bar corruption, equity-reconstruction half.
+#
+# `_reconstruct_live_equity` normalizes its index to UTC midnight to keep the
+# equity_curve upsert at one row per day. That is necessary but NOT sufficient:
+# when the vendor emitted two bars for one session, BOTH normalized onto the
+# same key and the upsert took the LAST write. On 2026-09-01 that silently
+# replaced the banked 2026-08-31 row (1,317,530.70) with a two-symbol
+# valuation (303,397.70) — a read defect that became a write defect.
+#
+# See docs/live-test/events/2026-09-01-dual-bar-nav-corruption.md.
+# ---------------------------------------------------------------------------
+
+
+class TestReconstructLiveEquityDualBar:
+    @staticmethod
+    def _cfg() -> LivePortfolioConfig:
+        return LivePortfolioConfig(
+            strategy_id="csm-set",
+            entry_date=pd.Timestamp("2026-08-31").date(),
+            starting_nav=100.0,
+            cash=1.0,
+            positions=(
+                LivePosition(symbol="A", shares=10.0, avg_cost=1.0),
+                LivePosition(symbol="B", shares=100.0, avg_cost=1.0),
+            ),
+        )
+
+    @staticmethod
+    def _dual_bar_prices() -> pd.DataFrame:
+        """2026-08-31 complete; 2026-09-01 split across two complementary bars."""
+        index: pd.DatetimeIndex = pd.DatetimeIndex(
+            [
+                pd.Timestamp("2026-08-31 09:55", tz="Asia/Bangkok"),
+                pd.Timestamp("2026-09-01 09:55", tz="Asia/Bangkok"),
+                pd.Timestamp("2026-09-01 10:00", tz="Asia/Bangkok"),
+            ]
+        )
+        return pd.DataFrame(
+            {
+                "SET:A": [10.0, 12.0, float("nan")],
+                "SET:B": [2.0, float("nan"), 3.0],
+            },
+            index=index,
+        )
+
+    def test_emits_one_row_per_day_with_union_values(self) -> None:
+        series: pd.Series = _reconstruct_live_equity(
+            live_config=self._cfg(), prices=self._dual_bar_prices()
+        )
+        assert len(series) == 2
+        assert series.index.is_unique, "a duplicate key is what let the upsert overwrite"
+        # 08-31: 10*10.0 + 100*2.0 + 1.0 ; 09-01 union: 10*12.0 + 100*3.0 + 1.0
+        assert list(series.to_numpy()) == pytest.approx([301.0, 421.0])
+
+    def test_the_earlier_days_banked_value_is_not_overwritten(self) -> None:
+        """The precise failure: 2026-08-31 must survive a 2026-09-01 refresh."""
+        series: pd.Series = _reconstruct_live_equity(
+            live_config=self._cfg(), prices=self._dual_bar_prices()
+        )
+        aug31 = series[series.index.normalize() == pd.Timestamp("2026-08-31", tz="UTC")]
+        assert len(aug31) == 1
+        assert float(aug31.iloc[0]) == pytest.approx(301.0)
+
+    def test_index_dates_are_not_shifted_by_the_collapse(self) -> None:
+        series: pd.Series = _reconstruct_live_equity(
+            live_config=self._cfg(), prices=self._dual_bar_prices()
+        )
+        assert [ts.date().isoformat() for ts in series.index] == ["2026-08-31", "2026-09-01"]
+
+    def test_a_day_that_cannot_be_fully_priced_is_omitted_not_zeroed(self) -> None:
+        prices: pd.DataFrame = pd.DataFrame(
+            {"SET:A": [10.0, float("nan")], "SET:B": [2.0, 3.0]},
+            index=pd.DatetimeIndex(
+                [
+                    pd.Timestamp("2026-08-31 09:55", tz="Asia/Bangkok"),
+                    pd.Timestamp("2026-09-01 09:55", tz="Asia/Bangkok"),
+                ]
+            ),
+        )
+        series: pd.Series = _reconstruct_live_equity(live_config=self._cfg(), prices=prices)
+        assert [ts.date().isoformat() for ts in series.index] == ["2026-08-31"]

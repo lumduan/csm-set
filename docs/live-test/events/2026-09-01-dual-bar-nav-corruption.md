@@ -4,8 +4,10 @@
 **Category:** Data-integrity defect — silent NAV corruption (live figures wrong; source data intact)
 **Severity:** High (the platform's headline NAV read 373,561.70 against a true 1,273,881.70 — a
 −71.6% error — and one historical `equity_curve` row was overwritten)
-**Status:** **OPEN** — the defect is characterised and the true figures are recovered, but **nothing
-has been fixed and nothing has been repaired.** The corruption re-runs at every 18:00 BKK refresh.
+**Status:** **CLOSED 2026-09-01** — fixed, deployed and both corrupt rows repaired the same evening,
+in that order. Verified against the live database. **One residual defect was LOCALISED but not fixed
+and is not part of this report's scope:** the `daily_return` denominator bug lives in
+`quant-api-gateway`, not here (see Follow-up 5).
 
 ---
 
@@ -182,11 +184,12 @@ this and were not confused by it.
 - **Downstream consumers read the wrong NAV.** `portfolio_snapshot` feeds the gateway's
   cross-strategy aggregation and `quant-monitor`; anything that read csm-set's NAV between the
   2026-09-01 18:02 write and a future repair sees 373,561.70.
-- **One banked historical figure was destroyed** and will be re-destroyed nightly until the code is
-  fixed.
-- **The 2026-09-01 daily log deviates from its own verification gate.** Skill step 10 requires
-  `Total NAV` to equal `daily_performance.total_value`; that check is **waived and recorded**, with
-  the three validations above standing in its place.
+- **One banked historical figure was destroyed** and would have been re-destroyed nightly until the
+  code was fixed. ✅ **Restored to 1,317,530.70 the same evening** (see Resolution).
+- **The 2026-09-01 daily log deviated from its own verification gate** while the defect stood: skill
+  step 10 requires `Total NAV` to equal `daily_performance.total_value`, and it was **waived and
+  recorded**, with the three validations above standing in. ✅ **After the repair the gate was re-run
+  and PASSES** — the stored value is 1,273,881.70, equal to the log's Total NAV to the satang.
 
 ---
 
@@ -202,19 +205,61 @@ question.
 
 ---
 
-## Follow-up — all OPEN
+## Resolution — 2026-09-01, same evening
 
-1. **Collapse the panel to one row per trading day.** Either at read time in
+Sequence was deliberately **fix → deploy → repair**. A repair before the fix is undone by the next
+18:00 refresh and would have created a false impression of resolution.
+
+**Fix.** Two guards in `src/csm/live/portfolio.py`, used by **both** affected paths:
+`collapse_to_daily_bars` (one row per trading day, last non-null per column = the union of the day's
+bars, re-keyed to the day's last real bar stamp so no date shifts) and `drop_unpriced_days` (a day
+with any unpriced holding is dropped, named in the log, and callers fail closed — no cross-day
+forward-fill, which would be a valuation-policy change rather than a bug fix).
+
+**Tests, proven non-vacuous.** 17 new cases. Reverting the guards turns **8 `live/` + 3 `hooks`
+tests red**, including a positive control that the sparse-row valuation is unreachable and one that
+an earlier day's banked value survives a later refresh. Gate: ruff ✓, format ✓, mypy strict ✓,
+1,328 passed. The 6 remaining failures are the known host-`.env` LOCAL-only config tests —
+**verified pre-existing by reverting this change and re-running.**
+
+**Deploy is a REBUILD.** `docker-compose.yml` has `build: .` and the private overlay bind-mounts only
+`data/`, `results/`, `configs/` — `src/` is baked into the image, so a working-tree advance would
+have deployed nothing. Both guards were verified present *inside the running container*, with
+`CSM_PUBLIC_MODE=false` and the scheduler started (next run 2026-09-02 18:00 +07).
+
+**Repair via the production hook, not SQL.** `run_post_refresh_hook` re-run inside the fixed
+container against the **existing** parquet — no re-fetch, so the published closes stand. The new
+guard logged itself: `price panel carries 2 day(s) with more than one bar … ['2026-08-31',
+'2026-09-01']`; gateway POST `201`.
+
+| Row | Before | After |
+|---|---:|---:|
+| `daily_performance` 2026-09-01 | 373,561.70 | **1,273,881.70** ✅ |
+| `portfolio_snapshot` 2026-09-01 | 373,561.70 | **1,273,881.70** ✅ |
+| `equity_curve` 2026-09-01 | 373,561.70 | **1,273,881.70** ✅ |
+| `equity_curve` **2026-08-31** | **303,397.70** | **1,317,530.70** ✅ restored |
+| `combined_drawdown` 2026-09-01 | −0.7706435442961985 | **−0.04448286083054431** ✅ |
+
+`combined_drawdown` is bit-identical to 2026-08-28/08-31 again — correct twice over: the phantom
+trough is gone, and today's true −3.70% drawdown is shallower than the window's real trough, so the
+running minimum must not move. `equity_curve`: **81 rows / 81 dates / 0 non-midnight stamps.**
+
+---
+
+## Follow-up
+
+1. ✅ **DONE — collapse the panel to one row per trading day.** Either at read time in
    `compute_live_portfolio_metrics` (`groupby(index.date).ffill().iloc[-1]`) or, better, by
    normalising the bar stamp at write time in the refresh path so every consumer benefits.
 2. **Make faults 2 and 3 fail loudly.** Check value presence, not only column presence, and refuse
    to price a book in which any holding is NaN rather than summing it to zero. *A missing price must
    never be able to present as a valid number.*
-3. **Assert the panel invariant in the refresh** — exactly one row per trading date — so the next
+3. ⚠️ **PARTIAL — assert the panel invariant in the refresh.** The collapse now WARNS with the offending dates whenever a day carries more than one bar, which is the detection this asked for; a hard assertion at the write site is still not present. Assert the panel invariant in the refresh — exactly one row per trading date — so the next
    vendor stamp change is caught where it happens instead of four layers downstream.
 4. **Repair the two corrupt rows.** Deliberately **not** done before (1): a repair without the fix is
    undone by the next 18:00 refresh, so it would create a false impression of resolution.
-5. **Deadline: 2026-09-30**, the next `features_latest` write and the October rebalance evaluation.
+5. 🔑 **NEW, OPEN, and NOT this repo's — the `daily_return` denominator defect is in `quant-api-gateway`.** The fixed engine computes the *correct* value (**−0.03312939880641874** = `ΔNAV ÷ PRIOR NAV`) and `adapters/payload.py` sends only `daily_pnl`, never `daily_return`; the stored **−0.03426456318510581** is exactly `daily_pnl ÷ TODAY's NAV`, so the gateway recomputes it on ingest. Weeks of daily logs established the arithmetic; this repair established the address. **Filed, not fixed.** The `cumulative_return` `entry_date` re-anchor is likewise untouched.
+6. **Deadline: 2026-09-30**, the next `features_latest` write and the October rebalance evaluation.
 
 Deliberately **not** done in the unit of work that produced this report: no code change and no DB
 write. A change to the live NAV path needs its own review and quality gate, and is not something to

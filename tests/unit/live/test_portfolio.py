@@ -16,7 +16,9 @@ from csm.live.portfolio import (
     LivePortfolioConfig,
     LivePortfolioMetrics,
     LivePosition,
+    collapse_to_daily_bars,
     compute_live_portfolio_metrics,
+    drop_unpriced_days,
     load_live_portfolio,
 )
 from csm.research.strategy_report import build_strategy_report
@@ -226,3 +228,155 @@ def test_live_portfolio_metrics_as_dict_embeds_report() -> None:
     payload = enriched.as_dict()
     assert "extended_data" in payload
     assert Decimal(payload["extended_data"]["report"]["headline"]["total_pnl"]) == Decimal("10000")
+
+
+# ---------------------------------------------------------------------------
+# Regression: the 2026-09-01 dual-bar NAV corruption.
+#
+# The vendor began emitting a SECOND daily bar (10:00 BKK beside the 09:55 one)
+# covering a subset of symbols, so one session arrived as two sparse rows.
+# Reading the panel's last row then priced the book off whichever symbols
+# carried the later stamp, and `sum(axis=1)`'s skipna=True valued the rest at
+# ZERO — writing 373,561.70 against a true 1,273,881.70, and overwriting the
+# banked 2026-08-31 equity_curve row with a two-symbol valuation.
+#
+# See docs/live-test/events/2026-09-01-dual-bar-nav-corruption.md.
+# ---------------------------------------------------------------------------
+
+
+def _dual_bar_panel() -> pd.DataFrame:
+    """A clean day, then a day split across two COMPLEMENTARY sparse bars.
+
+    2026-09-01 arrives as 09:55 (DELTA only) + 10:00 (IRPC only) — the shape
+    that broke production. Their union is the session: DELTA 12.0, IRPC 3.0.
+    """
+    index: pd.DatetimeIndex = pd.DatetimeIndex(
+        [
+            pd.Timestamp("2026-08-31 09:55", tz="Asia/Bangkok"),
+            pd.Timestamp("2026-09-01 09:55", tz="Asia/Bangkok"),
+            pd.Timestamp("2026-09-01 10:00", tz="Asia/Bangkok"),
+        ]
+    )
+    return pd.DataFrame(
+        {
+            "SET:DELTA": [10.0, 12.0, float("nan")],
+            "SET:IRPC": [2.0, float("nan"), 3.0],
+        },
+        index=index,
+    )
+
+
+class TestCollapseToDailyBars:
+    def test_leaves_a_one_row_per_day_panel_untouched(self) -> None:
+        """The common case must be a genuine no-op, not a rebuild."""
+        panel: pd.DataFrame = _make_prices([("2026-08-31", 10.0, 2.0), ("2026-09-01", 12.0, 3.0)])
+        out: pd.DataFrame = collapse_to_daily_bars(panel)
+        pd.testing.assert_frame_equal(out, panel)
+
+    def test_collapses_two_bars_into_their_union(self) -> None:
+        out: pd.DataFrame = collapse_to_daily_bars(_dual_bar_panel())
+        assert len(out) == 2, "one row per trading day"
+        assert out.iloc[-1]["SET:DELTA"] == 12.0
+        assert out.iloc[-1]["SET:IRPC"] == 3.0
+        assert not out.isna().to_numpy().any()
+
+    def test_overlapping_bars_take_the_later_value(self) -> None:
+        """Where both bars carry a symbol they agreed in production; assert the rule anyway."""
+        index: pd.DatetimeIndex = pd.DatetimeIndex(
+            [
+                pd.Timestamp("2026-09-01 09:55", tz="Asia/Bangkok"),
+                pd.Timestamp("2026-09-01 10:00", tz="Asia/Bangkok"),
+            ]
+        )
+        panel: pd.DataFrame = pd.DataFrame({"SET:DELTA": [12.0, 12.5]}, index=index)
+        assert collapse_to_daily_bars(panel).iloc[-1]["SET:DELTA"] == 12.5
+
+    def test_rekeys_so_the_UTC_calendar_day_is_preserved(self) -> None:
+        """Re-keying to local midnight would shift every date back one day.
+
+        Callers convert to UTC then normalize; 00:00+07 is 17:00 UTC on the
+        PREVIOUS day. The day's last real bar stamp shares its UTC date, so the
+        collapsed index must carry that, not midnight.
+        """
+        out: pd.DataFrame = collapse_to_daily_bars(_dual_bar_panel())
+        utc_dates = [ts.tz_convert("UTC").normalize().date() for ts in out.index]
+        assert [d.isoformat() for d in utc_dates] == ["2026-08-31", "2026-09-01"]
+
+    def test_empty_panel_is_returned_unchanged(self) -> None:
+        empty: pd.DataFrame = pd.DataFrame()
+        pd.testing.assert_frame_equal(collapse_to_daily_bars(empty), empty)
+
+
+class TestDropUnpricedDays:
+    def test_clean_panel_is_untouched(self) -> None:
+        panel: pd.DataFrame = _make_prices([("2026-08-31", 10.0, 2.0)])
+        pd.testing.assert_frame_equal(drop_unpriced_days(panel, context="t"), panel)
+
+    def test_a_day_missing_any_holding_is_dropped_not_valued_at_zero(self) -> None:
+        """The whole point: an unpriced holding must not silently contribute 0."""
+        panel: pd.DataFrame = _make_prices(
+            [("2026-08-31", 10.0, 2.0), ("2026-09-01", float("nan"), 3.0)]
+        )
+        out: pd.DataFrame = drop_unpriced_days(panel, context="t")
+        assert len(out) == 1
+        assert out.index[0] == pd.Timestamp("2026-08-31", tz="Asia/Bangkok")
+
+    def test_names_the_missing_symbol_in_the_log(self, caplog: pytest.LogCaptureFixture) -> None:
+        panel: pd.DataFrame = _make_prices([("2026-09-01", float("nan"), 3.0)])
+        with caplog.at_level("WARNING"):
+            drop_unpriced_days(panel, context="unit-test-context")
+        assert "SET:DELTA" in caplog.text
+        assert "unit-test-context" in caplog.text
+
+
+class TestDualBarRegression:
+    @pytest.fixture()
+    def cfg(self) -> LivePortfolioConfig:
+        return LivePortfolioConfig(
+            strategy_id="csm-set",
+            entry_date=pd.Timestamp("2026-08-31").date(),
+            starting_nav=100.0,
+            cash=1.0,
+            positions=(
+                LivePosition(symbol="DELTA", shares=10.0, avg_cost=1.0),
+                LivePosition(symbol="IRPC", shares=100.0, avg_cost=1.0),
+            ),
+        )
+
+    def test_nav_is_the_union_of_the_days_bars(self, cfg: LivePortfolioConfig) -> None:
+        m: LivePortfolioMetrics | None = compute_live_portfolio_metrics(cfg, _dual_bar_panel())
+        assert m is not None
+        # union: DELTA 10*12.0 + IRPC 100*3.0 + cash 1.0
+        assert m.total_value == pytest.approx(421.0)
+
+    def test_the_sparse_last_row_valuation_is_NOT_produced(self, cfg: LivePortfolioConfig) -> None:
+        """Positive control for the bug itself.
+
+        The old code read the 10:00 bar alone: IRPC 100*3.0 + cash = 301.0,
+        DELTA silently zero. That number must be unreachable now.
+        """
+        m: LivePortfolioMetrics | None = compute_live_portfolio_metrics(cfg, _dual_bar_panel())
+        assert m is not None
+        assert m.total_value != pytest.approx(301.0)
+
+    def test_daily_return_compares_two_DAYS_not_two_bars(self, cfg: LivePortfolioConfig) -> None:
+        """`iloc[-2]` meant 'yesterday' only while one row was one day.
+
+        With two bars per session it silently became 'earlier today', which is
+        how a -141.82% daily_return reached production.
+        """
+        m: LivePortfolioMetrics | None = compute_live_portfolio_metrics(cfg, _dual_bar_panel())
+        assert m is not None
+        # 2026-08-31 NAV = 10*10.0 + 100*2.0 + 1.0 = 301.0 -> 421.0
+        assert m.daily_return == pytest.approx(421.0 / 301.0 - 1.0)
+        assert m.daily_pnl == pytest.approx(120.0)
+
+    def test_snapshot_time_is_the_right_calendar_day(self, cfg: LivePortfolioConfig) -> None:
+        m: LivePortfolioMetrics | None = compute_live_portfolio_metrics(cfg, _dual_bar_panel())
+        assert m is not None
+        assert m.snapshot_time.date().isoformat() == "2026-09-01"
+
+    def test_fails_closed_when_no_day_can_be_fully_priced(self, cfg: LivePortfolioConfig) -> None:
+        """No metrics beats wrong metrics — the hook then writes no row."""
+        panel: pd.DataFrame = _make_prices([("2026-09-01", float("nan"), 3.0)])
+        assert compute_live_portfolio_metrics(cfg, panel) is None

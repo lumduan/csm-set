@@ -11,7 +11,9 @@ from csm.live.portfolio import (
     LivePortfolioConfig,
     LivePortfolioMetrics,
     LivePosition,
+    collapse_to_daily_bars,
     compute_live_portfolio_metrics,
+    drop_unpriced_days,
     load_live_portfolio,
 )
 
@@ -19,6 +21,8 @@ __all__: list[str] = [
     "LivePortfolioConfig",
     "LivePortfolioMetrics",
     "LivePosition",
+    "collapse_to_daily_bars",
     "compute_live_portfolio_metrics",
+    "drop_unpriced_days",
     "load_live_portfolio",
 ]

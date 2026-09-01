@@ -277,14 +277,15 @@ before and after and are byte-identical (`drawdown` eea580c3…, `equity_curve` 
 because it is built from the daily log's figures rather than from `equity_curve`.** On 2026-09-01 the
 price vendor began emitting a **second daily bar per session** and the NAV path priced the book off
 the sparse one, writing **373,561.70** where the true NAV is **1,273,881.70** and **retroactively
-overwriting the 2026-08-31 `equity_curve` row** (1,317,530.70 → **303,397.70**). **Both corrupt rows
-are still in the database.** So for the first time the two series **must not** be reconciled against
-each other on their latest rows: `pnl.csv` is right, `equity_curve` is wrong, and the divergence is
-the defect rather than the usual un-restated-basis gap. ⚠️ **`nav_actual.csv` and `nav_twr.csv` were
-deliberately NOT extended** — they are rebuilt from `equity_curve` at month-end, and rebuilding them
-today would import the corruption into two more committed series. **They stay at 2026-08-31 until the
-defect is fixed and the rows repaired**, and the four PNGs are consequently back on two dates. Full
-mechanism, footprint and follow-ups: `../events/2026-09-01-dual-bar-nav-corruption.md`.
+overwriting the 2026-08-31 `equity_curve` row** (1,317,530.70 → **303,397.70**). ✅ **Both corrupt rows were
+REPAIRED the same evening** — the defect was fixed, deployed and the production hook re-run, restoring
+`equity_curve` 2026-08-31 to **1,317,530.70** and writing 2026-09-01 as **1,273,881.70**. So the two
+series agree again on their latest rows, and `pnl.csv`'s 2026-09-01 unrealized of **+204,583.35**
+reconciles against `equity_curve` exactly. ⚠️ **`nav_actual.csv` and `nav_twr.csv` were still NOT
+extended today** — that is unchanged and deliberate, but the reason is now the ordinary one: they are
+rebuilt from `equity_curve` **at month-end**, not daily. The four PNGs are consequently on two dates,
+as they normally are mid-month. Full mechanism, footprint and resolution:
+`../events/2026-09-01-dual-bar-nav-corruption.md`.
 
 🟢 **NO corporate action occurred on 2026-09-01**, so no new divergence was added and the restatement
 scope holds at 6 of 10 held names.
