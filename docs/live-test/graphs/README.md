@@ -260,6 +260,35 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-01** on 2026-09-01, appending the **2026-09-01** row — one row,
+continuing the same-session practice for a **thirteenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged, and for a new reason: **the September rebalance was a 0-out / 0-in,
+no-trade rotation** (`monthly/2026-08.md`), so there was no fill to record and the ledger holds at
+**−49,091.38** / **−3,735.16**. The whole movement is the unrealized leg (+248,232.35 →
+**+204,583.35**, a **−43,649.00** session — the third-largest single-session loss of the live test),
+and the reconciliation residual holds at **1,610.27**. ⚠️ **The residual did NOT step at this
+rotation** — the first rebalance not to move it — because no position entered at a fresh 4-dp
+`avg_cost`. **`pnl_realized_unrealized.png` was regenerated from the extended CSV in the same
+session**, so the two artifacts end together at **81 points**; the three NAV charts were checksummed
+before and after and are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…,
+`monthly_returns` aebd96bd…), with only the P/L PNG's hash moving (67c5af36… → 67f656bb…).
+
+🔴 **`pnl.csv` IS THE ONLY CORRECT P/L SERIES FOR 2026-09-01, and that is not a coincidence — it is
+because it is built from the daily log's figures rather than from `equity_curve`.** On 2026-09-01 the
+price vendor began emitting a **second daily bar per session** and the NAV path priced the book off
+the sparse one, writing **373,561.70** where the true NAV is **1,273,881.70** and **retroactively
+overwriting the 2026-08-31 `equity_curve` row** (1,317,530.70 → **303,397.70**). **Both corrupt rows
+are still in the database.** So for the first time the two series **must not** be reconciled against
+each other on their latest rows: `pnl.csv` is right, `equity_curve` is wrong, and the divergence is
+the defect rather than the usual un-restated-basis gap. ⚠️ **`nav_actual.csv` and `nav_twr.csv` were
+deliberately NOT extended** — they are rebuilt from `equity_curve` at month-end, and rebuilding them
+today would import the corruption into two more committed series. **They stay at 2026-08-31 until the
+defect is fixed and the rows repaired**, and the four PNGs are consequently back on two dates. Full
+mechanism, footprint and follow-ups: `../events/2026-09-01-dual-bar-nav-corruption.md`.
+
+🟢 **NO corporate action occurred on 2026-09-01**, so no new divergence was added and the restatement
+scope holds at 6 of 10 held names.
+
 **AUGUST MONTH-END REGENERATION — 2026-08-31.** All three input CSVs rebuilt and all four PNGs
 regenerated; the four artifacts are back on a single date for the first time since 2026-08-01.
 `nav_actual.csv` **60 → 80 rows** (seed + every `equity_curve` row minus 2026-06-04, keeping
