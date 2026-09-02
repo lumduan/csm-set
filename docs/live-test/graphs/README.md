@@ -260,6 +260,35 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-02** on 2026-09-02, appending the **2026-09-02** row — one row,
+continuing the same-session practice for a **fourteenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (the September rebalance was a 0-out / 0-in, no-trade rotation), so
+the whole movement is the unrealized leg (+204,583.35 → **+198,847.35**, a **−5,736.00** session),
+and the reconciliation residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was
+regenerated in the same session**, so the two artifacts end together at **82 points**; the three NAV
+charts were checksummed before and after and are byte-identical (`drawdown` eea580c3…,
+`equity_curve` 25b0baf9…, `monthly_returns` aebd96bd…), with only the P/L PNG's hash moving
+(67f656bb… → c11bb6b2…).
+
+🔑 **`pnl.csv` and `equity_curve` now diverge on 2026-09-01, and the divergence is CORRECT.** The
+vendor restated **FORTH's 2026-09-01 close, 15.50 → 15.40** (factor 0.9935483871). `equity_curve`
+reprices `[entry_date, today]` against current history, so its 2026-09-01 row moved by exactly
+`5,300 × −0.10 = −530.00` (1,273,881.70 → **1,273,351.70**). `pnl.csv` is built from the **daily
+logs'** figures, so its 2026-09-01 row keeps the **as-published** unrealized of **+204,583.35**, and
+`db_gateway.daily_performance` — being append-only — likewise still reads **1,273,881.70** for that
+date. ⚠️ **Three series, two bases, and all three are right on their own terms.** This is the second
+divergence of this kind the file records and it is **by design, not drift**: the rule is that
+`pnl.csv` tracks what was published and `equity_curve` tracks what the panel currently says.
+
+**`nav_actual.csv` and `nav_twr.csv` were not extended**, which is the ordinary mid-month state —
+they are rebuilt from `equity_curve` **at month-end**, so the four PNGs sit on two dates as usual.
+⚠️ **The next month-end rebuild will pick up the restated 2026-09-01 bar**, which is the intended
+behaviour and is noted here so it is not re-diagnosed as a discrepancy then.
+
+🟢 **The 2026-09-01 dual-bar corruption did not recur.** The panel is back to one row per trading
+day (947 rows, all stamped 09:55), and the guards shipped that day logged nothing. See
+`../events/2026-09-01-dual-bar-nav-corruption.md`.
+
 **`pnl.csv` extended through 2026-09-01** on 2026-09-01, appending the **2026-09-01** row — one row,
 continuing the same-session practice for a **thirteenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged, and for a new reason: **the September rebalance was a 0-out / 0-in,
