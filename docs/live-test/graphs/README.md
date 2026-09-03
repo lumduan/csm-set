@@ -260,6 +260,31 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-03** on 2026-09-03, appending the **2026-09-03** row — one row,
+continuing the same-session practice for a **fifteenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
+0-out / 0-in), so the whole movement is the unrealized leg (+198,847.35 → **+183,424.35**, a
+**−15,423.00** session — the largest single-session decline of the holding period). The
+reconciliation residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the
+same session**, so the two artifacts end together at **83 points**; the three NAV charts were
+checksummed before and after and are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…,
+`monthly_returns` aebd96bd…), with only the P/L PNG's hash moving (c11bb6b2… → 2bfe465f…).
+
+🟢 **NO restatement occurred on 2026-09-03, so no NEW divergence was added.** All ten 2026-09-02
+closes still match what that log published, and the EMA100 positive control reproduced 5 of 5 —
+two independent checks agreeing that the banked past did not move.
+
+⚠️ **The 2026-09-01 divergence recorded in the previous entry PERSISTS and is still by design.**
+`pnl.csv` carries the **as-published** unrealized of **+204,583.35** for that date; `equity_curve`
+carries **1,273,351.70** (the FORTH-restated basis); `db_gateway.daily_performance` — append-only —
+still carries **1,273,881.70**. **Three series, two bases, all three right on their own terms.** The
+rule is unchanged: **`pnl.csv` tracks what was published, `equity_curve` tracks what the panel
+currently says.** Do not "reconcile" them on that row.
+
+**`nav_actual.csv` and `nav_twr.csv` were not extended** — the ordinary mid-month state; they are
+rebuilt from `equity_curve` **at month-end**, so the four PNGs sit on two dates as usual. ⚠️ The
+next month-end rebuild will pick up the restated 2026-09-01 bar, which is intended.
+
 **`pnl.csv` extended through 2026-09-02** on 2026-09-02, appending the **2026-09-02** row — one row,
 continuing the same-session practice for a **fourteenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (the September rebalance was a 0-out / 0-in, no-trade rotation), so
