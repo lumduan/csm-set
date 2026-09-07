@@ -260,6 +260,33 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-07** on 2026-09-07, appending the **2026-09-07** row — one row,
+continuing the same-session practice for a **seventeenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
+0-out / 0-in), so the whole movement is the unrealized leg (+198,799.35 → **+221,809.35**, a
+**+23,010.00** session — the largest single-session gain since 2026-08-18). The reconciliation
+residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same
+session**, so the two artifacts end together at **85 points**; the three NAV charts were checksummed
+before and after and are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…,
+`monthly_returns` aebd96bd…), with only the P/L PNG's hash moving (14594e92… → 2e270370…).
+
+🟢 **NO restatement on 2026-09-07 — third consecutive clean session.** All ten 2026-09-04 closes
+still match what that log published, and the EMA100 positive control reproduced 5 of 5.
+
+🔴 **Read the 2026-09-07 daily log before using this series for a sector-weight question.** ENERG
+closed at **34.3519% of NAV with 8,367.70 THB of headroom** to the 35% cap — a fifth consecutive
+fresh tightest — and a further **~12,873 THB** of sleeve gain breaches it. **Nothing enforces that
+cap intra-month**; the next evaluation is 2026-09-30. This file carries P/L, not weights, so the
+exposure is invisible here — noted so a reader of the series does not conclude the book is unstressed.
+
+⚠️ **The 2026-09-01 divergence PERSISTS and is still by design.** `pnl.csv` carries the
+**as-published** unrealized of **+204,583.35** for that date; `equity_curve` carries **1,273,351.70**
+(the FORTH-restated basis); `db_gateway.daily_performance` — append-only — still carries
+**1,273,881.70**. **Three series, two bases, all three right on their own terms.**
+
+**`nav_actual.csv` and `nav_twr.csv` were not extended** — the ordinary mid-month state; they are
+rebuilt from `equity_curve` **at month-end**.
+
 **`pnl.csv` extended through 2026-09-04** on 2026-09-04, appending the **2026-09-04** row — one row,
 continuing the same-session practice for a **sixteenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
