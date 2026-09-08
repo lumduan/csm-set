@@ -260,6 +260,28 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-08** on 2026-09-08, appending the **2026-09-08** row — one row,
+continuing the same-session practice for an **eighteenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
+0-out / 0-in), so the whole movement is the unrealized leg (+221,809.35 → **+223,408.35**, a
+**+1,599.00** session). **Total P/L reached +174,316.97, a new post-rotation high**, though the
+headline understates how narrow the session was: **IRPC contributed +7,924.00 against that net
++1,599.00 — 495.6% of the move — and the other nine names summed to −6,325.00.** The reconciliation
+residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same
+session**, so the two artifacts end together at **86 points**; the four PNGs were checksummed before
+and after and the three NAV charts are byte-identical (`drawdown` 4a94b8fd…, `equity_curve`
+87de0a45…, `monthly_returns` 39f094fa…), with only the P/L PNG's hash moving
+(f31d6885… → 1ea7d8c1…).
+
+🟢 **NO restatement on 2026-09-08 — fourth consecutive clean session.** All ten 2026-09-07 closes
+still match what that log published, and the EMA100 positive control reproduced 5 of 5.
+
+⚠️ **The unrealized leg's shape is now worth reading alongside the sector table.** The series has
+gained on six of the last seven sessions, but ENERG's headroom to the 35% cap fell from 34,187.75 to
+**1,003.35 THB** over the same window — **97.1%, with no trade and no change to the share register.**
+**A P/L chart that only goes up cannot show a concentration limit closing**, which is exactly why the
+sector figures live in the daily logs rather than here. See `daily/2026-09-08.md`.
+
 **`pnl.csv` extended through 2026-09-07** on 2026-09-07, appending the **2026-09-07** row — one row,
 continuing the same-session practice for a **seventeenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
