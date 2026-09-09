@@ -260,6 +260,35 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-09** on 2026-09-09, appending the **2026-09-09** row — one row,
+continuing the same-session practice for a **nineteenth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation), so the whole movement is the
+unrealized leg (+223,408.35 → **+238,219.35**, a **+14,811.00** session). **Total P/L reached
++189,127.97, a new post-rotation high for a second consecutive session.** The reconciliation residual
+holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same session**, so the
+two artifacts end together at **87 points**; the four PNGs were checksummed before and after and the
+three NAV charts are byte-identical (`drawdown` 4a94b8fd…, `equity_curve` 87de0a45…,
+`monthly_returns` 39f094fa…), with only the P/L PNG's hash moving (1ea7d8c1… → 21b97e69…).
+
+🔴 **RESTATEMENT ON 2026-09-09 — IRPC, and this series is now on a DIFFERENT BASIS from
+`equity_curve` on FOUR dates.** IRPC went ex-dividend at **0.04 THB/share** and the vendor
+back-adjusted its entire history by a uniform **0.987261150**. `pnl.csv` is an **as-published**
+series — every row records what was true when it was written — while `db_csm_set.equity_curve` is
+recomputed from the price panel on every refresh and now reads **−2,033.27 / −2,163.06 / −2,264.00**
+against `daily_performance` on 2026-09-04, 09-07 and 09-08, joining the 2026-09-01 FORTH divergence.
+
+🔑 **Both series are correct on their own basis and the divergence is BY DESIGN — but it has grown
+from one date to four, and it is the reason this file exists separately from the DB.** The
+2026-09-08 unrealized figure in this CSV is **+223,408.35** on the basis its own log published; a
+reader recomputing it from today's parquet would get **+221,144.35**, lower by exactly the
+**2,264.00** dividend. ⚠️ **Do not reconcile `pnl.csv` against a re-read of the panel** — they answer
+different questions, and only the as-published series is stable under later vendor adjustments.
+
+⚠️ **The unrealized leg's rise should not be read as the whole story.** On the same session the
+Energy & Utilities sleeve **BREACHED the 35% sector cap** at 35.2791% of NAV, 3,648.81 THB over,
+which no rule will act on until 2026-09-30. **A P/L chart that only goes up cannot show a
+concentration limit being exceeded.** See `daily/2026-09-09.md`.
+
 **`pnl.csv` extended through 2026-09-08** on 2026-09-08, appending the **2026-09-08** row — one row,
 continuing the same-session practice for an **eighteenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
