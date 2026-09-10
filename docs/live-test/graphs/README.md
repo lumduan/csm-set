@@ -260,6 +260,46 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-10** on 2026-09-10, appending the **2026-09-10** row — one row,
+continuing the same-session practice for a **twentieth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation), so the whole movement is the
+unrealized leg (+238,219.35 → **+235,928.35**, a **−2,291.00** session). The reconciliation residual
+holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same session**, so the
+two artifacts end together at **88 points**; the four PNGs were checksummed before and after and the
+three NAV charts are byte-identical (`drawdown` 4a94b8fd…, `equity_curve` 87de0a45…,
+`monthly_returns` 39f094fa…), with only the P/L PNG's hash moving (21b97e69… → cf954abb…).
+
+🔴 **CORRECTION to the 2026-09-09 entry above: the `equity_curve` divergence set is SIX dates, not
+four.** That entry said *"−2,033.27 / −2,163.06 / −2,264.00 … joining the 2026-09-01 FORTH
+divergence"* and counted four. The full set, measured today and unchanged in membership because
+nothing was restated:
+
+| Date | `equity_curve` | `daily_performance` | Delta |
+|---|---:|---:|---:|
+| 2026-09-01 | 1,271,404.949226 | 1,273,881.70 | **−2,476.75** |
+| 2026-09-02 | 1,266,126.847052 | 1,268,145.70 | **−2,018.85** |
+| 2026-09-03 | 1,250,689.426504 | 1,252,722.70 | **−2,033.27** |
+| 2026-09-04 | 1,266,064.426504 | 1,268,097.70 | −2,033.27 |
+| 2026-09-07 | 1,288,944.643270 | 1,291,107.70 | −2,163.06 |
+| 2026-09-08 | 1,290,442.700566 | 1,292,706.70 | −2,264.00 |
+
+**2026-09-02 and 2026-09-03 were missed entirely, and 2026-09-01's delta had GROWN 4.7×** — from the
+**−530.00** recorded for the FORTH restatement to **−2,476.75**, because IRPC's adjustment stacked on
+top of it: `−530.00 − 1,946.75 = −2,476.75`, exact.
+
+🔑 **The verification that ran alongside that entry asserted the 2026-09-08 delta was exactly
+−2,264.00 — true, and it passed — but it never asserted the COUNT, and it never re-checked a date
+already believed divergent. A check that enumerates a set which has since grown passes green
+forever.** Today's checker asserts the **cardinality** of the divergence set. **This entry is a
+correction recorded forward; the 2026-09-09 entry is left in place.**
+
+⚠️ **The set will not shrink.** A vendor back-adjustment is permanent, so `pnl.csv` — an
+**as-published** series — and `equity_curve` — recomputed from the panel on every refresh — diverge
+by design and will keep diverging. **Do not reconcile this CSV against a re-read of the parquet.**
+
+🟢 **No restatement on 2026-09-10** — all ten 2026-09-09 closes match what that log published, and
+**zero of 211 symbols** carry a non-clean 2-decimal close, against eight the prior session.
+
 **`pnl.csv` extended through 2026-09-09** on 2026-09-09, appending the **2026-09-09** row — one row,
 continuing the same-session practice for a **nineteenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation), so the whole movement is the
