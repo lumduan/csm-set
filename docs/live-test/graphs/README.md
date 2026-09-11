@@ -260,6 +260,25 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-11** on 2026-09-11, appending the **2026-09-11** row — one row,
+continuing the same-session practice for a **twenty-first** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation, and the 2026-09-01 rebalance
+was a 0-out / 0-in rotation that traded nothing), so the whole movement is the unrealized leg
+(+235,928.35 → **+250,369.35**, a **+14,441.00** session — the largest single-session gain since
+2026-08-17). The reconciliation residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was
+regenerated in the same session**, so the two artifacts end together at **89 points**; the four PNGs
+were checksummed before and after and the three NAV charts are byte-identical (`drawdown`
+eea580c3…, `equity_curve` 25b0baf9…, `monthly_returns` aebd96bd…), with only the P/L chart's hash
+moving (c116837f… → **d5c45add…**) — the twenty-first consecutive verification of the one-PNG rule.
+
+> 🔴 **A note this series now needs, because the figures above are unchanged in how they are computed
+> and changed in what they may be used for.** By operator decision of **2026-09-11** the live test's
+> track record **restarts forward-only**: every point in `pnl.csv`, `nav_actual.csv` and `nav_twr.csv`
+> to date is **pre-registration history — seen, not scored**, and scoring criteria are **pending an
+> operator pre-registration**. Nothing in this file proposes or implies any. The series continue to be
+> extended and reconciled exactly as before; a reader must simply not treat their contents as a
+> graded result.
+
 **`pnl.csv` extended through 2026-09-10** on 2026-09-10, appending the **2026-09-10** row — one row,
 continuing the same-session practice for a **twentieth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation), so the whole movement is the
