@@ -260,6 +260,21 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-15** on 2026-09-15, appending the **2026-09-15** row — one row,
+continuing the same-session practice for a **twenty-third** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
+traded nothing), so the whole movement is the unrealized leg (+237,541.35 → **+252,900.35**, a
+**+15,359.00** session — the largest single-session gain since 2026-09-07, checked against
+`db_gateway.daily_performance`). The reconciliation residual holds at **1,610.27**.
+**`pnl_realized_unrealized.png` was regenerated in the same session**, so the two artifacts end
+together at **91 points**; the four PNGs were checksummed before and after and the three NAV charts
+are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…, `monthly_returns` aebd96bd…),
+with only the P/L chart's hash moving (0cbe13e1… → **a62d01b3…**). ↻ **Two earlier rankings in this
+section were wrong when written and now carry pointers** — the 2026-09-11 and 2026-09-07 entries
+below; the check that found them is recorded in `daily/2026-09-15.md`. Every point in the series
+remains **pre-registration history — seen, not scored** under the operator decision of 2026-09-11;
+no scoring criteria have been pre-registered since.
+
 **`pnl.csv` extended through 2026-09-14** on 2026-09-14, appending the **2026-09-14** row — one row,
 continuing the same-session practice for a **twenty-second** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
@@ -277,7 +292,9 @@ continuing the same-session practice for a **twenty-first** consecutive session.
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation, and the 2026-09-01 rebalance
 was a 0-out / 0-in rotation that traded nothing), so the whole movement is the unrealized leg
 (+235,928.35 → **+250,369.35**, a **+14,441.00** session — the largest single-session gain since
-2026-08-17). The reconciliation residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was
+2026-08-17 ↻ **CORRECTED 2026-09-15: wrong when written.** Six sessions after 2026-08-17 were larger,
+the nearest 2026-09-09's +14,811.00, so the correct scope is *since 2026-09-09*; checked against
+`db_gateway.daily_performance`). The reconciliation residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was
 regenerated in the same session**, so the two artifacts end together at **89 points**; the four PNGs
 were checksummed before and after and the three NAV charts are byte-identical (`drawdown`
 eea580c3…, `equity_curve` 25b0baf9…, `monthly_returns` aebd96bd…), with only the P/L chart's hash
@@ -386,7 +403,9 @@ sector figures live in the daily logs rather than here. See `daily/2026-09-08.md
 continuing the same-session practice for a **seventeenth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; September's rebalance was
 0-out / 0-in), so the whole movement is the unrealized leg (+198,799.35 → **+221,809.35**, a
-**+23,010.00** session — the largest single-session gain since 2026-08-18). The reconciliation
+**+23,010.00** session — the largest single-session gain since 2026-08-18 ↻ **CORRECTED 2026-09-15:
+wrong when written.** 2026-08-21 (+27,020.00) and 2026-08-26 (+34,934.00) were both larger, so the
+correct scope is *since 2026-08-26*; checked against `db_gateway.daily_performance`). The reconciliation
 residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same
 session**, so the two artifacts end together at **85 points**; the three NAV charts were checksummed
 before and after and are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…,
