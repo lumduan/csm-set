@@ -260,6 +260,19 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-25** on 2026-09-25, appending the **2026-09-25** row — one row,
+continuing the same-session practice for a **thirty-first** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
+traded nothing), so the whole movement is the unrealized leg (+283,638.35 → **+293,240.35**, a
+**+9,602.00** session). `total_pl` recovers to **+244,148.97**, 8,202.00 below the +252,350.97
+maximum of 2026-09-23 — the second-highest point in the series. The reconciliation residual holds at
+**1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same session**, so the two
+artifacts end together at **99 points**; the four PNGs were checksummed before and after and the
+three NAV charts are byte-identical (`drawdown` eea580c3…, `equity_curve` 25b0baf9…,
+`monthly_returns` aebd96bd…), with only the P/L chart's hash moving (254074fd… → **a15290c7…**).
+Every point in the series remains **pre-registration history — seen, not scored** under the operator
+decision of 2026-09-11; no scoring criteria have been pre-registered since.
+
 **`pnl.csv` extended through 2026-09-24** on 2026-09-24, appending the **2026-09-24** row — one row,
 continuing the same-session practice for a **thirtieth** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
