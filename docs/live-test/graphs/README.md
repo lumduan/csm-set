@@ -260,6 +260,20 @@ do not re-derive `k` from the new NAV.
 
 ## History
 
+**`pnl.csv` extended through 2026-09-30** on 2026-09-30, appending the **2026-09-30** row — one row,
+continuing the same-session practice for a **thirty-fourth** consecutive session. `realized_cum` and
+`commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
+traded nothing), so the whole movement is the unrealized leg (+324,145.35 → **+286,473.35**, a
+**−37,672.00** session — the largest decline since 2026-09-16, checked against
+`db_gateway.daily_performance` over the whole series). `total_pl` falls to **+237,381.97**, 37,672.00
+below the +275,053.97 maximum of 2026-09-29 and its lowest since 2026-09-24. The reconciliation
+residual holds at **1,610.27**. **`pnl_realized_unrealized.png` was regenerated in the same
+session**, so the two artifacts end together at **102 points**; the four PNGs were checksummed before
+and after and the three NAV charts are byte-identical (`drawdown` eea580c3…, `equity_curve`
+25b0baf9…, `monthly_returns` aebd96bd…), with only the P/L chart's hash moving (b4ec31f5… →
+**1d5a7992…**). Every point in the series remains **pre-registration history — seen, not scored**
+under the operator decision of 2026-09-11; no scoring criteria have been pre-registered since.
+
 **`pnl.csv` extended through 2026-09-29** on 2026-09-29, appending the **2026-09-29** row — one row,
 continuing the same-session practice for a **thirty-third** consecutive session. `realized_cum` and
 `commission_cum` are unchanged (no trade since the 2026-08-03 rotation; the 2026-09-01 rebalance
