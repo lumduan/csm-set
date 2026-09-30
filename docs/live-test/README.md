@@ -37,7 +37,7 @@
 - [x] June monthly review: [monthly/2026-06.md](monthly/2026-06.md) — the **first fully systematic rebalance** (July 1 ATO = SELL MCOT / BUY FORTH, 1-out/1-in)
 - [x] July monthly review: [monthly/2026-07.md](monthly/2026-07.md) — filed 2026-07-31, **rebalance amended 2026-08-01** after a universe defect was corrected (August 3 ATO = SELL DELTA + PTTGC / BUY SMT + MGC, 2-out/2-in)
 - [x] August monthly review: [monthly/2026-08.md](monthly/2026-08.md) — filed 2026-08-31; **0-out / 0-in — the live test's first NO-TRADE rebalance** (all three exit rules fire on zero holdings; lowest-ranked holding HANA at pct 0.814). **August closes Phase B.**
-- [ ] September monthly review — due ~2026-10-01 (**Phase C**)
+- [x] September monthly review: [monthly/2026-09.md](monthly/2026-09.md) — filed 2026-09-30 (**Phase C**); **1-out / 1-in** (SELL MGC on the per-holding EMA100 exit, BUY CNT) with **two operator decisions** carried into the 2026-10-01 ATO: which EMA100 rule governs, and how CNT is sized
 - ⚠️ **Phase C's slippage audit is not yet filed** and [reports/](reports/) is still empty; it is a stated Phase C exit criterion — [[TK-0571]]
 - Daily automation: one log per trading session since [2026-05-04](daily/2026-05-04.md), zero gaps. **Count the files** — `ls docs/live-test/daily/*.md | wc -l` — rather than trusting a number written here; it must equal `SELECT count(*) FROM daily_performance WHERE strategy_id='csm-set'`
 - Weekly health checks: one per Saturday since [weekly/2026-05-08.md](weekly/2026-05-08.md); the newest file in [weekly/](weekly/) is the current one
@@ -59,10 +59,12 @@ All exits happen at **monthly rebalance** (BME). No intra-month stop-loss. This 
 |-----------|-----------|--------|
 | Exit Rank Floor | Below 35th percentile | Unconditional eviction at rebalance |
 | Buffer Logic | Replacement ranks 25 pct pts higher | Existing holding evicted only if challenger is significantly better |
-| EMA100 Fast Exit | Price < EMA100 at rebalance | Close position at rebalance |
+| EMA100 Fast Exit | Price < EMA100 at rebalance | Close position at rebalance — ⚠️ **a live-test rule the backtest never ran**; see below |
 | Circuit Breaker (portfolio) | -10% rolling DD | Reduce equity to 20% until recovery at -5% for 21 days |
 
-These are the **only exit mechanisms tested in the 15-year backtest** (207 rebalance dates, 2009–2026). No per-position trailing stops or hard stops are applied — winners ride to the next rebalance.
+No per-position trailing stops or hard stops are applied — winners ride to the next rebalance.
+
+↻ **CORRECTED 2026-09-30 — this section said these four mechanisms "match the Phase 3.8 backtest design exactly" and are "the only exit mechanisms tested in the 15-year backtest". That is false for the EMA100 row.** The backtest engine has **no per-holding EMA exit**. Its `EXIT_EMA_WINDOW = 100` is an **index** overlay: *SET below its EMA100 inside a BULL regime → the whole book scaled to 20% equity* (`backtest.py::_is_fast_exit`). The per-holding rule above is applied by hand at each rebalance ([[TK-0277]]); it is what evicted DELTA on 2026-08-03 and MGC in the October plan. **On 2026-09-30 the two readings disagreed for the first time**: SET closed 0.73% below its EMA100, so the engine's rule would cut the book to 20% equity. The rank floor, the buffer and the circuit breaker are the backtest's own rules. See [events/2026-09-30-ema100-fast-exit-definition-conflict.md](events/2026-09-30-ema100-fast-exit-definition-conflict.md).
 
 ## Key Metrics at a Glance
 
@@ -76,8 +78,8 @@ These are the **only exit mechanisms tested in the 15-year backtest** (207 rebal
 | NAV · daily P/L · positions · sector weights | — | the newest file in [`daily/`](daily/), one per trading session |
 | Realized / unrealized / total P/L · commission | — | [`graphs/pnl.csv`](graphs/pnl.csv), one row per session; ledger derivation in [`graphs/README.md`](graphs/README.md) |
 | Total return on NAV | positive | `daily_performance.total_value` vs `starting_nav` in [`configs/live_portfolio.yaml`](../../configs/live_portfolio.yaml) — **not** the DB's `cumulative_return`, which re-anchors at every rebalance |
-| **Annualized volatility** | **≤ 15%** (warn > 20%) | 🔴 **BREACHED — 29.39% at 2026-09-07, ~2× target.** Computed from `daily_performance`, flows stripped. **This row did not exist before 2026-09-08, which is why 86 sessions passed without the breach surfacing** — [[TK-0564]] |
-| Sharpe ratio (since inception) | ≥ 0.5 | ⚠️ **Compute it flow-stripped.** The 2.69 previously published here counted the two capital injections as returns; the correct figure over that window is **1.9298** — [[TK-0568]] |
+| **Annualized volatility** | **≤ 15%** (warn > 20%) | 🔴 **BREACHED — 28.54% at 2026-09-30** (29.39% at 2026-09-07), ~2× target. Computed from `daily_performance`, flows stripped, sample standard deviation; the monthly review is where it is re-measured. **This row did not exist before 2026-09-08, which is why 86 sessions passed without the breach surfacing** — [[TK-0564]] |
+| Sharpe ratio (since inception) | ≥ 0.5 | ⚠️ **Compute it flow-stripped** (`daily_performance`, injections stripped, sample std, ×√252): **1.8276 at 2026-09-30** (n=102), 1.9298 at 2026-08-31. The 2.69 once published here counted the two capital injections as returns — [[TK-0568]] |
 | Max drawdown | > −15% | the drawdown line in the newest [`daily/`](daily/) log; the circuit breaker has never tripped |
 | Data completeness | ≥ 95% | `count(*)` on `daily_performance` vs SET trading days in the period |
 | Position bound · sector cap | 5–15% · ≤ 35% | the newest [`daily/`](daily/) log. ⚠️ Both are applied at **rebalance construction only** — there is no intra-month enforcement — [[TK-0279]] |
@@ -103,8 +105,8 @@ The two halves of the result answer different questions and are reported separat
 | | Since inception | Meaning |
 |---|---:|---|
 | **Realized** | **−49,091.38 THB** | Banked. Only moves when a position is **closed** — i.e. at a rebalance — and can never change again |
-| **Unrealized** | **+248,232.35 THB** | Mark-to-market on the open book. Moves every session; can round-trip to zero |
-| **Total** | **+199,140.97 THB** | Sum of the two |
+| **Unrealized** | **+286,473.35 THB** | Mark-to-market on the open book at 2026-09-30. Moves every session; can round-trip to zero |
+| **Total** | **+237,381.97 THB** | Sum of the two |
 | **Commission paid** | **−3,735.16 THB** | All-in fees on every fill @ **0.16799%**. Already *inside* the two rows above — buy-side is capitalised into cost basis, sell-side is netted out of realized. Shown separately because it is otherwise invisible |
 
 Every realisation so far, and the commission behind it. Both exits came from exit rules, not
@@ -126,19 +128,19 @@ friction scales with turnover, not with book size. ⚠️ **The share of the rea
 15.8% to 7.6% — and that is not an improvement in friction.** The denominator grew: the 2026-08-03
 rotation added 682.65 of commission against 29,775.45 of fresh realized loss. **September's 0%
 turnover is the cheapest possible month by construction**, and is the only thing that will actually
-hold this figure still.
+hold this figure still. ➡️ **It did: September traded nothing and the ratio held at 7.6%. The October rotation's MGC exit (about −39,365 at the 2026-09-30 close) roughly doubles the realized loss and will take the ratio to about 4.5% — a smaller share of a bigger loss, not cheaper friction.**
 
-**Realized P/L being negative while the strategy is up +17.64% is expected, not a warning.** A
+**Realized P/L being negative while the strategy is up +21.05% (2026-09-30) is expected, not a warning.** A
 momentum book banks its losers at rebalance and lets winners ride to the next one, so realized P/L
 skews negative while the gains accumulate unrealized. It becomes worth investigating only if the
 *total* stalls, or if realisations start coming from discretionary sales rather than exit rules —
-and the total advanced **+70,791.01** in August. ↻ *This section previously projected the 2026-08-03
+and the total advanced **+70,791.01** in August and **+38,241.00** in September. ↻ *This section previously projected the 2026-08-03
 rotation would take cumulative realized to **−45,048.18 THB**. The executed fills came in worse:
 **−49,091.38**. The projection used the 2026-07-31 indicatives; both sells filled under them
 (DELTA 272.00 vs ~278.00, PTTGC 36.00 vs ~36.75), which is the same slippage that forced the
 20,000 injection.*
 
-_(Next refresh: ~2026-10-01, with the September monthly review. Charts:
+_(Refreshed 2026-09-30 with the September monthly review; next with the October review.  Charts:
 [equity curve](graphs/equity_curve.png) · [drawdown](graphs/drawdown.png) ·
 [monthly returns](graphs/monthly_returns.png) · [realized vs unrealized P/L](graphs/pnl_realized_unrealized.png)
 — see [graphs/README.md](graphs/README.md) before regenerating; they are **not** all built from one
@@ -150,11 +152,12 @@ Defects found during the live test that are **not yet fixed**. Each links to its
 
 | Issue | Effect | Filed |
 |-------|--------|-------|
-| **Ex-dividend restatements rewrite banked history** — the vendor back-adjusts a symbol's whole series on each XD; **6 of 10 held names** now carry restated bars | No NAV/cost-basis/U.PL impact, but `equity_curve` historical rows move and three gateway reporting columns are computed on endpoints that shift retroactively. Mechanism fully characterised and predictive | [2026-08-24](events/2026-08-24-ex-dividend-restatement-wave.md) |
-| **No dividend-accrual path in the live-test book** — `cash` is a static YAML field mutated only at rebalance | **6,663.00 THB uncredited**; on 2026-08-28 it flipped a reported sign (FORTH shown −0.79% below cost, truly +0.14% above). Above/below-cost count reads 8/2 and is truly 9/1 | [2026-08-24](events/2026-08-24-ex-dividend-restatement-wave.md) |
-| **Position/sector bands are applied at rebalance CONSTRUCTION only** — no code path trims drift | INSET outside the 5–15% band on 19 of 20 August sessions (15.24%, 3,130.40 over); AUTO 0.34 pp off the 5% sector floor; the ENERG–ETRON gap moved 0.8 pp in one session | [2026-08-31](monthly/2026-08.md) |
-| **Composite factor count is ambiguous** — the live panel carries 7 columns; the documented composite is 6 (`sector_rel_strength` is an entry gate, but `cross_section` feeds `select()` whatever the panel holds) | No effect on the September verdict (0-out/0-in either way), but HANA survives eviction by **0.0098** on the 7-factor reading | [2026-08-31](monthly/2026-08.md) |
+| **Ex-dividend restatements rewrite banked history** — the vendor back-adjusts a symbol's whole series on each XD; **7 of 10 held names** now carry restated bars (IRPC added 2026-09-09) | No NAV/cost-basis/U.PL impact, but `equity_curve` historical rows move and three gateway reporting columns are computed on endpoints that shift retroactively. Mechanism fully characterised and predictive | [2026-08-24](events/2026-08-24-ex-dividend-restatement-wave.md) |
+| **No dividend-accrual path in the live-test book** — `cash` is a static YAML field mutated only at rebalance | **8,927.00 THB uncredited** at 2026-09-30 (6,663.00 at 2026-08-31; IRPC +2,264.00); on 2026-08-28 it flipped a reported sign (FORTH shown −0.79% below cost, truly +0.14% above). Above/below-cost count reads 8/2 and is truly 9/1 | [2026-08-24](events/2026-08-24-ex-dividend-restatement-wave.md) |
+| **Position/sector bands are applied at rebalance CONSTRUCTION only** — no code path trims drift | August: INSET outside the 5–15% band on 19 of 20 sessions. **September: every bound breached** — ENERG over the 35% cap (09-09), ETRON over it (09-30, on a falling NAV), AUTO/MGC under the 5% floor for 13 sessions, INSET over 15% on 4 | [2026-08-31](monthly/2026-08.md) · [2026-09-09](events/2026-09-09-sector-cap-and-position-band-drift.md) |
+| **Composite factor count is ambiguous** — the live panel carries 7 columns; the documented composite is 6 (`sector_rel_strength` is an entry gate, but `cross_section` feeds `select()` whatever the panel holds) | No effect on the September or October verdicts (the rank rules evict nothing on either basis at both month-ends); in August HANA survived by **0.0098** on the 7-factor reading | [2026-08-31](monthly/2026-08.md) · [2026-09](monthly/2026-09.md) |
 | ⚠️ **The HOME host runs at ~386% memory commitment with swap ~74% full as its NORMAL state** — it stalled on memory compaction for 66 minutes on 2026-09-10 and had to be hard-reset | **No impact on this strategy: the outage was 11:55–13:01 BKK and the only scheduled work is the 18:00 refresh, a 4h58m margin.** ⚠️ **That is cadence, not resilience — the same outage at 18:00 would cost the session's refresh outright.** The pressure is unchanged by the reboot | [2026-09-10](events/2026-09-10-host-hang-and-unclean-reboot.md) |
+| 🔴 **"EMA100 fast exit" is two different rules** — the live test exits a holding below its own EMA100; the backtest engine scales the whole book to 20% equity when the SET is below its EMA100 | **On 2026-09-30 they disagree**: the live rule sells MGC, the engine's rule would sell ~80% of the book. Operator decision pending; the October plan follows the live rule | [2026-09-30](events/2026-09-30-ema100-fast-exit-definition-conflict.md) |
 | 🔴 **Realized volatility is ~2× the 15% vol target** — 29.39% annualized, flows stripped, against a pre-registered target of ≤15% and a warning threshold of >20% | A pre-registered primary metric in breach for the whole live test. It surfaced only on 2026-09-08 because **volatility was the one primary metric absent from the metrics table** | [[TK-0564]] |
 | 🔴 **The strategy reports zero trades and zero commission to the platform** — `hooks.py` passes a hardcoded `trades=[]` | `db_csm_set.trade_history` holds **0 rows after four rebalances**; every gateway payload carries `commission_paid: "0"` against **3,735.16 THB** actually paid. The trade record exists only as prose | [[TK-0565]] |
 | ⚠️ **`configs/live-settings.yaml` has no code consumer** — the file three documents call the single source of truth is inert | Nothing is currently wrong *because* of it; the risk is the next person who changes a value there and expects the strategy to change. The container's refresh cron already disagrees with it | [[TK-0566]] |
