@@ -104,10 +104,10 @@ The two halves of the result answer different questions and are reported separat
 
 | | Since inception | Meaning |
 |---|---:|---|
-| **Realized** | **−49,091.38 THB** | Banked. Only moves when a position is **closed** — i.e. at a rebalance — and can never change again |
-| **Unrealized** | **+286,473.35 THB** | Mark-to-market on the open book at 2026-09-30. Moves every session; can round-trip to zero |
-| **Total** | **+237,381.97 THB** | Sum of the two |
-| **Commission paid** | **−3,735.16 THB** | All-in fees on every fill @ **0.16799%**. Already *inside* the two rows above — buy-side is capitalised into cost basis, sell-side is netted out of realized. Shown separately because it is otherwise invisible |
+| **Realized** | **−88,456.67 THB** | Banked. Only moves when a position is **closed** — i.e. at a rebalance — and can never change again |
+| **Unrealized** | **+322,278.03 THB** | Mark-to-market on the open (post-trade) book at 2026-10-01. Moves every session; can round-trip to zero |
+| **Total** | **+233,821.36 THB** | Sum of the two |
+| **Commission paid** | **−3,936.97 THB** | All-in fees on every fill @ **0.16799%**. Already *inside* the two rows above — buy-side is capitalised into cost basis, sell-side is netted out of realized. Shown separately because it is otherwise invisible |
 
 Every realisation so far, and the commission behind it. Both exits came from exit rules, not
 discretionary calls:
@@ -120,15 +120,16 @@ discretionary calls:
 | 2026-07-01 | SELL MCOT — tripped three independent exit signals | −14,964.06 | −287.83 |
 | 2026-08-03 | Rebalance — SELL DELTA (EMA100 exit) −14,392.42 · SELL PTTGC (buffer) −15,383.03 | −29,775.45 | −682.65 |
 | 2026-09-01 | **No trades — 0-out / 0-in, all three exit rules fire on zero holdings** | **0.00** | **0.00** |
-| | **Cumulative** | **−49,091.38** | **−3,735.16** |
+| 2026-10-01 | Rebalance — SELL MGC (per-holding EMA100 exit) −39,365.29 · BUY CNT; no capital injection (operator decision D2) | −39,365.29 | −201.81 |
+| | **Cumulative** | **−88,456.67** | **−3,936.97** |
 
-**Commission is 0.28% of NAV but 7.6% of the realized loss.** The NAV denominator makes rotation
+**Commission is 0.29% of NAV and 4.45% of the realized loss at 2026-10-01** (it was 0.28% and 7.6% before the October rotation). The NAV denominator makes rotation
 friction look free; the realized one is the denominator that carries the consequence, because
 friction scales with turnover, not with book size. ⚠️ **The share of the realized loss FELL from
 15.8% to 7.6% — and that is not an improvement in friction.** The denominator grew: the 2026-08-03
 rotation added 682.65 of commission against 29,775.45 of fresh realized loss. **September's 0%
 turnover is the cheapest possible month by construction**, and is the only thing that will actually
-hold this figure still. ➡️ **It did: September traded nothing and the ratio held at 7.6%. The October rotation's MGC exit (about −39,365 at the 2026-09-30 close) roughly doubles the realized loss and will take the ratio to about 4.5% — a smaller share of a bigger loss, not cheaper friction.**
+hold this figure still. ➡️ **It did: September traded nothing and the ratio held at 7.6%. The October rotation's MGC exit (−39,365.29, executed 2026-10-01) nearly doubled the realized loss and took the ratio to 4.45% — a smaller share of a bigger loss, not cheaper friction.**
 
 **Realized P/L being negative while the strategy is up +21.05% (2026-09-30) is expected, not a warning.** A
 momentum book banks its losers at rebalance and lets winners ride to the next one, so realized P/L
