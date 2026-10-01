@@ -118,9 +118,51 @@ strategy_id: csm-set
 #   book back over [entry_date, today] and UPSERTs every row, so leaving
 #   entry_date at 2026-07-01 would overwrite the historical 07-01..07-31
 #   equity rows with a fictional SMT/MGC-instead-of-DELTA/PTTGC mark.
-entry_date: "2026-08-03"
+# 2026-09-01: September rebalance — 0-out / 0-in, no trades; this file was not
+#   changed (docs/live-test/monthly/2026-08.md).
+# 2026-10-01: October rebalance — 1-out / 1-in, executed at ATO.  Plan:
+# docs/live-test/monthly/2026-09.md §Rebalance.  Three operator decisions given
+# 2026-09-30, recorded here as given:
+#   D1 — EMA100 exit: the LIVE per-holding rule (close < own EMA100 → sell).
+#     The engine's index overlay (SET < EMA100 in BULL → 20% equity) would have
+#     sold ~80% of the book on the same close.  The two rules disagreed for the
+#     first time on a day when both outcomes were already known, so choosing
+#     between them that day would be choosing by outcome; the live rule is what
+#     every prior rotation used.  The definition is deferred to the pending
+#     pre-registration.  Neither rule's code, config or docs changed here.
+#   D2 — CNT sizing: OPTION A, no capital injection.  starting_nav stays
+#     1,120,000 and the circuit-breaker line stays 1,064,000.  An injection to
+#     seat CNT inside the band would have been the second after 2026-08-03 and
+#     would make the bounds non-binding; the forward configuration has no
+#     injection available.  ACCEPTED KNOWN VIOLATIONS after the fills: CNT
+#     below the 5% position floor and ETRON above the 35% sector cap (measured
+#     in docs/live-test/daily/2026-10-01.md) — the bounds question is TK-0279.
+#   D3 — partial fills: take what fills, one ATO order per side, no follow-up.
+#     Both orders filled in full (fill ratio 100% each).
+#   SELL MGC (9,200 sh @ 6.45) → gross 59,340.00 − fees @0.16799% 99.69 = net
+#     59,240.31; realized P/L vs cost basis 98,605.60 = −39,365.29 (−39.92%).
+#     Evicted solely by the per-holding EMA100 exit (Sep 30 close 6.45 <
+#     EMA100 7.0013, −7.87%); it tripped neither the 0.35 rank floor (pct
+#     0.887, #24 of 204) nor the 0.25 buffer (+0.113).
+#   BUY CNT (18,200 sh @ 3.34) → gross 60,788.00 + fees @0.16799% 102.12 =
+#     all-in 60,890.12; avg_cost = 60,890.12 / 18,200 = 3.3456 (4-dp).
+#     Universe rank #1 of 204 (pct 1.000), SET-official CONS, 63-day ADTV
+#     11.10M THB.  Filled +1.21% above the 3.30 Sep 30 indicative.
+#   Fees are the 0.16799% all-in schedule (configs/live-settings.yaml), as in
+#   every entry above; the operator supplied fill prices, not fee lines.
+#   Cash: 3,027.70 + 59,240.31 − 60,890.12 = 1,377.89.  No capital injection —
+#   starting_nav unchanged at 1,120,000.
+#   Fills were recorded AFTER the 2026-10-01 18:00 refresh, so that day's
+#   db_gateway.daily_performance row (1,354,596.70, cash 3,027.70) is a
+#   PRE-TRADE mark of the old book, as on 2026-08-03; no manual refresh was run.
+#   entry_date reset to 2026-10-01 because book composition and cash changed:
+#   the equity reconstruction reprices the *current* book back over
+#   [entry_date, today] and UPSERTs every row, so leaving entry_date at
+#   2026-08-03 would overwrite the 08-03..09-30 equity rows with a fictional
+#   CNT-instead-of-MGC mark.
+entry_date: "2026-10-01"
 starting_nav: 1120000.0
-cash: 3027.70
+cash: 1377.89
 positions:
   - symbol: IRPC
     shares: 56600
@@ -149,6 +191,6 @@ positions:
   - symbol: SMT
     shares: 20400
     avg_cost: 5.8097
-  - symbol: MGC
-    shares: 9200
-    avg_cost: 10.7180
+  - symbol: CNT
+    shares: 18200
+    avg_cost: 3.3456
