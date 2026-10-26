@@ -480,7 +480,7 @@ CSM_PUBLIC_MODE=false + CSM_DB_WRITE_ENABLED=true + 3 DSNs set
 
 **Symptom:** `docker compose up` fails with `bind: address already in use`.
 
-**Fix:** Stop the process on port 8100 (`lsof -ti:8100 | xargs kill`) or set the host port in `docker-compose.yml` to a free port (e.g., `"8101:8000"`).
+**Fix:** Stop the process on port 8100 (`lsof -ti:8100 | xargs kill`) or set the host port in `docker-compose.yml` to a free port (e.g., `"127.0.0.1:8101:8000"`).
 
 ### Docker daemon not running
 

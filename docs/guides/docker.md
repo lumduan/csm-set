@@ -207,7 +207,7 @@ Multiple origins are comma-separated. The middleware parses them from the `CSM_C
 
 ### Port 8100 already in use
 
-**Symptom:** `docker compose up` fails with `Error starting userland proxy: listen tcp4 0.0.0.0:8100: bind: address already in use`.
+**Symptom:** `docker compose up` fails with `Error starting userland proxy: listen tcp4 127.0.0.1:8100: bind: address already in use`.
 
 **Fix:** Find and stop the process using port 8100:
 
@@ -218,7 +218,7 @@ lsof -ti:8100 | xargs kill
 Or run csm-set on a different host port:
 
 ```bash
-# Edit docker-compose.yml: change "8100:8000" to "8101:8000" (or any free port)
+# Edit docker-compose.yml: change "127.0.0.1:8100:8000" to "127.0.0.1:8101:8000" (or any free port)
 ```
 
 ### Docker daemon not running

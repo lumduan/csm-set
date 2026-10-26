@@ -8,7 +8,7 @@
 #   pre-computed research artefacts from results/static/ (read-only).
 #
 # Usage:
-#   docker compose up               # Start the public API on port 8100
+#   docker compose up               # Start the public API on localhost:8100
 #   docker compose up -d            # Detached mode
 #   docker compose down             # Stop and remove the container
 #
@@ -38,8 +38,11 @@ services:
     # children, so SIGKILLed healthcheck `curl` processes pile up as <defunct>
     # zombies. `init: true` makes Docker inject tini as PID 1 to reap them.
     init: true
+    # Host port bound to loopback only: reachable as http://localhost:8100 from this machine,
+    # not from the LAN. Containers on quant-network reach the service by name on :8000, which
+    # this binding does not touch. Bound to all interfaces until 2026-10-27.
     ports:
-      - "8100:8000"
+      - "127.0.0.1:8100:8000"
     environment:
       CSM_PUBLIC_MODE: "true"
       CSM_LOG_LEVEL: "INFO"
