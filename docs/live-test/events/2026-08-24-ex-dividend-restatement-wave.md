@@ -95,3 +95,5 @@ The **2026-09-01 rebalance was evaluated on the restated panel** and returned 0-
 3. **Fix `daily_return`'s denominator** — it divides by today's NAV where it should divide by the prior NAV. One line, independent of (1).
 4. **Keep the mixed-basis caveat on high/low claims** for GUNKUL, INSET, EPG, MGC and FORTH until (1) is settled — their panel highs differ from the values prior logs published.
 5. **Do not re-derive the TWR scale factor `k₂` from the current NAV.** It was defined against the 2026-08-03 `equity_curve` anchor of 1,247,760.70, which this wave has since moved to 1,240,806.78; re-deriving it would move published historical chart values to chase a number that itself moved. See `graphs/README.md`.
+
+➡️ **2026-10-27: items 1 and 2 are answered for the Phase D scoring window only** — the scored series is the published NAV, frozen at publication, and dividends are not credited but reported beside each score — in [`../reports/2026-10-27-forward-scoring-pre-registration.md`](../reports/2026-10-27-forward-scoring-pre-registration.md) §8. The history question and the book's own dividend treatment stay open.

@@ -3,7 +3,7 @@
 **Feature:** Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy
 **Branch:** `live-test`
 **Created:** 2026-05-04
-**Status:** Phase B in progress — 2 calendar months complete (May, June); July underway (Day 42 as of 2026-07-02). Phase A closed 2026-05-31 (all exit criteria met). Phase B exit gate (3 consecutive months, Jun–Aug) tracks 1 of 3 monthly reviews filed (June); July review due 2026-08-03.
+**Status:** Phase C in progress (September–October 2026). **Phase D (November–December 2026) is the forward scoring window, registered 2026-10-27** in [`docs/live-test/reports/2026-10-27-forward-scoring-pre-registration.md`](../../live-test/reports/2026-10-27-forward-scoring-pre-registration.md); everything before it is pre-registration history under the operator decision of 2026-09-11. *(Until 2026-10-27 this line read "Phase B in progress … July underway (Day 42 as of 2026-07-02)", stale since August.)*
 **Environment Lock:** Git tag `live-test-v1.0.0` at commit `892e78a`
 **Docker Port:** 8100 (host) → 8000 (container)
 **Depends on:** Phase 7 (Hardening & Documentation — complete), Phase 4.9 (Signal Robustness & Risk Stabilization — complete)
@@ -470,6 +470,8 @@ Event log template:
 | 8 | Circuit breaker behavior matches design | Trips on real DD, recovers per spec, no false trips |
 
 All 8 criteria must be met to recommend production deployment. Partial success (some criteria met) triggers a recommendation for a second, extended live test period rather than production.
+
+**How these are scored (registered 2026-10-27).** The operator decision of 2026-09-11 restarted the track record forward-only, so the criteria above are scored on the Phase D window alone. The window, the formulas, the data basis, the EMA100 definition and the criterion-4 baseline ([[TK-0570]]) are fixed in [`docs/live-test/reports/2026-10-27-forward-scoring-pre-registration.md`](../../live-test/reports/2026-10-27-forward-scoring-pre-registration.md). **The targets and thresholds above are unchanged.**
 
 ---
 

@@ -46,6 +46,8 @@ Receipts: each session's Sector Concentration table and Risk Notes in `daily/202
 2. **Operator: `fix-notional-not-shares`.** The October rotation shows the cost of the current practice: an exit that shrank to 4.4% of NAV cannot fund its replacement into the band without new capital.
 3. If the bounds are to govern drift, a code path has to evaluate them; today the daily log is the only place they are measured.
 
+➡️ **2026-10-27: items 1 and 2 are answered for the Phase D scoring window only** — bounds bind at construction on the names being traded, and entrants keep the current proceeds-plus-cash sizing — in [`../reports/2026-10-27-forward-scoring-pre-registration.md`](../reports/2026-10-27-forward-scoring-pre-registration.md) §8. Both stay open for any later test.
+
 ## Related
 
 - `monthly/2026-09.md` — Drawdown & Risk; Rebalance, Decision 2

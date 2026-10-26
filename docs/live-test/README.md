@@ -20,7 +20,7 @@
 | [monthly/](monthly/) | Performance reviews: metrics, charts, backtest comparison | Manual, monthly |
 | [events/](events/) | Significant event reports: downtime, model deviations, regime transitions | Ad-hoc, immediate |
 | [graphs/](graphs/) | Exported charts: equity curves, drawdown, monthly returns | As generated |
-| [reports/](reports/) | Phase reports: slippage audit, parameter review, final report | Per phase |
+| [reports/](reports/) | Phase reports (slippage audit, parameter review, final report), audits, and the [scoring pre-registration](reports/2026-10-27-forward-scoring-pre-registration.md) | Per phase |
 
 ## Current Phase
 
@@ -38,7 +38,7 @@
 - [x] July monthly review: [monthly/2026-07.md](monthly/2026-07.md) — filed 2026-07-31, **rebalance amended 2026-08-01** after a universe defect was corrected (August 3 ATO = SELL DELTA + PTTGC / BUY SMT + MGC, 2-out/2-in)
 - [x] August monthly review: [monthly/2026-08.md](monthly/2026-08.md) — filed 2026-08-31; **0-out / 0-in — the live test's first NO-TRADE rebalance** (all three exit rules fire on zero holdings; lowest-ranked holding HANA at pct 0.814). **August closes Phase B.**
 - [x] September monthly review: [monthly/2026-09.md](monthly/2026-09.md) — filed 2026-09-30 (**Phase C**); **1-out / 1-in** (SELL MGC on the per-holding EMA100 exit, BUY CNT) with **two operator decisions** carried into the 2026-10-01 ATO: which EMA100 rule governs, and how CNT is sized
-- ⚠️ **Phase C's slippage audit is not yet filed** and [reports/](reports/) is still empty; it is a stated Phase C exit criterion — [[TK-0571]]
+- ⚠️ **Phase C's slippage audit is not yet filed**; it is a stated Phase C exit criterion — [[TK-0571]]. [reports/](reports/) holds the [2026-09-08 audit](reports/2026-09-08-live-test-state-and-cost-model-audit.md) and the [scoring pre-registration of 2026-10-27](reports/2026-10-27-forward-scoring-pre-registration.md), which makes Phase D (2026-11-02 to 2026-12-30) the scored window. *(Until 2026-10-27 this bullet said reports/ was "still empty", which was false from 2026-09-08.)*
 - Daily automation: one log per trading session since [2026-05-04](daily/2026-05-04.md), zero gaps. **Count the files** — `ls docs/live-test/daily/*.md | wc -l` — rather than trusting a number written here; it must equal `SELECT count(*) FROM daily_performance WHERE strategy_id='csm-set'`
 - Weekly health checks: one per Saturday since [weekly/2026-05-08.md](weekly/2026-05-08.md); the newest file in [weekly/](weekly/) is the current one
 
@@ -83,6 +83,8 @@ No per-position trailing stops or hard stops are applied — winners ride to the
 | Max drawdown | > −15% | the drawdown line in the newest [`daily/`](daily/) log; the circuit breaker has never tripped |
 | Data completeness | ≥ 95% | `count(*)` on `daily_performance` vs SET trading days in the period |
 | Position bound · sector cap | 5–15% · ≤ 35% | the newest [`daily/`](daily/) log. ⚠️ Both are applied at **rebalance construction only** — there is no intra-month enforcement — [[TK-0279]] |
+
+🔑 **Scoring.** The values this table points to are **pre-registration history — seen, not scored**. The targets are scored only on the Phase D window (2026-11-02 to 2026-12-30), with formulas, data basis and grades registered on 2026-10-27 in [`reports/2026-10-27-forward-scoring-pre-registration.md`](reports/2026-10-27-forward-scoring-pre-registration.md).
 
 **Two standing cautions that are not measurements and therefore do not go stale.**
 

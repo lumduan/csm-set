@@ -3,7 +3,7 @@
 **Date:** 2026-09-30 (the September month-end evaluation)
 **Category:** Model deviation — the live test's exit rule is not the rule the backtest engine implements
 **Severity:** High. The rule decides the October book. Under the live test's reading it sells **one** name (MGC). Under the engine's reading, the same close cuts the book to **20% equity**, a sale of about **1.08M THB**.
-**Status:** **OPEN — operator decision.** The October rotation is recommended on the live test's documented rule (SELL MGC); which definition the forward record uses is put to the operator with the pre-registration the 2026-09-11 decision left pending. The README's claim that the live exits "match the Phase 3.8 backtest design exactly" is corrected in the same commit as this report.
+**Status:** **DEFINITION REGISTERED 2026-10-27 — per holding** (close < its own EMA100 at the evaluation → sell at the ATO; the index overlay is not applied), in [`../reports/2026-10-27-forward-scoring-pre-registration.md`](../reports/2026-10-27-forward-scoring-pre-registration.md) §4, under the operator's go of 2026-10-27 and open to amendment until the 2026-10-30 evaluation. *Was:* **OPEN — operator decision.** The October rotation is recommended on the live test's documented rule (SELL MGC); which definition the forward record uses is put to the operator with the pre-registration the 2026-09-11 decision left pending. The README's claim that the live exits "match the Phase 3.8 backtest design exactly" is corrected in the same commit as this report.
 
 ---
 
