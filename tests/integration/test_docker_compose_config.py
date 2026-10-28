@@ -37,9 +37,13 @@ class TestPublicCompose:
         assert "csm" in doc["services"]
 
     def test_single_port_8100(self) -> None:
-        """Only port 8100 is exposed — port 8080 must not appear."""
+        """Only port 8100 is published, and on loopback only — port 8080 must not appear.
+
+        Bound to 127.0.0.1 since 8307ab3 (2026-10-27): owner mode runs with no API key, so an
+        all-interfaces binding would expose the API to the LAN.
+        """
         ports = _service(_load_yaml(PUBLIC_COMPOSE))["ports"]
-        assert ports == ["8100:8000"], f"Expected only 8100:8000, got {ports}"
+        assert ports == ["127.0.0.1:8100:8000"], f"Expected only 127.0.0.1:8100:8000, got {ports}"
 
     def test_has_mem_limit(self) -> None:
         """mem_limit: 2g is set."""
