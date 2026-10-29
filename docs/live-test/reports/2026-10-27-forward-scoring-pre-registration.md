@@ -8,6 +8,10 @@ the open item that the operator decision of 2026-09-11 left pending. Drafted by 
 before the 18:00 BKK scheduled refresh on 2026-10-30 builds that evaluation's data. **Frozen from
 then.** Every choice below that is not already on record is marked **CHOSEN HERE**. Those are the
 items the operator may change before that point.
+**Confirmed 2026-10-29, after that session's close and before the 2026-10-30 evaluation's:** the operator
+answered *"keep"*. Every
+CHOSEN HERE item stands as registered, with no amendment. This closes the open question of
+2026-10-28, when a change was asked for without naming an item.
 
 ---
 
