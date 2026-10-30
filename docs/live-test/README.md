@@ -1,7 +1,7 @@
 # Live Test Documentation
 
 > Real-world paper-trading validation of the CSM-SET Cross-Sectional Momentum strategy.
-> **Period:** May–December 2026 | **Status:** **Phase C — Stress Testing & Optimization (Sep–Oct 2026)**; Phase B closed 2026-08-31 with all three monthly reviews filed.
+> **Period:** May–December 2026 | **Status:** **Phase C — Stress Testing & Optimization (Sep–Oct 2026)** ended with the October review (2026-10-30); its two reports are still due. **Phase D, the scored window, opens 2026-11-02** with the design circuit breaker TRIPPED. Phase B closed 2026-08-31 with all three monthly reviews filed.
 > Counts and figures in this file are **pointers, not restatements** — see [Key Metrics at a Glance](#key-metrics-at-a-glance).
 
 ## Quick Reference
@@ -38,7 +38,8 @@
 - [x] July monthly review: [monthly/2026-07.md](monthly/2026-07.md) — filed 2026-07-31, **rebalance amended 2026-08-01** after a universe defect was corrected (August 3 ATO = SELL DELTA + PTTGC / BUY SMT + MGC, 2-out/2-in)
 - [x] August monthly review: [monthly/2026-08.md](monthly/2026-08.md) — filed 2026-08-31; **0-out / 0-in — the live test's first NO-TRADE rebalance** (all three exit rules fire on zero holdings; lowest-ranked holding HANA at pct 0.814). **August closes Phase B.**
 - [x] September monthly review: [monthly/2026-09.md](monthly/2026-09.md) — filed 2026-09-30 (**Phase C**); **1-out / 1-in** (SELL MGC on the per-holding EMA100 exit, BUY CNT) with **two operator decisions** carried into the 2026-10-01 ATO: which EMA100 rule governs, and how CNT is sized
-- ⚠️ **Phase C's slippage audit is not yet filed**; it is a stated Phase C exit criterion — [[TK-0571]]. [reports/](reports/) holds the [2026-09-08 audit](reports/2026-09-08-live-test-state-and-cost-model-audit.md) and the [scoring pre-registration of 2026-10-27](reports/2026-10-27-forward-scoring-pre-registration.md), which makes Phase D (2026-11-02 to 2026-12-30) the scored window. *(Until 2026-10-27 this bullet said reports/ was "still empty", which was false from 2026-09-08.)*
+- [x] October monthly review: [monthly/2026-10.md](monthly/2026-10.md) — filed 2026-10-30, **the first evaluation under the forward scoring pre-registration**; its close is NAV₀. 🔴 **The design circuit breaker tripped** ([events/2026-10-30-circuit-breaker-trip.md](events/2026-10-30-circuit-breaker-trip.md)), so the 2026-11-02 ATO plan is **2-out / 2-in** (SELL EASTW + FORTH, BUY SPRC + RCL) **scaled to 20% equity**. It rests on five points of interpretation (I1–I5) for the operator to confirm before the ATO. **October closes Phase C.**
+- ⚠️ **Phase C's slippage audit (C.2) and parameter review (C.3) are not yet filed**; both are stated Phase C exit criteria — [[TK-0571]]. *(Until 2026-10-30 this bullet named only the slippage audit.)* [reports/](reports/) holds the [2026-09-08 audit](reports/2026-09-08-live-test-state-and-cost-model-audit.md) and the [scoring pre-registration of 2026-10-27](reports/2026-10-27-forward-scoring-pre-registration.md), which makes Phase D (2026-11-02 to 2026-12-30) the scored window. *(Until 2026-10-27 this bullet said reports/ was "still empty", which was false from 2026-09-08.)*
 - Daily automation: one log per trading session since [2026-05-04](daily/2026-05-04.md), zero gaps. **Count the files** — `ls docs/live-test/daily/*.md | wc -l` — rather than trusting a number written here; it must equal `SELECT count(*) FROM daily_performance WHERE strategy_id='csm-set'`
 - Weekly health checks: one per Saturday since [weekly/2026-05-08.md](weekly/2026-05-08.md); the newest file in [weekly/](weekly/) is the current one
 
@@ -78,9 +79,9 @@ No per-position trailing stops or hard stops are applied — winners ride to the
 | NAV · daily P/L · positions · sector weights | — | the newest file in [`daily/`](daily/), one per trading session |
 | Realized / unrealized / total P/L · commission | — | [`graphs/pnl.csv`](graphs/pnl.csv), one row per session; ledger derivation in [`graphs/README.md`](graphs/README.md) |
 | Total return on NAV | positive | `daily_performance.total_value` vs `starting_nav` in [`configs/live_portfolio.yaml`](../../configs/live_portfolio.yaml) — **not** the DB's `cumulative_return`, which re-anchors at every rebalance |
-| **Annualized volatility** | **≤ 15%** (warn > 20%) | 🔴 **BREACHED — 28.54% at 2026-09-30** (29.39% at 2026-09-07), ~2× target. Computed from `daily_performance`, flows stripped, sample standard deviation; the monthly review is where it is re-measured. **This row did not exist before 2026-09-08, which is why 86 sessions passed without the breach surfacing** — [[TK-0564]] |
-| Sharpe ratio (since inception) | ≥ 0.5 | ⚠️ **Compute it flow-stripped** (`daily_performance`, injections stripped, sample std, ×√252): **1.8276 at 2026-09-30** (n=102), 1.9298 at 2026-08-31. The 2.69 once published here counted the two capital injections as returns — [[TK-0568]] |
-| Max drawdown | > −15% | the drawdown line in the newest [`daily/`](daily/) log; the circuit breaker has never tripped |
+| **Annualized volatility** | **≤ 15%** (warn > 20%) | 🔴 **BREACHED — 28.35% at 2026-10-30** (28.54% at 2026-09-30, 29.39% at 2026-09-07), ~2× target. Computed from `daily_performance`, flows stripped, sample standard deviation; the monthly review is where it is re-measured. **This row did not exist before 2026-09-08, which is why 86 sessions passed without the breach surfacing** — [[TK-0564]] |
+| Sharpe ratio (since inception) | ≥ 0.5 | ⚠️ **Compute it flow-stripped** (`daily_performance`, injections stripped, sample std, ×√252): **1.0451 at 2026-10-30** (n=121), 1.8276 at 2026-09-30 (n=102), 1.9298 at 2026-08-31. The 2.69 once published here counted the two capital injections as returns — [[TK-0568]] |
+| Max drawdown | > −15% | the drawdown line in the newest [`daily/`](daily/) log. 🔴 **The design circuit breaker (−10% over 60 sessions) TRIPPED at the 2026-10-30 close**, the first trip of the live test: [events/2026-10-30-circuit-breaker-trip.md](events/2026-10-30-circuit-breaker-trip.md). *(Until 2026-10-30 this cell said "the circuit breaker has never tripped".)* |
 | Data completeness | ≥ 95% | `count(*)` on `daily_performance` vs SET trading days in the period |
 | Position bound · sector cap | 5–15% · ≤ 35% | the newest [`daily/`](daily/) log. ⚠️ Both are applied at **rebalance construction only** — there is no intra-month enforcement — [[TK-0279]] |
 
@@ -88,11 +89,12 @@ No per-position trailing stops or hard stops are applied — winners ride to the
 
 **Two standing cautions that are not measurements and therefore do not go stale.**
 
-**Read any Sharpe with care.** The live sample is four months of a concentrated ~10-name book. The
+**Read any Sharpe with care.** The live sample is six months (May–October 2026) of a concentrated ~10-name book. The
 honest baseline is the Phase 3.8 backtest's **0.663** on the broad top-quantile book; this expression
-of the same edge is higher-variance by construction. ⚠️ **Which backtest baseline the
-production-readiness criteria compare against is itself unsettled** — the live configuration's
-registered numbers are synthetic-data only — [[TK-0570]].
+of the same edge is higher-variance by construction. ~~Which backtest baseline the
+production-readiness criteria compare against is itself unsettled~~ ➡️ **settled for the scored window
+on 2026-10-29**: criterion 4 compares against the Phase 3.8 figures pro-rated (registration §6 #4) —
+[[TK-0570]], closed. The live configuration's own registered numbers remain synthetic-data only.
 
 ⚠️ **`configs/live-settings.yaml` is a RECORD, not a control panel.** No code reads it; changing a
 value there changes nothing. The container's refresh cron already disagrees with it — [[TK-0566]].
@@ -107,8 +109,8 @@ The two halves of the result answer different questions and are reported separat
 | | Since inception | Meaning |
 |---|---:|---|
 | **Realized** | **−88,456.67 THB** | Banked. Only moves when a position is **closed** — i.e. at a rebalance — and can never change again |
-| **Unrealized** | **+322,278.03 THB** | Mark-to-market on the open (post-trade) book at 2026-10-01. Moves every session; can round-trip to zero |
-| **Total** | **+233,821.36 THB** | Sum of the two |
+| **Unrealized** | **+232,227.03 THB** | Mark-to-market on the open book at the 2026-10-30 close, the October month-end. Moves every session; can round-trip to zero |
+| **Total** | **+143,770.36 THB** | Sum of the two |
 | **Commission paid** | **−3,936.97 THB** | All-in fees on every fill @ **0.16799%**. Already *inside* the two rows above — buy-side is capitalised into cost basis, sell-side is netted out of realized. Shown separately because it is otherwise invisible |
 
 Every realisation so far, and the commission behind it. Both exits came from exit rules, not
@@ -125,7 +127,7 @@ discretionary calls:
 | 2026-10-01 | Rebalance — SELL MGC (per-holding EMA100 exit) −39,365.29 · BUY CNT; no capital injection (operator decision D2) | −39,365.29 | −201.81 |
 | | **Cumulative** | **−88,456.67** | **−3,936.97** |
 
-**Commission is 0.29% of NAV and 4.45% of the realized loss at 2026-10-01** (it was 0.28% and 7.6% before the October rotation). The NAV denominator makes rotation
+**Commission is 0.31% of NAV and 4.45% of the realized loss at 2026-10-30** (0.29% and 4.45% at 2026-10-01; 0.28% and 7.6% before the October rotation). The NAV denominator makes rotation
 friction look free; the realized one is the denominator that carries the consequence, because
 friction scales with turnover, not with book size. ⚠️ **The share of the realized loss FELL from
 15.8% to 7.6% — and that is not an improvement in friction.** The denominator grew: the 2026-08-03

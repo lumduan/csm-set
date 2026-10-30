@@ -1,11 +1,13 @@
 # Live-Test Charts — how these are generated
 
-_🟢 **All four PNGs are on ONE date — the September month-end, 2026-09-30.** The three **NAV** charts
-(`equity_curve`, `drawdown`, `monthly_returns`) were regenerated on 2026-09-30 from `nav_actual.csv` /
-`nav_twr.csv` extended to **102 points** (2026-05-04 → 2026-09-30). `pnl_realized_unrealized.png` is newer:
-regenerated on 2026-10-30 from `pnl.csv` (**121 rows**, through 2026-10-30; its newest realized step is the 2026-10-01 rotation's). ⚠️ **The September rows of the two NAV CSVs
+_🟢 **All four PNGs are on ONE date — the October month-end, 2026-10-30.** The three **NAV** charts
+(`equity_curve`, `drawdown`, `monthly_returns`) were regenerated on 2026-10-30 from `nav_actual.csv` /
+`nav_twr.csv` extended to **121 points** (2026-05-04 → 2026-10-30). `pnl_realized_unrealized.png` was
+regenerated the same day from `pnl.csv` (**121 rows**, through 2026-10-30; its newest realized step is the 2026-10-01 rotation's). ⚠️ **The September rows of the two NAV CSVs
 come from `db_gateway.daily_performance`, not `equity_curve`** — IRPC's 2026-09-09 restatement rewrote the
-`equity_curve` rows it would otherwise have supplied; see the 2026-09-30 History entry. `pnl.csv` is built
+`equity_curve` rows it would otherwise have supplied; see the 2026-09-30 History entry. **The October rows
+are the published daily-log NAVs**, which equal `equity_curve` on every October session; `daily_performance`
+differs only on 2026-10-01, where it holds the pre-trade mark (see the 2026-10-30 History entry). `pnl.csv` is built
 from the daily logs' figures (the un-restated `daily_performance` basis), so it does not agree with
 `equity_curve` on historical rows after any ex-dividend restatement — **7 of 10 held names** carry
 restated bars *(counted at 2026-09-30, MGC included; MGC left the book at the 2026-10-01 rotation)* — and that is the expected state, not a discrepancy to reconcile._
@@ -236,9 +238,9 @@ restatement has rewritten `equity_curve` rows inside the month being appended, *
 | Check | Expected |
 |---|---|
 | July bar is identical on **both** bases | **+9.53%** — no flow in July, so `k` cancels. Disagreement means the CSVs are wrong |
-| `equity_curve.png` last point | **1,355,771.70** @ 2026-09-30 *(1,317,530.70 @ 2026-08-31 until the 2026-09-30 rebuild)* |
-| `drawdown.png` title | **−7.11%** (2026-07-30, against the 2026-07-22 peak of 1,262,400.35) — **unchanged by the August and September rebuilds**. September's worst is about −5.3% on the chart (committed August rows are restated values) and −5.80% on the published basis |
-| `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** · Aug **+5.68%** · Sep **+2.90%** (no flow in September, so the TWR and actual-NAV figures agree) |
+| `equity_curve.png` last point | **1,262,159.89** @ 2026-10-30 *(1,355,771.70 @ 2026-09-30 until the 2026-10-30 rebuild; 1,317,530.70 @ 2026-08-31 until the 2026-09-30 rebuild)* |
+| `drawdown.png` title | **−10.71%** (2026-10-30, against the 2026-10-07 peak of 1,413,483.89; both are published values, so the chart and the daily logs agree). *(It read **−7.11%** — 2026-07-30, against the 2026-07-22 peak of 1,262,400.35 — from the July rebuild until the 2026-10-30 rebuild, unchanged by the August and September rebuilds. September's worst is about −5.3% on the chart, because committed August rows are restated values, and −5.80% on the published basis.)* |
+| `monthly_returns.png` | May **+0.33%** · Jun **+1.44%** · Jul **+9.53%** · Aug **+5.68%** · Sep **+2.90%** · Oct **−6.90%** (no flow in September or October, so the TWR and actual-NAV figures agree for both) |
 | **August bar is the TWR figure** | **+5.68%**, NOT the reported +7.40% and NOT the ex-injection +5.77%. Feeding `nav_actual.csv` instead reproduces the documented failure mode — **Jun +11.62%** and Aug +7.40% |
 | June bar vs the June review | must read **+1.44%**, not +11.62% |
 | `pnl_realized_unrealized.png` *(the 2026-10-30 PNG, through 10-30)* | realized **−88,456.67** · unrealized **+232,227.03** · commission **−3,936.97** THB; the realized line is **flat except at 2026-06-02, 2026-07-01, 2026-08-03 and 2026-10-01** — **four** steps. *(The 2026-10-29 PNG read the same realized and commission with unrealized +264,919.03 at 120 points; the 2026-10-28 PNG read the same realized and commission with unrealized +310,400.03 at 119 points; the 2026-10-27 PNG read the same realized and commission with unrealized +293,787.03 at 118 points; the 2026-10-26 PNG read the same realized and commission with unrealized +293,003.03 at 117 points; the 2026-10-22 PNG read the same realized and commission with unrealized +294,101.03 at 116 points; the 2026-10-21 PNG read the same realized and commission with unrealized +301,696.03 at 115 points; the 2026-10-20 PNG read the same realized and commission with unrealized +294,904.03 at 114 points; the 2026-10-19 PNG read the same realized and commission with unrealized +309,815.03 at 113 points; the 2026-10-15 PNG read the same realized and commission with unrealized +330,143.03 at 112 points; the 2026-10-14 PNG read the same realized and commission with unrealized +372,572.03 at 111 points; the 2026-10-12 PNG read the same realized and commission with unrealized +354,949.03 at 110 points; the 2026-10-09 PNG +376,567.03 at 109; the 2026-10-08 PNG +352,021.03 at 108; the 2026-10-07 PNG +383,551.03 at 107; the 2026-10-06 PNG +377,303.03 at 106; the 2026-10-05 PNG +338,709.03 at 105; the 2026-10-02 PNG +335,559.03 at 104; the 2026-10-01 PNG +322,278.03 at 103.)* *(The 2026-08-31 PNG read:* realized **−49,091.38** · unrealized **+248,232.35** · commission **−3,735.16** THB; the realized line is **flat except at 2026-06-02, 2026-07-01 and 2026-08-03** — **three** steps.) *(The superseded 2026-08-28 render showed −49,091.38 / +239,078.35 at 79 points; the 2026-08-27 one showed −49,091.38 / +245,069.35 at 78 points; the 2026-08-26 one showed −49,091.38 / +232,605.35 at 77 points; the 2026-08-25 one showed −49,091.38 / +197,671.35 at 76 points; the 2026-08-24 one showed −49,091.38 / +210,441.35 at 75 points; the 2026-08-21 one showed −49,091.38 / +249,619.35 at 74 points; the 2026-08-20 one showed −49,091.38 / +222,599.35 at 73 points; the 2026-08-19 one showed −49,091.38 / +257,693.35 at 72 points; the 2026-08-18 one showed −49,091.38 / +260,527.35 at 71 points; the 2026-08-17 one showed −49,091.38 / +231,713.35 at 70 points; the 2026-08-14 one −49,091.38 / +183,951.35 at 69 points; the 2026-08-12 one −49,091.38 / +129,844.35 at 67 points; the 2026-08-01 one −19,315.93 / +147,665.89 / −3,052.51 and only two steps.)* |
@@ -249,6 +251,25 @@ restatement has rewritten `equity_curve` rows inside the month being appended, *
 | `commission_cum` | rises **only on the 7 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, 08-03, **10-01**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
+
+**OCTOBER MONTH-END REGENERATION — 2026-10-30.** `nav_actual.csv` and `nav_twr.csv` extended **102 → 121
+rows** (19 October sessions); the three NAV PNGs regenerated by the two-run recipe (TWR run to a scratch
+directory, only `monthly_returns.png` copied back); `pnl_realized_unrealized.png` unchanged from that day's
+daily-log render (7f77ebda…). **Regression, run before committing:** the first 103 lines (header + 102 rows)
+of both CSVs are **byte-identical** to the committed files (`cmp`). The bars read **May +0.33% · Jun +1.44% ·
+Jul +9.53% · Aug +5.68% · Sep +2.90% · Oct −6.90%**, the five prior bars unchanged; the equity curve ends at
+**1,262,159.89**; the drawdown title reads **−10.71%**, the first change to it since the July rebuild. Checked
+against the rendered images. New hashes: `drawdown` **7df00897…**, `equity_curve` **5ab54261…**,
+`monthly_returns` **89088737…** (were 02a92127…, 7b1c0816…, a661bb50…).
+
+**Where the October rows came from.** They are the **published** daily-log NAVs, which equal
+`equity_curve` on all 19 sessions. They also equal `db_gateway.daily_performance` on every session but
+**2026-10-01**: `daily_performance` holds the **pre-trade** mark there (1,354,596.70), while the log and
+`equity_curve` hold the post-trade **1,352,210.89**, a 2,385.81 difference (the rotation's slippage marked
+to the close, plus fees). September's rule — take `daily_performance` when `equity_curve` has been restated —
+did not apply: no October `equity_curve` row was restated. The TWR rows are the same values × `k₁ × k₂`
+(0.9087563918 × 0.9839712855), **neither factor re-derived**; October has no capital flow. **Control:** the
+factor reproduces the committed 2026-09-30 TWR row, **1,212,317.76**, exactly.
 
 **`pnl.csv` extended through 2026-10-30** on 2026-10-30, appending the **2026-10-30** row — one row,
 the eighteenth and last session of the rotated October book. `realized_cum` and `commission_cum` are
