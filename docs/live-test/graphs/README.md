@@ -148,8 +148,27 @@ in the report tables instead.
 
 ### Reconciliation residual — known, constant, unexplained
 
-`realized_cum + unrealized` overstates `NAV − capital base` by a **constant 1,610.27 THB** (0.13% of
-NAV) from the 2026-08-03 rotation onward, and by **1,609.61** between 2026-05-29 and 2026-07-31:
+`realized_cum + unrealized` overstates `NAV − capital base` by an amount that is constant between
+fills: **1,610.47 THB** (0.13% of NAV) since the 2026-10-01 rotation.
+
+↻ **CORRECTED 2026-10-31.** This paragraph said *"a constant 1,610.27 THB from the 2026-08-03 rotation
+onward, and 1,609.61 between 2026-05-29 and 2026-07-31"*, and the next one said that before then the
+residual was *"larger and moving"*. Both were wrong. Measured on 2026-10-31 over every `pnl.csv` row
+(the published NAV where the daily log states one, which it does from 2026-05-20; `daily_performance`
+before that), the eras are:
+
+| Era | Residual (THB) |
+|---|---:|
+| 2026-05-05 → 2026-05-29 | 1,613.86 |
+| 2026-06-02 | 1,609.85 |
+| 2026-06-04 | 1,609.81 |
+| 2026-06-05 → 2026-06-30 | 1,609.36 |
+| 2026-07-01 → 2026-07-31 | 1,609.61 |
+| 2026-08-03 → 2026-09-30 | 1,610.27 |
+| 2026-10-01 → 2026-10-30 | 1,610.47 |
+
+Every step falls on one of the seven fill dates in the commission ledger, and none exceeds 4.01 THB.
+The two worked examples below are from the 1,610.27 and 1,609.61 eras:
 
 ```
 2026-08-11   total P/L   +80,752.97
@@ -162,8 +181,8 @@ NAV) from the 2026-08-03 rotation onward, and by **1,609.61** between 2026-05-29
 ```
 
 It is stable to the cent across every session within each era, so it is a **fixed historical
-amount** originating in the 2026-05-05 entry (before then it is larger and moving, because capital
-was still being deployed).
+amount** originating in the 2026-05-05 entry. In May, before any later fill, it equals the entry
+shortfall exactly (1,613.86, below).
 
 **The +0.66 step at 2026-08-03 is expected, and is not a missed realisation.** It is the 4-decimal
 `avg_cost` convention applied to the two entrants: SMT + MGC cost **217,124.14** all-in but are
@@ -247,7 +266,7 @@ restatement has rewritten `equity_curve` rows inside the month being appended, *
 | `pnl.csv` last row *(the CSV and the P/L PNG are in sync — see the header)* | 2026-10-30: realized **−88,456.67** · unrealized **+232,227.03** · total **+143,770.36** · commission **3,936.97** THB; **121 rows**, matching `equity_curve`'s 121 **in row count only** *(↻ this row read 2026-08-31 / 80 rows until 2026-10-02: the September daily runs extended the CSV without updating it; it is updated with each session's History entry since)* — the values diverge historically after the KCE, INSET, MGC *and* FORTH restatements (see the header caveat) |
 | The August regeneration *(**done** 2026-08-12, **superseded** by the 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-28 and then the 2026-08-31 render)* | ✅ satisfied — the current PNG title reads `realized -49,091 · unrealized +248,232 · commission −3,735 THB`, the series ends 2026-08-31 at 80 points, and the realized line steps **three** times. Verified by eye against the rendered image, not only from the generator's stdout |
 | Only ONE PNG may change on a P/L regeneration | ✅ `gen_pnl_chart.py:118` writes `pnl_realized_unrealized.png` and nothing else. Checksum the four PNGs before and after: the three NAV charts must be **byte-identical** and keep their 2026-08-01 mtimes. Verified 2026-08-14, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-28 and 2026-08-31 — only the P/L PNG's hash moved on all twelve |
-| P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.47** from 2026-10-01 (**1,610.27** for 2026-08-03 → 2026-09-30, **1,609.61** for 2026-05-29 → 2026-07-31), and constant *within* each era; the 2026-10-01 step is **+0.20**, CNT's 4-dp `avg_cost` rounding. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
+| P/L reconciliation | `realized_cum + unrealized − (NAV − capital)` = **1,610.47** from 2026-10-01 (**1,610.27** for 2026-08-03 → 2026-09-30, **1,609.61** for 2026-07-01 → 2026-07-31; every era since 2026-05-05 is listed in §Reconciliation residual, corrected 2026-10-31), and constant *within* each era; the 2026-10-01 step is **+0.20**, CNT's 4-dp `avg_cost` rounding. A *drifting* residual means a realisation was missed; the one-time **+0.66** step at the rotation is 4-dp `avg_cost` rounding — see above |
 | `commission_cum` | rises **only on the 7 fill dates** (05-05, 06-02, 06-04, 06-05, 07-01, 08-03, **10-01**); a rise on any other day means a non-trading day was credited with a fill |
 
 ## History
