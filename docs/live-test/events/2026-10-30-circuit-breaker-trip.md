@@ -40,10 +40,10 @@ The month-end evaluation applied the registered rules in order (`monthly/2026-10
 
 1. **Rank rules** (`PortfolioConstructor.select()`, six-factor, floor 0.35, buffer 0.25): **EASTW evicted** by the buffer.
 2. **EMA100, per holding:** **EASTW** (−10.36%) and **FORTH** (−5.71%) are below their own EMA100 and are sold.
-3. **Entrants**, under the 63-day ADTV ≥ 5M floor and the 35% sector cap at construction: **SPRC** and **RCL**. SSP and BBGI would have taken ENERG over 35%.
+3. **Entrants**, under the 63-day ADTV ≥ 5M floor and the 35% sector cap: **SPRC** and **SSP**. The cap is checked on the scaled book (the operator's ruling on I2, 2026-10-31). The first reading checked it before scaling, where SSP would have taken ENERG over 35% and RCL would have entered instead.
 4. **Circuit breaker TRIPPED:** the constructed book is scaled to **20% equity**. Every continuing position keeps 20% of its shares, floored to a 100-share lot. The entrants are bought at 20% of their construction size, and the exits are sold in full.
 
-At the 2026-10-30 close as indicative prices, equity falls to about **19.55% of NAV** and cash rises to about **1,013,626.89 THB**. Fees come to about **1,809.00**, and the sales realize about **+181,319.53**. **Fills will differ; the executed figures come from the broker confirmations.**
+At the 2026-10-30 close as indicative prices, equity falls to about **19.70% of NAV** and cash rises to about **1,011,648.57 THB**. Fees come to about **1,812.32**, and the sales realize about **+181,319.53**. **Fills will differ; the executed figures come from the broker confirmations.**
 
 ## Impact
 
@@ -53,12 +53,12 @@ At the 2026-10-30 close as indicative prices, equity falls to about **19.55% of 
   - The window's return, volatility and Sharpe will therefore describe a mostly-cash book. The registration's §9 power statement applies with extra force.
 - **On criterion 8 (breaker behaviour matches design): the trip path is now exercised**, on a real drawdown. Whether it "recovers per spec, no false trips" is for the window to show.
 - **On realized P/L:** the scaling realizes a large part of the unrealized gain. At indicative prices the cumulative realized P/L moves from −88,456.67 to about **+92,862.86**.
-- **On the position band and sector cap:** in safe mode every position is 0.86–2.86% of NAV, below the 5% floor. The registration binds the bands at construction on the names being traded, and every name trades in this rotation, so the floor and the breaker conflict. The plan lets the breaker govern; this is interpretation I5 in the October review, for the operator to confirm.
+- **On the position band and sector cap:** in safe mode every position is 0.86–2.86% of NAV, below the 5% floor. The registration binds the bands at construction on the names being traded, and every name trades in this rotation, so the floor and the breaker conflict. The plan lets the breaker govern; this is interpretation I5 in the October review, which the operator confirmed on 2026-10-31.
 
 ## Follow-up
 
 1. **Operator:**
-   - place the 2026-11-02 ATO orders, or say which interpretation (I1–I5 in the October review) differs;
+   - place the 2026-11-02 ATO orders. The five interpretations (I1–I5 in the October review) were answered on 2026-10-31;
    - report the fills, which update `configs/live_portfolio.yaml`.
 2. **Thread the breaker state once per session** in the daily logs (TRIPPED → RECOVERING → NORMAL needs 21 consecutive sessions above −5%). Trades happen only at month-end evaluations.
 3. **Phase C reports** (`reports/slippage-audit.md`, `reports/parameter-review.md`) fall due with this month-end. The slippage audit should measure this rotation's fills ([[TK-0571]]).
