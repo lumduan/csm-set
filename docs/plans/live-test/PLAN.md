@@ -288,7 +288,7 @@ live_test:
   - If possible, collect snapshots of actual Level 1 quotes at rebalance times via tvkit or alternative source
   - Slippage audit report saved as `docs/live-test/reports/slippage-audit.md`
 
-- [ ] **C.3 Parameter Sensitivity Re-Check**
+- [x] **C.3 Parameter Sensitivity Re-Check** — filed 2026-10-31: [`docs/live-test/reports/parameter-review.md`](../../live-test/reports/parameter-review.md) (recommendations only; no config changed)
   - Using live data from May–August, re-run the Phase 4.8 notebook's stress tests with actual (not synthetic) 2026 price paths
   - Check whether the circuit breaker thresholds, vol target, and sector caps calibrated in Phase 4.9 still hold
   - If live experience suggests a parameter change, document the recommendation but do NOT change config mid-test (preserve clean out-of-sample period)
