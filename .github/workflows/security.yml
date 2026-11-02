@@ -78,17 +78,13 @@ jobs:
           exit 1
 
       - name: Run pip-audit
-        # diskcache 5.6.3 — CVE-2025-69872, which pip-audit also reports as PYSEC-2026-2447 (one advisory, two ids).
-        # No upstream fix exists (5.6.3 is the latest release). csm-set never imports diskcache; it arrives only
-        # through settfex (the SET holiday calendar source, src/csm/data/calendar.py), and settfex 0.15.0 — the
-        # version this lock pins — imports it in exactly one file, settfex/utils/session_cache.py: a cookie cache
-        # at ~/.settfex/cache, keyed by settfex itself. So the attack surface is negligible. Verified against this
-        # repo's own locked settfex on 2026-09-25, not copied; the same decision quant-marketdata-engine and
-        # cash-and-carry-set-tfex document. Both ids are kept so either alias stays covered. Revisit when
-        # diskcache ships a fix.
+        # No ignores. Until 2026-11-02 this step carried --ignore-vuln flags for the diskcache 5.6.3 advisory
+        # (both ids, added 0a8fb05 on 2026-09-25, with no deadline). diskcache reached this lock only through
+        # settfex 0.15.0; settfex 0.15.1 replaced it with stdlib sqlite3, the lock bump removed diskcache, and the
+        # flags went with it. A finding here is new: read the printed list.
         id: audit
         env:
-          AUDIT: uv run --with pip-audit pip-audit --ignore-vuln CVE-2025-69872 --ignore-vuln PYSEC-2026-2447
+          AUDIT: uv run --with pip-audit pip-audit
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
           SIMULATE_UNREACHABLE: ${{ inputs.simulate_unreachable_index }}
           UV_NO_SYNC: "1"
