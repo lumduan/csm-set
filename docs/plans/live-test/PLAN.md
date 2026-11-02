@@ -282,7 +282,7 @@ live_test:
   - Document model behavior: did the strategy react appropriately or reveal a blind spot?
   - Event analysis saved as `docs/live-test/events/<date>-<event-name>.md`
 
-- [ ] **C.2 Slippage Audit**
+- [x] **C.2 Slippage Audit** — filed 2026-11-02: [`docs/live-test/reports/slippage-audit.md`](../../live-test/reports/slippage-audit.md) (one operator question open: how the orders were placed)
   - Compare `ExecutionSimulator` estimated slippage against actual SET bid-ask spread data for the stocks the strategy traded
   - If the sqrt-impact model consistently under- or over-estimates, document the calibration gap
   - If possible, collect snapshots of actual Level 1 quotes at rebalance times via tvkit or alternative source
