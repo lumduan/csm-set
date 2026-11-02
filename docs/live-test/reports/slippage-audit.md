@@ -23,7 +23,7 @@ Ticket: [[TK-0571]].
 4. 🔴 **Most recorded fills do not match the opening auction.**
    - The reported price equals that day's open in **7 of 28** fills and that day's close in **9 of 28**. All 28 sit inside the day's high–low range.
    - On 2026-11-02 only **1 of 12** equals the open, and the fills beat the open by **+18,681.00 THB** in total.
-   - Where the captured trade tape is at least 99.98% complete (2026-10-01), CNT's 18,200-share buy does not appear in the opening auction (500 + 100 shares printed), and only 3,000 shares traded at 3.34 all day.
+   - Where the captured trade tape is at least 99.98% complete (2026-10-01), CNT's 18,200-share buy does not appear in the opening auction (500 shares printed at its single price of 3.36, then 100 at 3.38 captured in the same millisecond), and only 3,000 shares traded at 3.34 all day.
 5. **Twenty-eight fills cannot calibrate `impact_coef`.** Participation never exceeded 2.40% of 63-day ADTV, so the impact term was never larger than 1.55 bps. The half-spread can be set from the quotes now (§7).
 
 ---
