@@ -160,37 +160,83 @@ strategy_id: csm-set
 #   [entry_date, today] and UPSERTs every row, so leaving entry_date at
 #   2026-08-03 would overwrite the 08-03..09-30 equity rows with a fictional
 #   CNT-instead-of-MGC mark.
-entry_date: "2026-10-01"
+# 2026-11-02: November rebalance — 2-out / 2-in, then the whole book scaled to
+# 20% equity by the design circuit breaker, executed at ATO.  The first rotation
+# under the forward scoring pre-registration (docs/live-test/reports/
+# 2026-10-27-forward-scoring-pre-registration.md); the 2026-10-30 close is NAV0.
+# Plan: docs/live-test/monthly/2026-10.md §Rebalance, as revised by the
+# operator's 2026-10-31 rulings (ac4cb82).
+#   Rules (registered): select() evicted EASTW (buffer); the per-holding EMA100
+#     exit sold EASTW (−10.36%) and FORTH (−5.71%); entrants SPRC (#3) and SSP
+#     (#5), 63-day ADTV ≥ 5M.  The design breaker returned TRIPPED at the
+#     2026-10-30 close (60-session rolling drawdown −10.7057%), so every
+#     position keeps about 20% of its constructed size.
+#   Operator rulings 2026-10-31 (I1–I5): I1 entrants bought at 20% of their
+#     construction size; I2 the 35% sector cap checked on the SCALED book, so
+#     SSP enters instead of RCL; I3 shares floored to the 100-share lot; I4 the
+#     breaker state advances every trading session; I5 the breaker governs the
+#     5–15% position band (every position ends below 5%).
+#   SELLS (operator-reported fill prices; fees @0.16799%; realized vs the
+#   4-dp avg_cost of the shares sold):
+#     EASTW  24,000 @  4.20 → gross 100,800.00 − 169.33 = net 100,630.67; realized  −1,782.13 (all sold)
+#     FORTH   5,300 @ 13.20 → gross  69,960.00 − 117.53 = net  69,842.47; realized −15,630.63 (all sold)
+#     INSET  33,600 @  4.42 → gross 148,512.00 − 249.49 = net 148,262.51; realized +44,613.23 (keep 8,400)
+#     KCE     2,100 @ 72.00 → gross 151,200.00 − 254.00 = net 150,946.00; realized +68,908.45 (keep 500)
+#     SMT    16,400 @  7.40 → gross 121,360.00 − 203.87 = net 121,156.13; realized +25,877.05 (keep 4,000)
+#     IRPC   45,300 @  2.62 → gross 118,686.00 − 199.38 = net 118,486.62; realized +14,129.01 (keep 11,300)
+#     GUNKUL 24,700 @  4.56 → gross 112,632.00 − 189.21 = net 112,442.79; realized +40,205.17 (keep 6,100)
+#     HANA    2,400 @ 46.00 → gross 110,400.00 − 185.46 = net 110,214.54; realized +24,277.74 (keep 600)
+#     EPG    13,900 @  6.10 → gross  84,790.00 − 142.44 = net  84,647.56; realized  +2,499.95 (keep 3,400)
+#     CNT    14,600 @  3.00 → gross  43,800.00 −  73.58 = net  43,726.42; realized  −5,119.34 (keep 3,600)
+#   BUYS:
+#     SPRC 1,200 @ 13.80 → gross 16,560.00 + 27.82 = all-in 16,587.82; avg_cost 13.8232 (4-dp)
+#     SSP  2,200 @  7.70 → gross 16,940.00 + 28.46 = all-in 16,968.46; avg_cost  7.7129 (4-dp)
+#   Every order filled in full (D3: one ATO order per side; nothing left over).
+#   Realized this rotation: +197,978.50; cumulative realized −88,456.67 →
+#     +109,521.83.  Fees: 1,840.57 (sells 1,784.29, buys 56.28); cumulative
+#     commission 3,936.97 → 5,777.54.  Kept names keep their 4-dp avg_cost.
+#   Cash: 1,377.89 + 1,060,355.71 net sells − 33,556.28 all-in buys =
+#     1,028,177.32.  No capital injection — starting_nav unchanged at
+#     1,120,000.
+#   Fills recorded BEFORE the 2026-11-02 18:00 refresh (operator report
+#     received 14:19 BKK), so that day's db_gateway.daily_performance row
+#     prices the new book — unlike 2026-08-03 and 2026-10-01.
+#   entry_date reset to 2026-11-02 because book composition and cash changed:
+#   the equity reconstruction reprices the *current* book back over
+#   [entry_date, today] and UPSERTs every row, so leaving entry_date at
+#   2026-10-01 would overwrite the 10-01..10-30 equity rows with a fictional
+#   scaled-book mark.
+entry_date: "2026-11-02"
 starting_nav: 1120000.0
-cash: 1377.89
+cash: 1028177.32
 positions:
   - symbol: IRPC
-    shares: 56600
+    shares: 11300
     avg_cost: 2.3037
   - symbol: HANA
-    shares: 3000
+    shares: 600
     avg_cost: 35.8070
   - symbol: GUNKUL
-    shares: 30800
+    shares: 6100
     avg_cost: 2.9246
   - symbol: INSET
-    shares: 42000
+    shares: 8400
     avg_cost: 3.0848
   - symbol: KCE
-    shares: 2600
+    shares: 500
     avg_cost: 39.0655
-  - symbol: EASTW
-    shares: 24000
-    avg_cost: 4.2672
   - symbol: EPG
-    shares: 17300
+    shares: 3400
     avg_cost: 5.9099
-  - symbol: FORTH
-    shares: 5300
-    avg_cost: 16.1270
   - symbol: SMT
-    shares: 20400
+    shares: 4000
     avg_cost: 5.8097
   - symbol: CNT
-    shares: 18200
+    shares: 3600
     avg_cost: 3.3456
+  - symbol: SPRC
+    shares: 1200
+    avg_cost: 13.8232
+  - symbol: SSP
+    shares: 2200
+    avg_cost: 7.7129
