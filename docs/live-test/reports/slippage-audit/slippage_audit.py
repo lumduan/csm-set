@@ -121,6 +121,22 @@ res["by_rotation"] = {
 res["all"] = summarise(rows)
 
 # ---- 2. the captured tape: opening auction and what traded at the reported price
+
+
+def read_tape(f: pathlib.Path) -> tuple[pd.DataFrame, int]:
+    """Trades, one row per exchange sequence number.
+
+    After the close Streaming Pro re-delivers recent trades with the SAME sequence number and a
+    new arrival time, and the compacted store keeps those rows. Summing them inflates volume
+    (KCE 2026-11-02: 99 replayed rows, 602% of the vendor's volume before dropping them).
+    """
+    raw = pd.read_parquet(f, columns=["t_ingest_ns", "price", "volume", "sequence"])
+    mt = raw.sort_values(["sequence", "t_ingest_ns"]).drop_duplicates("sequence")
+    mt = mt.reset_index(drop=True)
+    mt["p"] = mt.price.astype(str).map(D)
+    return mt, len(raw) - len(mt)
+
+
 tape = {}
 for day, sym, side, n, fill in (
     ("2026-08-03", "DELTA", "SELL", 300, "272.00"),
@@ -128,9 +144,7 @@ for day, sym, side, n, fill in (
     ("2026-10-01", "CNT", "BUY", 18200, "3.34"),
 ):
     f = COLD / f"date={day}/class=equity/series={sym}/SP_MarketTickerV1.parquet"
-    mt = pd.read_parquet(f, columns=["t_ingest_ns", "price", "volume", "sequence"])
-    mt = mt.sort_values("sequence")
-    mt["p"] = mt.price.astype(str).map(D)
+    mt, replayed = read_tape(f)
     first = mt.iloc[0]
     open_vol = int(mt[(mt.t_ingest_ns == first.t_ingest_ns) & (mt.p == first.p)].volume.sum())
     b = bar(sym, day)
@@ -139,6 +153,7 @@ for day, sym, side, n, fill in (
         "shares": n,
         "reported": float(fill),
         "tape_rows": len(mt),
+        "replayed_rows_dropped": replayed,
         "tape_volume": int(mt.volume.sum()),
         "vendor_volume": int(b.volume),
         "tape_share_of_vendor": round(mt.volume.sum() / b.volume * 100, 2),
@@ -151,6 +166,35 @@ for day, sym, side, n, fill in (
         "vendor_close": float(b.close),
     }
 res["tape"] = tape
+
+# ---- 2b. the 2026-11-02 rotation against its own tape (compacted overnight, read 2026-11-03)
+nov = {}
+for day, side, sym, n, fill, _dec, _close in fills:
+    if day != "2026-11-02":
+        continue
+    f = COLD / f"date={day}/class=equity/series={sym}/SP_MarketTickerV1.parquet"
+    mt, replayed = read_tape(f)
+    first = mt.iloc[0]
+    b = bar(sym, day)
+    at = int(mt[mt.p == D(fill)].volume.sum())
+    nov[sym] = {
+        "side": side,
+        "shares": n,
+        "reported": float(fill),
+        "replayed_rows_dropped": replayed,
+        "tape_share_of_vendor": round(mt.volume.sum() / b.volume * 100, 2),
+        "opening_print": float(first.p),
+        "opening_print_volume": int(
+            mt[(mt.t_ingest_ns == first.t_ingest_ns) & (mt.p == first.p)].volume.sum()
+        ),
+        "closing_print": float(mt.iloc[-1].p),
+        "vendor_open": float(b.open),
+        "vendor_close": float(b.close),
+        "volume_at_reported": at,
+        "ours_share_of_volume_at_reported": round(n / at * 100, 1) if at else None,
+        "ours_share_of_day": round(n / b.volume * 100, 2),
+    }
+res["tape_2026_11_02"] = nov
 
 # ---- 3. quoted spreads from the captured depth (continuous phases 2 and 4, uncrossed)
 spreads = {}

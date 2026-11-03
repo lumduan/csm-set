@@ -7,7 +7,7 @@
 - collect Level 1 quotes at rebalance times if possible.
 
 Ticket: [[TK-0571]].
-**Status:** 🟡 **FILED, with one question for the operator (§5): how were the orders placed?** Most recorded fills do not match the opening-auction price that the registered fill rule names. Nothing in the configuration or the code was changed.
+**Status:** 🟢 **FILED 2026-11-02; its question was answered on 2026-11-03.** The orders were **limit orders**, and the broker's summary statements match the recorded prices (operator, §5). The books stand. The registered fill rule says ATO, and how to treat that is the operator's decision, recorded in [the event report](../events/2026-11-03-rotation-orders-placed-as-limit-orders.md). Nothing in the configuration or the code was changed.
 **Reproduce:** [`slippage-audit/`](slippage-audit/) holds the fill dataset (`fills.json`, every row transcribed from its rotation day's published log), the two scripts and `results.json`. Every number below is taken from `results.json` (§8).
 
 ---
@@ -20,7 +20,7 @@ Ticket: [[TK-0571]].
    - SMT on 2026-08-03 cost +2,133.9 bps: the stock opened 4.8 against a 4.78 close and was bought at 5.80.
    - Without that fill, the other 25 fills with a decision price *gained* 3,999.00 THB (−17.7 bps).
    - The median fill costs **0.0 bps** against each of the three references.
-4. 🔴 **Most recorded fills do not match the opening auction.**
+4. **Most recorded fills do not match the opening auction, because the orders were limit orders, not ATO** (operator, 2026-11-03; §5). The broker's summary statements match the recorded prices.
    - The reported price equals that day's open in **7 of 28** fills and that day's close in **9 of 28**. All 28 sit inside the day's high–low range.
    - On 2026-11-02 only **1 of 12** equals the open, and the fills beat the open by **+18,681.00 THB** in total.
    - Where the captured trade tape is at least 99.98% complete (2026-10-01), CNT's 18,200-share buy does not appear in the opening auction (500 shares printed at its single price of 3.36, then 100 at 3.38 captured in the same millisecond), and only 3,000 shares traded at 3.34 all day.
@@ -34,7 +34,7 @@ Ticket: [[TK-0571]].
 |---|---|---|
 | Rotation-day daily logs | every fill's side, shares and reported price; the decision price (the prior evaluation close) and the day's close, as published | 28 fills, 2026-06-02 → 2026-11-02. The 2026-05-05 entry is excluded because its log records commission-inclusive averages, not execution prices. The two MCOT tranches (2026-06-04, 06-05) have no decision price: they were deferred fills of a 2026-05-29 decision |
 | tvkit daily bars | each fill day's open, high, low, close and volume; 63-day ADTV before the trade | every fill. The published closes equal the vendor's on all 28 |
-| Order-book capture (`quant-orderbook-engine`, compacted store, read-only) | quotes (`SP_DepthV1`) and trades (`SP_MarketTickerV1`) | depth for KCE, IRPC, GUNKUL, HANA and SPRC on 2026-10-30 and DELTA on 2026-08-03; trades for DELTA (2026-08-03), MGC and CNT (2026-10-01). **The 2026-11-02 data is compacted overnight**, so today's auction prints are a follow-up (§6) |
+| Order-book capture (`quant-orderbook-engine`, compacted store, read-only) | quotes (`SP_DepthV1`) and trades (`SP_MarketTickerV1`) | depth for KCE, IRPC, GUNKUL, HANA and SPRC on 2026-10-30 and DELTA on 2026-08-03; trades for DELTA (2026-08-03), MGC and CNT (2026-10-01); and for all 12 fills of 2026-11-02, compacted overnight and read on 2026-11-03 (§5a) |
 
 **Three reference prices, each answering a different question.** Every figure below is signed so that **positive = a cost to the book**.
 
@@ -163,7 +163,7 @@ The registered fill rule is **one ATO order per side** (registration §4, D3). A
 
 - **CNT:** the opening auction printed 500 shares, so an 18,200-share ATO buy is not in it. All day, only 3,000 shares traded at 3.34. The recorded 3.34 is therefore not a single execution price for 18,200 shares. It may be an average of several executions.
 - **MGC and DELTA:** an ATO sell would have filled at the open (6.40 and 279.00). The recorded prices are the closes.
-- **On 2026-11-02**, 11 of 12 recorded prices differ from the open, and 6 equal the close. Today's tape is compacted overnight (§6).
+- **On 2026-11-02**, 11 of 12 recorded prices differ from the open, and 6 equal the close. That day's tape is checked in §5a.
 
 🔴 **The question: how were the orders placed?** (ATO, ATC, or limit orders during the session; and do the broker confirmations show the same prices?)
 
@@ -174,13 +174,45 @@ The registered fill rule is **one ATO order per side** (registration §4, D3). A
   - whether execution followed the registered fill rule. Registration §6 #7 counts trades the rules do not produce, not execution timing. How a fill-rule difference is treated is the operator's call.
 - **Until it is answered, the books keep the reported prices.**
 
+### ➡️ Answered 2026-11-03: limit orders, and the broker's statements match
+
+The operator, on 2026-11-03: the orders were placed as **limit orders**, and the securities company's summary statements match the recorded prices. The answer covers the 28 audited fills; the 2026-05-05 entry is outside the audit (§6).
+
+- **The recorded prices are the executed prices.** The realized P/L, the published NAV series and `configs/live_portfolio.yaml` stand as published.
+- **For a limit order the reference is the decision price.** The vs-decision column (§4) is the implementation shortfall: **+16,809.00 THB, +70.6 bps over 26 fills**. The vs-open column is what an ATO order would have received had it filled in full at the opening price, so it measures limit execution against the registered rule, approximately: an auction may not absorb the order (CNT's auction on 2026-10-01 printed 500 shares). An arrival-price reference would need each order's entry time, which is not recorded (§7, recommendation 5).
+- **SMT on 2026-08-03.** A limit buy fills at its limit or better. SMT traded at 4.80 at the open (low 4.80, high 5.85), so the fill at 5.80 executed when the market had reached about 5.80. That is consistent with the order being entered or repriced later in the session; the entry time is not recorded. Its +20,808.00 THB against the decision price is an execution-timing cost, not an auction gap. [[TK-0278]] carried the auction reading and is corrected.
+- 🔴 **Execution did not follow the registered fill rule.** Registration §4 and operator decision D3 (2026-09-30) read *"one ATO order per side; take what fills; no follow-up"*. The first scored rotation, 2026-11-02, was placed with limit orders. How to treat this is the operator's decision: [events/2026-11-03-rotation-orders-placed-as-limit-orders.md](../events/2026-11-03-rotation-orders-placed-as-limit-orders.md).
+
+### 5a. Addendum 2026-11-03: the 2026-11-02 rotation against its own tape
+
+The store compacted 2026-11-02 overnight. All 12 fills (`results.json` → `tape_2026_11_02`):
+
+| Fill | Tape vs vendor volume | Opening print | Traded at the recorded price, whole day | Our shares as % of that |
+|---|---:|---|---:|---:|
+| SELL EASTW 24,000 @ 4.20 | 99.99% | 4.16 × 71,000 | 231,800 | 10.4% |
+| SELL FORTH 5,300 @ 13.20 | 99.97% | 13.30 × 5,400 | 503,300 | 1.1% |
+| SELL INSET 33,600 @ 4.42 | 100.00% | 4.28 × 155,700 | 2,667,700 | 1.3% |
+| SELL KCE 2,100 @ 72.00 | 93.02% | 68.75 × 282,200 | 2,559,100 | 0.1% |
+| SELL SMT 16,400 @ 7.40 | 100.00% | 7.25 × 559,900 | 5,661,800 | 0.3% |
+| SELL IRPC 45,300 @ 2.62 | 100.00% | 2.56 × 1,678,200 | 15,813,600 | 0.3% |
+| SELL GUNKUL 24,700 @ 4.56 | 97.10% | 4.62 × 1,293,100 | 27,777,400 | 0.1% |
+| SELL HANA 2,400 @ 46.00 | 97.60% | 45.00 × 777,900 | 8,338,500 | 0.0% |
+| SELL EPG 13,900 @ 6.10 | 100.00% | 6.10 × 261,800 | 3,084,500 | 0.5% |
+| SELL CNT 14,600 @ 3.00 | 100.00% | 2.94 × 68,000 | 209,600 | 7.0% |
+| BUY SPRC 1,200 @ 13.80 | 100.00% | 13.50 × 490,500 | 9,496,700 | 0.0% |
+| BUY SSP 2,200 @ 7.70 | 99.99% | 7.75 × 25,900 | 766,300 | 0.3% |
+
+- In all 12, the tape's first print equals the vendor's open and its last print the vendor's close.
+- **Every recorded price traded at least 209,600 shares that day**, and our order was at most 10.4% of the volume at its price (EASTW). This agrees with the broker's statements; it is not separate proof of any one execution.
+- **KCE's tape held 99 rows replayed after the close** with sequence numbers already seen. Kept, they put the tape at 602% of the vendor's volume; dropped, at 93.02%. The script now keeps one row per sequence for every tape. The three tapes checked in §5 had no replayed rows, and their figures are unchanged.
+
 ---
 
 ## 6. What this audit cannot show
 
 - **Twenty-eight fills, seven rotations.** Participation never exceeded 2.40%, so the impact term was never tested. Most of the per-fill dispersion is the day's price movement.
 - **Quotes for only six of the traded names.** The depth capture held 99 SET equity series on 2026-10-01 and 2026-10-30; the other traded names have trades in the capture but no quotes, and their spreads are not measured here.
-- **The 2026-11-02 tape is not yet compacted.** Its opening-auction prints, and the volume traded at each reported price, will be added once the store has them (from 2026-11-03) — in the next daily log, and here as an addendum.
+- **Order entry times and limit prices are not recorded.** The operator confirmed the order type and that the prices match the broker's statements (§5). Without entry times there is no arrival-price reference. (This bullet said, on 2026-11-02, that the 2026-11-02 tape was not yet compacted; it is checked in §5a.)
 - **The 2026-05-05 entry is not covered**: its log records commission-inclusive averages, not execution prices.
 - **There is still no fill series outside the daily logs** ([[TK-0565]]): `trade_history` holds no rows, so this audit was built by transcription, and the checker re-reads every row from its log.
 
@@ -189,10 +221,10 @@ The registered fill rule is **one ATO order per side** (registration §4, D3). A
 ## 7. Calibration findings and recommendations (none applied)
 
 1. **`half_spread_bps`: replace the flat 10 bps with half a tick at the trade price** (one tick wide 93–100% of the time on every measured name), floored by a measured median where depth exists. For the names measured that is 18.2–38.0 bps.
-2. **Separate auction executions from continuous ones.** At an opening auction the half-spread does not apply; the cost to model is the auction price against the decision price, an overnight-gap risk.
+2. **Model the order type the book actually uses.** The live test's orders are limit orders in the session (§5), so the continuous-session half-spread applies whenever a limit is marketable. An opening-auction model, where the half-spread does not apply and the cost is the auction price against the decision price, applies only if the fill rule is ATO. The operator's decision on the fill rule decides which ([event report](../events/2026-11-03-rotation-orders-placed-as-limit-orders.md)).
 3. **`impact_coef`: not calibrated, deliberately.** Twenty-eight fills with participation under 2.40% cannot estimate it ([[TK-0571]]: *"do not fit the model to twelve points and call it calibrated"*).
 4. **Wire the configuration through** ([[TK-0569]]): until `ExecutionSimulator` passes `ExecutionConfig.slippage_model` to the model, any calibration above changes nothing.
-5. **Record fills where code can read them** ([[TK-0565]]), with the order type and time from the broker confirmation, so that the reference-price question of §5 is answered by the record.
+5. **Record fills where code can read them** ([[TK-0565]]), with the order type, the limit price and the entry time from the broker confirmation, so that an arrival-price reference exists and the order type is in the record rather than in a question.
 6. **No change inside the scored window.** `PLAN.md:294` and the registration both require it.
 
 ---
@@ -201,7 +233,9 @@ The registered fill rule is **one ATO order per side** (registration §4, D3). A
 
 Run from a directory with no `.env`, with `CSM_PUBLIC_MODE=true CSM_OHLCV_SOURCE=parquet CSM_DB_WRITE_ENABLED=false`:
 
-    uv run --project <repo> python docs/live-test/reports/slippage-audit/fetch_ohlc.py       # tvkit daily OHLCV → ohlc_tvkit.csv (gitignored)
-    uv run --project <repo> python docs/live-test/reports/slippage-audit/slippage_audit.py   # → results.json
+    uv run --project <repo> python <repo>/docs/live-test/reports/slippage-audit/fetch_ohlc.py       # tvkit daily OHLCV → ohlc_tvkit.csv (gitignored)
+    uv run --project <repo> python <repo>/docs/live-test/reports/slippage-audit/slippage_audit.py   # → results.json
+
+The script paths are absolute because the working directory must not be the repository root, which may hold a `.env`.
 
 `slippage_audit.py` reads `fills.json`, `ohlc_tvkit.csv` and the order-book capture's compacted store (`COLD_SP` overrides its path), and writes `results.json`. Every table above is taken from that file.
