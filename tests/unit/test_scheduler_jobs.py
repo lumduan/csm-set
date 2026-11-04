@@ -972,6 +972,70 @@ class TestRefreshBound:
         assert time.monotonic() - started < 2
         assert "Scheduled daily_refresh failed" in caplog.text
 
+    async def test_a_symbol_that_never_returns_still_gives_a_completed_refresh(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The 2026-11-04 case end to end: the real tvkit loader, and one universe
+        symbol that never returns. The refresh must complete within the per-symbol
+        bound and write a receipt that counts that symbol as failed."""
+        from csm.data.loader import OHLCVLoader
+
+        class _OneHangsOHLCV:
+            def __init__(self, **_kwargs: object) -> None:
+                return None
+
+            async def __aenter__(self) -> _OneHangsOHLCV:
+                return self
+
+            async def __aexit__(self, *_exc: object) -> None:
+                return None
+
+            async def get_historical_ohlcv(
+                self, symbol: str, interval: str, bars_count: int, adjustment: object = None
+            ) -> list[SimpleNamespace]:
+                if symbol == "B":
+                    await asyncio.Event().wait()
+                return [
+                    SimpleNamespace(
+                        timestamp=1_704_067_200 + day * 86_400,
+                        open=10.0,
+                        high=11.0,
+                        low=9.0,
+                        close=10.5,
+                        volume=1_000.0,
+                    )
+                    for day in range(5)
+                ]
+
+        monkeypatch.setattr("csm.data.loader.OHLCV", _OneHangsOHLCV)
+        monkeypatch.setattr("csm.data.loader.SYMBOL_FETCH_TIMEOUT_SECS", 0.2)
+        started = time.monotonic()
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+            patch("api.scheduler.jobs.is_set_holiday", new=AsyncMock(return_value=(False, ""))),
+            patch(
+                "api.scheduler.jobs.build_ohlcv_loader",
+                return_value=OHLCVLoader(settings_override),
+            ),
+            patch("api.scheduler.jobs.FeaturePipeline"),
+        ):
+            # The outer bound only stops a broken implementation from hanging the suite.
+            summary = await asyncio.wait_for(
+                bounded_daily_refresh(settings=settings_override, store=mock_store), timeout=10
+            )
+
+        assert time.monotonic() - started < 5
+        assert summary["failures"] == 1  # B
+        assert summary["symbols_fetched"] == 2  # A and the SET index
+        marker = json.loads(
+            (settings_override.results_dir / ".tmp" / "last_refresh.json").read_text()
+        )
+        assert marker["failures"] == 1
+
     async def test_the_manual_trigger_submits_the_bounded_refresh(
         self, settings_override: Settings, mock_store: MagicMock
     ) -> None:
