@@ -87,11 +87,13 @@ So the network attempt moved **off** the critical path entirely.
 At a 30-minute interval that is ~48 attempts/day against ~4, and the refresh
 pays **0 s** instead of ~7 s.
 
-⚠️ **The poller is silent when it fails, and that is deliberate** — 48 failures a
-day would bury the one line that matters. Calendar health surfaces once per day
-instead, on the ``is_set_holiday`` line that names which source answered and
-when it was captured. **If that line stops advancing its capture stamp, the
-endpoint has been down since it.**
+⚠️ **Each failed poll logs ONE INFO line** with the exception type and HTTP status
+(since 2026-11-04, operator, TK-0657). Until then failures were silent, so that 48
+lines a day would not bury the one that matters. From settfex 0.24.1 a poll makes one
+attempt instead of up to four, so the per-poll success rate has to be readable from
+the log. Calendar health still surfaces once per day on the ``is_set_holiday`` line
+that names which source answered and when it was captured. **If that line stops
+advancing its capture stamp, the endpoint has been down since it.**
 
 Why a committed fallback, and not simply failing closed
 -------------------------------------------------------
@@ -521,11 +523,16 @@ async def capture_set_holidays(year: int, path: Path | None = None) -> bool:
         try:
             live = await fetch_set_holidays(year)
         except CalendarUnavailableError as exc:
-            # DEBUG, not WARNING: the poller runs dozens of times a day against an
-            # endpoint whose normal state is down. Logging each failure would emit
-            # ~48 lines/day and bury the one line that matters. Calendar health is
-            # reported once per day instead, by is_set_holiday.
-            logger.debug("holiday poll for %d found the endpoint down: %s", year, exc)
+            # INFO since 2026-11-04 (operator, TK-0657): from settfex 0.24.1 a poll is
+            # one attempt, so the per-poll success rate must be readable from the log.
+            # One line per failure, never WARNING: a failed poll is routine.
+            cause: BaseException = exc.__cause__ or exc
+            logger.info(
+                "holiday poll for %d failed: %s status_code=%s",
+                year,
+                type(cause).__name__,
+                getattr(cause, "status_code", None),
+            )
             return False
 
     if not live:
@@ -601,9 +608,9 @@ async def is_set_holiday(day: date, cache_path: Path | None = None) -> tuple[boo
 
     if cached is not None:
         # Once per day, on the refresh — the single line that makes calendar
-        # health visible without reading the file. The poller itself is silent
-        # on failure by design, so if this line ever stops moving forward, the
-        # endpoint has been down since the stamp it reports.
+        # health visible without reading the file. The poller logs each failure
+        # at INFO, so if this line ever stops moving forward, the endpoint has been
+        # down since the stamp it reports.
         logger.info(
             "SET holiday calendar for %s resolved from the banked cache (%d closures, captured %s)",
             day.isoformat(),

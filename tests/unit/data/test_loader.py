@@ -1,5 +1,6 @@
 """Tests for the OHLCV loader."""
 
+import asyncio
 from pathlib import Path
 from types import TracebackType
 
@@ -404,3 +405,56 @@ async def test_fetch_forwards_cookies_when_auth_token_set(
         "sessionid_sign": "sig",
         "device_t": "dev",
     }
+
+
+async def test_fetch_batch_bounds_a_symbol_that_never_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_override: Settings,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """TK-0657: on 2026-11-04 two symbols never returned and the scheduled refresh
+    hung. A fetch that never returns must become an ordinary failed symbol while
+    the rest of the batch still comes back."""
+
+    class _HangOnOneOHLCV:
+        def __init__(self, **_kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "_HangOnOneOHLCV":
+            return self
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: TracebackType | None,
+        ) -> None:
+            return None
+
+        async def get_historical_ohlcv(
+            self,
+            symbol: str,
+            interval: str,
+            bars_count: int,
+            adjustment: Adjustment = Adjustment.SPLITS,
+        ) -> list[_FakeBar]:
+            if symbol == "SET:HANG":
+                await asyncio.Event().wait()
+            return [_FakeBar("2024-01-01T00:00:00Z", 10.0)]
+
+    monkeypatch.setattr("csm.data.loader.OHLCV", _HangOnOneOHLCV)
+    monkeypatch.setattr("csm.data.loader.SYMBOL_FETCH_TIMEOUT_SECS", 0.2)
+    loader: OHLCVLoader = OHLCVLoader(settings_override)
+    with caplog.at_level("WARNING", logger="csm.data.loader"):
+        # The outer bound only stops a broken implementation from hanging the suite.
+        result: dict[str, pd.DataFrame] = await asyncio.wait_for(
+            loader.fetch_batch(symbols=["SET:HANG", "SET:AOT"], interval="1D", bars=1),
+            timeout=5,
+        )
+
+    assert "SET:HANG" not in result
+    assert "SET:AOT" in result
+    assert any(
+        getattr(r, "symbol", None) == "SET:HANG" and "timed out" in str(getattr(r, "error", ""))
+        for r in caplog.records
+    )
