@@ -4197,16 +4197,16 @@ wheels = [
 
 [[package]]
 name = "settfex"
-version = "0.15.1"
+version = "0.26.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "loguru" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/4d/62b2533062c2886d903b457ccc7b237b38b9d839fe16d2e21c7ffe9642ec/settfex-0.15.1.tar.gz", hash = "sha256:6342d9dd30f2f2779fb044b32efbb85dd59e2e9967431b86b35d5faddbcde3cb", size = 679117, upload-time = "2026-11-02T09:44:02.496Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/14/86cfdde1eb60c90d17dcdd5bc5a3f8882ac885b411a3adb8259cde622397/settfex-0.26.3.tar.gz", hash = "sha256:7f0fd77556fef631fe49131ca387dc291bbea240b69b33664da7a1df51d608ae", size = 1402173, upload-time = "2026-11-02T13:56:24.797Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/3a/57adb181d3515f1bb35b8359fbdfa89fe16a9c661ad8a3072b9944859fd4/settfex-0.15.1-py3-none-any.whl", hash = "sha256:7f8663486d1d020362df58c48ef13dfec5c3da52224f2b6b9668978a39705b15", size = 158788, upload-time = "2026-11-02T09:44:00.933Z" },
+    { url = "https://files.pythonhosted.org/packages/51/9d/461ed05a7ee51537d5f10ac86aea0f7ac1b9f21429bb1929daaa6068dc75/settfex-0.26.3-py3-none-any.whl", hash = "sha256:a7cbdad97a8e7ecb80397f0f538b68499f3965226e774e2817aba3fc01091d73", size = 308251, upload-time = "2026-11-02T13:56:23.387Z" },
 ]
 
 [[package]]
