@@ -3,7 +3,7 @@
 **Date:** 2026-11-03 (the answer to the slippage audit's question of 2026-11-02)
 **Category:** Model deviation (`docs/plans/live-test/PLAN.md` event table). Execution differs from the registered fill rule.
 **Severity:** Medium for the scoring record, because the registered rule does not describe how the first scored rotation was executed. No number changes. Low for the books: the recorded prices are the broker's.
-**Status:** 🔴 **OPEN — the operator's decision on the fill rule** (§Decision needed).
+**Status:** 🟢 **CLOSED 2026-11-04 by operator ruling: the operator places every order by hand, and the strategy only takes the operator's price updates** (§Decision, and registration §12). No deviation is counted. *(It read OPEN from 2026-11-03 until the ruling.)*
 
 ---
 
@@ -59,10 +59,22 @@ What each rotation's limit execution came to against the registered rule. The AT
   - a required trade not placed;
   - a trade outside a rebalance;
   - a capital flow.
-  The 2026-11-02 trades carry the plan's names and share counts. Whether an order-type difference is an instance is not written in the registration, so no count is recorded until the operator decides.
+  The 2026-11-02 trades carry the plan's names and share counts. Whether an order-type difference is an instance was not written in the registration. ➡️ The operator closed it on 2026-11-04 with no deviation counted (§Decision).
 - **The execution choice is large next to the score.** Against the ATO counterfactual it gained 18,681.00 THB on 2026-11-02, and it cost 23,250.00 on 2026-08-03. A judgement of that size, made outside any written rule, becomes part of what the window scores.
 
-## Decision needed (operator)
+## Decision (operator, 2026-11-04) — CLOSED
+
+> *"This is a live test in which I place every order myself. Close this matter. The strategy only waits for my price updates."*
+> (The operator's words, translated from Thai.)
+
+- **Neither option below was taken as written.** Execution is the operator's, by hand, outside the
+  rules under test.
+- The registration records the ruling as a dated amendment to §4 *Fills* (registration §12). The
+  rest of that row, *"take what fills; no follow-up"*, is not addressed by the ruling and stands.
+- **The fill-rule question is closed, with no deviation counted.**
+- The options as they were put to the operator on 2026-11-03 are kept below as history.
+
+## The options put to the operator on 2026-11-03 *(history — superseded by the decision above)*
 
 Registration §10: after the 2026-10-30 evaluation the registration is frozen. A change is a dated amendment, and the verdict reports each affected criterion under the original registration, with the amended reading beside it.
 
@@ -77,9 +89,9 @@ Registration §10: after the 2026-10-30 evaluation the registration is frozen. A
 
 ## Follow-up
 
-- The operator's decision (above). It is then recorded in the registration as a dated amendment or a dated note.
+- ✅ The operator's decision: closed 2026-11-04 (§Decision). It is recorded in the registration as a dated amendment (§12).
 - From the next rotation, record each fill's order type, limit price and entry time from the broker confirmation (audit §7, recommendation 5; [[TK-0565]]).
-- The daily-log, weekly-report and monthly-rebalance skills describe execution "at ATO". They are umbrella files, and they are updated once the decision is made.
+- The daily-log, weekly-report and monthly-rebalance skills describe execution "at ATO". They are umbrella files. Now that the decision is made, they should say the operator places the orders by hand. That is still to do (2026-11-04).
 
 ## Related
 

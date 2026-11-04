@@ -11,7 +11,7 @@ items the operator may change before that point.
 **Confirmed 2026-10-29, after that session's close and before the 2026-10-30 evaluation's:** the operator
 answered *"keep"*. Every
 CHOSEN HERE item stands as registered, with no amendment. This closes the open question of
-2026-10-28, when a change was asked for without naming an item.
+2026-10-28, when a change was asked for without naming an item. **➡️ One dated amendment since the freeze: §4 Fills, 2026-11-04 (§12).**
 
 ---
 
@@ -101,7 +101,7 @@ mid-test, so the registration records the configuration as it runs. It does not 
 | Entrants | the top-ranked names not held, each with 63-day ADTV ≥ 5,000,000 THB, filling back to about 10 names, with the 35% sector cap checked at construction on SET-official sectors | `monthly/2026-09.md:70` |
 | Sizing | only exits and entrants trade. Entrants are sized from exit proceeds plus cash, and held names are not re-weighted | the practice of every rotation; see §8 |
 | Capital | **no injection** | D2 |
-| Fills | one ATO order per side; take what fills; no follow-up | D3 |
+| Fills | one ATO order per side; take what fills; no follow-up ➡️ *amended 2026-11-04: the operator places every order by hand (§12)* | D3 |
 | Fees | 0.16799% all-in on both sides: buy-side fees capitalised into the 4-dp `avg_cost`, sell-side netted from proceeds | `configs/live-settings.yaml:91-96` |
 | Circuit breaker | see §6 #8 | `configs/live-settings.yaml:37-43` |
 
@@ -307,3 +307,27 @@ window can support.**
   is.
 - **It re-labels no history.** Every figure before 2026-10-27 stays pre-registration history.
 - **It does not settle the wider decisions** in §8's last column.
+
+## 12. Dated amendments (§10)
+
+### 2026-11-04 — §4 *Fills*: the operator places every order by hand
+
+**The operator's ruling, 2026-11-04,** given in answer to the fill-rule question of
+[`events/2026-11-03-rotation-orders-placed-as-limit-orders.md`](../events/2026-11-03-rotation-orders-placed-as-limit-orders.md):
+
+> *"This is a live test in which I place every order myself. Close this matter. The strategy only waits for my price updates."*
+> (The operator's words, translated from Thai.)
+
+- **§4 *Fills* now reads:** the operator places every order by hand, by the operator's own method
+  (limit orders to date). The strategy records the fills the operator reports, as it always has.
+- **What changed:** *"one ATO order per side"* no longer describes the rule. Execution is the
+  operator's, outside the rules under test.
+- **What the ruling does not address:** the rest of the row, *"take what fills; no follow-up"*.
+  It stands as registered.
+- **The 2026-11-02 rotation:** the fill-rule question is closed with no deviation counted, by the
+  operator's *"close this matter"*.
+- **Per §10, the verdict reports each affected criterion under the original registration, with
+  this reading beside it.** No measurement changes:
+  - §5 scores the published NAV, which was always built from the reported fills;
+  - §6 #7 counts trades by name and size, and the 2026-11-02 trades carry the plan's names and
+    share counts.
