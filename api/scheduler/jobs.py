@@ -30,6 +30,11 @@ if TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+#: Upper bound on one refresh run. Normal runs took 119-125 s (receipts 2026-11-02 to
+#: 2026-11-04). A run still going at the bound is treated as stuck: with
+#: max_instances=1 it would block the next firing (TK-0657).
+REFRESH_TIMEOUT_SECS: float = 45 * 60.0
+
 # Standard crontab numbering: 0=Sun, 1=Mon, …, 6=Sat (and 7 = Sun).
 # APScheduler's CronTrigger numeric numbering is 0=Mon, …, 6=Sun — so passing a
 # raw crontab field through ``from_crontab`` silently shifts every weekday by one.
@@ -468,6 +473,33 @@ async def daily_refresh(
     return _write_marker(settings, summary)
 
 
+async def bounded_daily_refresh(
+    settings: Settings,
+    store: ParquetStore,
+    adapters: AdapterManager | None = None,
+) -> dict[str, Any]:
+    """Run :func:`daily_refresh` under :data:`REFRESH_TIMEOUT_SECS`.
+
+    :func:`daily_refresh` writes the refresh marker last, so a run cancelled here
+    leaves the previous marker in place and no receipt for the unfinished run
+    (``test_a_cut_off_refresh_writes_no_marker`` fails if that stops being true).
+
+    Raises:
+        TimeoutError: If the run exceeds :data:`REFRESH_TIMEOUT_SECS`.
+    """
+    try:
+        return await asyncio.wait_for(
+            daily_refresh(settings=settings, store=store, adapters=adapters),
+            timeout=REFRESH_TIMEOUT_SECS,
+        )
+    except TimeoutError:
+        logger.error(
+            "daily_refresh exceeded %.0fs and was cancelled; no refresh marker was written",
+            REFRESH_TIMEOUT_SECS,
+        )
+        raise
+
+
 def create_scheduler(
     settings: Settings,
     store: ParquetStore,
@@ -481,7 +513,7 @@ def create_scheduler(
 
     async def _job_wrapper() -> None:
         try:
-            summary = await daily_refresh(settings=settings, store=store, adapters=adapters)
+            summary = await bounded_daily_refresh(settings=settings, store=store, adapters=adapters)
             logger.info("Scheduled daily_refresh completed", extra={"summary": summary})
         except Exception:
             logger.exception("Scheduled daily_refresh failed")

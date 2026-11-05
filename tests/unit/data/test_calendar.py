@@ -564,28 +564,38 @@ class TestCaptureSetHolidays:
 
         writer.assert_not_called()
 
-    async def test_routine_failure_is_SILENT(
+    async def test_routine_failure_logs_ONE_info_line_with_type_and_status(
         self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
-        """~48 polls/day against an endpoint whose normal state is down. If each
-        failure logged at WARNING it would emit ~48 lines/day and bury the one
-        line that matters, which is the failure mode the poller exists to fix."""
+        """Reversed 2026-11-04 (operator, TK-0657). This test used to require silence:
+        ~48 failures a day would bury the line that matters. From settfex 0.24.1 a
+        poll makes one attempt instead of up to four, so the per-poll success rate has
+        to be readable from the log. One INFO line per failure, never WARNING, with
+        the exception type and the HTTP status the settfex error carries."""
+
+        class _FakeFetchError(Exception):
+            status_code = 401
+
         with (
             patch(
                 "settfex.services.set.holiday.get_holidays",
-                new=AsyncMock(side_effect=RuntimeError("401")),
+                new=AsyncMock(side_effect=_FakeFetchError("unauthorized")),
             ),
-            caplog.at_level("INFO", logger="csm.data.calendar"),
+            caplog.at_level("DEBUG", logger="csm.data.calendar"),
         ):
             await capture_set_holidays(2026, _isolated_cache)
 
-        assert caplog.text == "", "a routine poll failure must not log above DEBUG"
+        records = [r for r in caplog.records if r.name == "csm.data.calendar"]
+        assert len(records) == 1
+        assert records[0].levelname == "INFO"
+        assert "_FakeFetchError" in records[0].getMessage()
+        assert "status_code=401" in records[0].getMessage()
 
     async def test_first_capture_is_announced(
         self, caplog: pytest.LogCaptureFixture, _isolated_cache: Path
     ) -> None:
         """The rare, genuinely newsworthy event — and the counterpart control to
-        the silence test above, proving the logger is wired at all."""
+        the failure-logging test above, proving success is announced too."""
         with (
             patch(
                 "settfex.services.set.holiday.get_holidays",

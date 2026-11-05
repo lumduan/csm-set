@@ -6,7 +6,9 @@ runner contract, marker file writing, and failure-safe wrapper behaviour.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import Generator
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
@@ -18,6 +20,7 @@ import pytest
 from api.scheduler.jobs import (
     _fetch_batch_with_retry,
     _has_usable_data,
+    bounded_daily_refresh,
     create_scheduler,
     daily_refresh,
     holiday_poll,
@@ -884,3 +887,173 @@ class TestHolidayPollJob:
         """The endpoint's normal state is down; returning False is routine."""
         with patch("api.scheduler.jobs.capture_set_holidays", new=AsyncMock(return_value=False)):
             assert await holiday_poll(settings=settings_override) is False
+
+
+class TestRefreshBound:
+    """TK-0657: a refresh must never outlive its bound. With max_instances=1 a run
+    that never ends would also block the next scheduled firing."""
+
+    @staticmethod
+    async def _never(**_kwargs: object) -> dict[str, object]:
+        await asyncio.Event().wait()
+        return {}
+
+    async def test_a_refresh_that_never_returns_is_cut_off(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        monkeypatch.setattr("api.scheduler.jobs.REFRESH_TIMEOUT_SECS", 0.2)
+        started = time.monotonic()
+        with (
+            patch("api.scheduler.jobs.daily_refresh", new=self._never),
+            caplog.at_level("ERROR", logger="api.scheduler.jobs"),
+            pytest.raises(TimeoutError),
+        ):
+            # The outer 5 s bound only stops a broken implementation from hanging the suite.
+            await asyncio.wait_for(
+                bounded_daily_refresh(settings=settings_override, store=mock_store), timeout=5
+            )
+
+        assert time.monotonic() - started < 2, "the refresh's own bound must fire, not the test's"
+        assert "exceeded" in caplog.text
+
+    async def test_a_cut_off_refresh_writes_no_marker(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The marker is the receipt the daily log and registration §6 #5 read, so a
+        run cancelled at the bound must not leave one behind."""
+
+        async def _hang(*_args: object, **_kwargs: object) -> dict[str, pd.DataFrame]:
+            await asyncio.Event().wait()
+            return {}
+
+        monkeypatch.setattr("api.scheduler.jobs.REFRESH_TIMEOUT_SECS", 0.2)
+        started = time.monotonic()
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+            patch("api.scheduler.jobs.is_set_holiday", new=AsyncMock(return_value=(False, ""))),
+            patch("api.scheduler.jobs.build_ohlcv_loader") as MockLoader,
+            patch("api.scheduler.jobs.FeaturePipeline"),
+            pytest.raises(TimeoutError),
+        ):
+            MockLoader.return_value.fetch_batch = _hang
+            await asyncio.wait_for(
+                bounded_daily_refresh(settings=settings_override, store=mock_store), timeout=5
+            )
+
+        assert time.monotonic() - started < 2, "the refresh's own bound must fire, not the test's"
+        assert not (settings_override.results_dir / ".tmp" / "last_refresh.json").exists()
+
+    async def test_the_scheduled_wrapper_survives_the_cut_off(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        scheduler = create_scheduler(settings_override, mock_store)
+        assert scheduler is not None
+        wrapper = scheduler.get_job("daily_refresh").func
+        monkeypatch.setattr("api.scheduler.jobs.REFRESH_TIMEOUT_SECS", 0.2)
+        started = time.monotonic()
+        with (
+            patch("api.scheduler.jobs.daily_refresh", new=self._never),
+            caplog.at_level("ERROR", logger="api.scheduler.jobs"),
+        ):
+            await asyncio.wait_for(wrapper(), timeout=5)
+
+        assert time.monotonic() - started < 2
+        assert "Scheduled daily_refresh failed" in caplog.text
+
+    async def test_a_symbol_that_never_returns_still_gives_a_completed_refresh(
+        self,
+        settings_override: Settings,
+        mock_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The 2026-11-04 case end to end: the real tvkit loader, and one universe
+        symbol that never returns. The refresh must complete within the per-symbol
+        bound and write a receipt that counts that symbol as failed."""
+        from csm.data.loader import OHLCVLoader
+
+        class _OneHangsOHLCV:
+            def __init__(self, **_kwargs: object) -> None:
+                return None
+
+            async def __aenter__(self) -> _OneHangsOHLCV:
+                return self
+
+            async def __aexit__(self, *_exc: object) -> None:
+                return None
+
+            async def get_historical_ohlcv(
+                self, symbol: str, interval: str, bars_count: int, adjustment: object = None
+            ) -> list[SimpleNamespace]:
+                if symbol == "B":
+                    await asyncio.Event().wait()
+                return [
+                    SimpleNamespace(
+                        timestamp=1_704_067_200 + day * 86_400,
+                        open=10.0,
+                        high=11.0,
+                        low=9.0,
+                        close=10.5,
+                        volume=1_000.0,
+                    )
+                    for day in range(5)
+                ]
+
+        monkeypatch.setattr("csm.data.loader.OHLCV", _OneHangsOHLCV)
+        monkeypatch.setattr("csm.data.loader.SYMBOL_FETCH_TIMEOUT_SECS", 0.2)
+        started = time.monotonic()
+        with (
+            patch("api.scheduler.jobs.load_live_portfolio", return_value=None),
+            patch("api.scheduler.jobs._sleep", new=AsyncMock()),
+            patch("api.scheduler.jobs.is_set_holiday", new=AsyncMock(return_value=(False, ""))),
+            patch(
+                "api.scheduler.jobs.build_ohlcv_loader",
+                return_value=OHLCVLoader(settings_override),
+            ),
+            patch("api.scheduler.jobs.FeaturePipeline"),
+        ):
+            # The outer bound only stops a broken implementation from hanging the suite.
+            summary = await asyncio.wait_for(
+                bounded_daily_refresh(settings=settings_override, store=mock_store), timeout=10
+            )
+
+        assert time.monotonic() - started < 5
+        assert summary["failures"] == 1  # B
+        assert summary["symbols_fetched"] == 2  # A and the SET index
+        marker = json.loads(
+            (settings_override.results_dir / ".tmp" / "last_refresh.json").read_text()
+        )
+        assert marker["failures"] == 1
+
+    async def test_the_manual_trigger_submits_the_bounded_refresh(
+        self, settings_override: Settings, mock_store: MagicMock
+    ) -> None:
+        from api.routers import scheduler as router
+
+        jobs = MagicMock()
+        jobs.submit = AsyncMock(return_value=SimpleNamespace(job_id="job-1", status="accepted"))
+        with (
+            patch.object(router, "get_adapter_manager", return_value=None),
+            patch.object(router, "get_request_id", return_value="req-1"),
+        ):
+            await router.trigger_job(
+                "daily_refresh",
+                MagicMock(),
+                jobs=jobs,
+                settings=settings_override,
+                store=mock_store,
+            )
+
+        assert jobs.submit.await_args is not None
+        assert jobs.submit.await_args.args[1] is bounded_daily_refresh

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from api.deps import get_adapter_manager, get_jobs, get_settings, get_store
 from api.jobs import JobKind, JobRegistry
 from api.logging import get_request_id
-from api.scheduler.jobs import daily_refresh
+from api.scheduler.jobs import bounded_daily_refresh
 from api.schemas.data import RefreshResult
 from api.schemas.errors import ProblemDetail
 from csm.config.settings import Settings
@@ -59,7 +59,7 @@ async def trigger_job(
     adapters = get_adapter_manager(request)
     record = await jobs.submit(
         JobKind.DATA_REFRESH,
-        daily_refresh,
+        bounded_daily_refresh,
         request_id=get_request_id(),
         settings=settings,
         store=store,

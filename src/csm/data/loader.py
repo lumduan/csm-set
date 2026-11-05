@@ -35,6 +35,13 @@ from csm.data.exceptions import DataAccessError, FetchError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+#: Upper bound on one symbol's fetch, retries included. A fetch that never returns
+#: becomes an ordinary failed symbol instead of holding the batch (TK-0657: on
+#: 2026-11-04 two symbols never returned and the scheduled refresh hung). ``fetch``
+#: makes up to ``tvkit_retry_attempts + 1`` attempts (4 by default), so the bound
+#: leaves room for a slow symbol and only cuts one that is stuck.
+SYMBOL_FETCH_TIMEOUT_SECS: float = 180.0
+
 _TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (
     asyncio.TimeoutError,
     OSError,
@@ -211,8 +218,9 @@ class OHLCVLoader:
         async def _fetch_symbol(target_symbol: str) -> tuple[str, pd.DataFrame | None]:
             async with self._semaphore:
                 try:
-                    frame: pd.DataFrame = await self.fetch(
-                        target_symbol, interval, bars, adjustment=adjustment
+                    frame: pd.DataFrame = await asyncio.wait_for(
+                        self.fetch(target_symbol, interval, bars, adjustment=adjustment),
+                        timeout=SYMBOL_FETCH_TIMEOUT_SECS,
                     )
                     logger.info("Fetched symbol successfully", extra={"symbol": target_symbol})
                     return target_symbol, frame
@@ -220,6 +228,15 @@ class OHLCVLoader:
                     logger.warning(
                         "Failed to fetch symbol",
                         extra={"symbol": target_symbol, "error": str(exc)},
+                    )
+                    return target_symbol, None
+                except TimeoutError:
+                    logger.warning(
+                        "Failed to fetch symbol",
+                        extra={
+                            "symbol": target_symbol,
+                            "error": f"timed out after {SYMBOL_FETCH_TIMEOUT_SECS:.0f}s",
+                        },
                     )
                     return target_symbol, None
 
