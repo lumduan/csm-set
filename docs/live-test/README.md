@@ -187,7 +187,10 @@ container line to expect is the holiday skip, not the stale-bar WARNING, and the
 the no-bar guard moves to the first unlisted closure — see the amended note in
 [2026-07-31](events/2026-07-31-july-data-integrity-sweep.md) §2. **Amended again 2026-08-07:** settfex
 recovered and all 20 published 2026 closures were promoted, so **no unlisted 2026 closure remains** and
-the holiday route to that proof is closed until a 2027 date. The guard's other job — a session where
+the holiday route to that proof is closed until a 2027 date. **Amended 2026-11-20:** SET later added a
+21st closure, 2026-12-16. The holiday poller banked it at 2026-11-19T17:52:10Z, and it was copied
+into the committed table on 2026-11-20, so it is listed in both before the day arrives and the route
+stays closed. The guard's other job — a session where
 the market traded but the fetch came back empty — is untouched and can still fire any day.
 
 _Resolved 2026-08-09: the **price adjustment was never applied** — the `adjustment` kwarg was

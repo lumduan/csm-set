@@ -190,13 +190,17 @@ _CACHE_SCHEMA: Final[int] = 1
 
 #: SET closures consulted when the live calendar cannot be reached, by year.
 #:
-#: **2026 is complete: all 20 published closures**, captured verbatim from
+#: **2026 holds all 21 published closures.** Twenty were captured verbatim from
 #: ``get_holidays(year=2026, lang="en")`` on **2026-08-07 ~10:25 BKK**, during a
-#: window when the endpoint was serving. Every date and description below is that
-#: payload — none is inferred, and none is edited. Descriptions are **verbatim**,
-#: including the trailing ``" *"`` on 2026-10-16, which is SET's own footnote
-#: marker for an additional special closure and which settfex deliberately does
-#: not strip (its ``Holiday`` model alone omits ``str_strip_whitespace``).
+#: window when the endpoint was serving. **SET added the 21st, 2026-12-16, later in
+#: the year**: the poller banked it at **2026-11-19T17:52:10Z** (the container
+#: logged the calendar change and the stale-table warning), and it was copied here
+#: on 2026-11-20 from the banked payload. Every date and description below is a
+#: live payload — none is inferred, and none is edited. Descriptions are
+#: **verbatim**, including the trailing ``" *"`` on 2026-10-16 and ``" **"`` on
+#: 2026-12-16, which are SET's own footnote markers for an additional special
+#: closure and which settfex deliberately does not strip (its ``Holiday`` model
+#: alone omits ``str_strip_whitespace``).
 #:
 #: Independently corroborated: the **13** entries at or before 2026-08-06 each
 #: carry **no bar for any of the 211 symbols** in
@@ -232,6 +236,7 @@ FALLBACK_SET_HOLIDAYS: dict[int, dict[date, str]] = {
             "National Day / Father's Day (Saturday 5th December 2026)"
         ),
         date(2026, 12, 10): "Constitution Day",
+        date(2026, 12, 16): "Additional special holiday **",
         date(2026, 12, 31): "New Year's Eve",
     },
 }

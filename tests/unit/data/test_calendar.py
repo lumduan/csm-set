@@ -237,7 +237,7 @@ class TestTableDriftIsReported:
         with caplog.at_level("INFO", logger="csm.data.calendar"):
             await is_set_holiday(date(2026, 8, 3))
 
-        assert "matches the live calendar (20 closures)" in caplog.text
+        assert "matches the live calendar (21 closures)" in caplog.text
         assert "STALE" not in caplog.text
 
     async def test_drift_reporting_never_changes_the_verdict(self, _isolated_cache: Path) -> None:
@@ -379,11 +379,13 @@ class TestFallbackTableIntegrity:
             assert day in table, f"{iso} missing from the committed 2026 table"
             assert table[day] == description, f"{iso} wording drifted from the fetched calendar"
 
-    def test_2026_holds_all_twenty_published_closures(self) -> None:
-        """2026 is complete — a short table means entries were lost, not that
-        SET published fewer. The count is pinned separately from the dates so a
-        failure says *which* of the two went wrong."""
-        assert len(FALLBACK_SET_HOLIDAYS[2026]) == 20
+    def test_2026_holds_all_twenty_one_published_closures(self) -> None:
+        """2026 holds every closure SET has published: the 20 captured on
+        2026-08-07 plus 2026-12-16, which SET added later. A short table means
+        entries were lost, not that SET published fewer. The count is pinned
+        separately from the dates so a failure says *which* of the two went
+        wrong."""
+        assert len(FALLBACK_SET_HOLIDAYS[2026]) == 21
 
     @pytest.mark.parametrize(
         ("iso", "description"),
@@ -413,6 +415,12 @@ class TestFallbackTableIntegrity:
         day = date.fromisoformat(iso)
         assert day in table, f"{iso} was not promoted"
         assert table[day] == description
+
+    def test_the_closure_set_added_later_is_promoted_verbatim(self) -> None:
+        """2026-12-16 was not in the 2026-08-07 payload. SET added it later, and
+        the poller banked it at 2026-11-19T17:52:10Z; its wording is that
+        payload's, with SET's double footnote marker kept."""
+        assert FALLBACK_SET_HOLIDAYS[2026][date(2026, 12, 16)] == "Additional special holiday **"
 
     def test_the_footnote_marker_is_not_stripped(self) -> None:
         """``" *"`` is SET's own marker for an additional special closure.
